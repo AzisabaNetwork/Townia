@@ -75,10 +75,12 @@ Townyのようなチャンクベースの土地保護システムを採用して
 
 ### 👑 管理者コマンド (`/townia admin`)
 ※ OPまたは`townia.admin`権限が必要です。
-- `/townia admin reload`: 設定ファイルや言語ファイルを再読み込みします。
-- `/townia admin town delete <町名>`: 町を強制的に解散させます。
-- `/townia admin nation delete <国名>`: 国を強制的に解散させます。
-- `/townia admin unclaim`: 現在の土地を強制的に放棄させます。
+- `/towniaadmin reload`: 設定ファイルや言語ファイルを再読み込みします。
+- `/towniaadmin town delete <町名>`: 町を強制的に解散させます。
+- `/towniaadmin nation delete <国名>`: 国を強制的に解散させます。
+- `/towniaadmin unclaim`: 現在の土地を強制的に放棄させます。
+
+...その他多数のコマンド
 
 ---
 
