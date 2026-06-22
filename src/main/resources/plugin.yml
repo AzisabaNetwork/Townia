@@ -1,0 +1,265 @@
+name: Townia
+description: $description
+version: '${version}'
+main: net.azisaba.townia.Townia
+api-version: '1.21'
+authors: [ Azisaba Network ]
+website: https://github.com/AzisabaNetwork/Townia
+softdepend:
+  - CoreProtect
+  - LuckPerms
+  - PlaceholderAPI
+  - Vault
+commands:
+  townia:
+    description: Main command for Townia
+    usage: /townia <help|reload|info>
+  nation:
+    description: Nation command
+    usage: /nation <subcommand>
+    aliases:
+      - n
+      - nat
+  plot:
+    description: Plot command
+    usage: /plot <subcommand>
+  resident:
+    description: Resident command
+    usage: /resident [player]
+    aliases:
+      - res
+  town:
+    description: Town command
+    usage: /town <subcommand>
+    aliases:
+      - t
+  towniaadmin:
+    description: TowniaAdmin command
+    usage: /towniaadmin <subcommand>
+    aliases:
+      - ta
+  towniaworld:
+    description: TowniaWorld command
+    usage: /towniaworld <subcommand>
+    aliases:
+      - tw
+  invite:
+    description: Invite command
+    usage: /invite [accept|decline|list]
+    aliases:
+      - invites
+permissions:
+  townia.*:
+    description: All Townia permissions
+    default: op
+    children:
+      townia.town.*: true
+      townia.nation.*: true
+      townia.plot.*: true
+      townia.resident.*: true
+      townia.admin.*: true
+
+  townia.town.*:
+    description: All town permissions
+    default: false
+    children:
+      townia.town.create: true
+      townia.town.join: true
+      townia.town.leave: true
+      townia.town.invite: true
+      townia.town.kick: true
+      townia.town.claim: true
+      townia.town.unclaim: true
+      townia.town.deposit: true
+      townia.town.withdraw: true
+      townia.town.setspawn: true
+      townia.town.rename: true
+      townia.town.toggle: true
+      townia.town.list: true
+      townia.town.info: true
+      townia.town.spawn: true
+      townia.town.rank: true
+      townia.town.delete: true
+  townia.town.create:
+    description: Create a new town
+    default: true
+  townia.town.join:
+    description: Join a public town
+    default: true
+  townia.town.leave:
+    description: Leave a town
+    default: true
+  townia.town.invite:
+    description: Invite a player to town
+    default: true
+  townia.town.kick:
+    description: Kick a resident from town
+    default: true
+  townia.town.claim:
+    description: Claim a chunk for the town
+    default: true
+  townia.town.unclaim:
+    description: Unclaim a chunk from the town
+    default: true
+  townia.town.deposit:
+    description: Deposit money into town bank
+    default: true
+  townia.town.withdraw:
+    description: Withdraw money from town bank
+    default: true
+  townia.town.setspawn:
+    description: Set the town spawn point
+    default: true
+  townia.town.rename:
+    description: Rename the town
+    default: true
+  townia.town.toggle:
+    description: Toggle town public/private setting
+    default: true
+  townia.town.list:
+    description: List all towns
+    default: true
+  townia.town.info:
+    description: View town information
+    default: true
+  townia.town.spawn:
+    description: Teleport to town spawn
+    default: true
+  townia.town.rank:
+    description: Manage town ranks
+    default: true
+  townia.town.delete:
+    description: Delete the town
+    default: true
+
+  townia.nation.*:
+    description: All nation permissions
+    default: false
+    children:
+      townia.nation.create: true
+      townia.nation.join: true
+      townia.nation.leave: true
+      townia.nation.invite: true
+      townia.nation.kick: true
+      townia.nation.list: true
+      townia.nation.info: true
+      townia.nation.spawn: true
+      townia.nation.bank: true
+      townia.nation.delete: true
+  townia.nation.create:
+    description: Create a new nation
+    default: true
+  townia.nation.join:
+    description: Join a nation
+    default: true
+  townia.nation.leave:
+    description: Leave a nation
+    default: true
+  townia.nation.invite:
+    description: Invite a town to a nation
+    default: true
+  townia.nation.kick:
+    description: Kick a town from a nation
+    default: true
+  townia.nation.list:
+    description: List all nations
+    default: true
+  townia.nation.info:
+    description: View nation information
+    default: true
+  townia.nation.spawn:
+    description: Teleport to nation spawn
+    default: true
+  townia.nation.bank:
+    description: Manage nation bank
+    default: true
+  townia.nation.delete:
+    description: Delete the nation
+    default: true
+
+  townia.plot.*:
+    description: All plot permissions
+    default: false
+    children:
+      townia.plot.claim: true
+      townia.plot.unclaim: true
+      townia.plot.settype: true
+      townia.plot.forsale: true
+      townia.plot.notforsale: true
+      townia.plot.buy: true
+      townia.plot.info: true
+  townia.plot.claim:
+    description: Claim a plot
+    default: true
+  townia.plot.unclaim:
+    description: Unclaim a plot
+    default: true
+  townia.plot.settype:
+    description: Set plot type
+    default: true
+  townia.plot.forsale:
+    description: Set plot for sale
+    default: true
+  townia.plot.notforsale:
+    description: Remove plot from sale
+    default: true
+  townia.plot.buy:
+    description: Buy a plot
+    default: true
+  townia.plot.info:
+    description: View plot information
+    default: true
+
+  townia.resident.*:
+    description: All resident permissions
+    default: false
+    children:
+      townia.resident.info: true
+      townia.resident.other: true
+      townia.resident.list: true
+  townia.resident.info:
+    description: View own resident info
+    default: true
+  townia.resident.other:
+    description: View other player's resident info
+    default: true
+  townia.resident.list:
+    description: List all residents
+    default: true
+
+  townia.admin.*:
+    description: All admin permissions
+    default: op
+    children:
+      townia.admin.reload: true
+      townia.admin.givebonus: true
+      townia.admin.forceclaim: true
+      townia.admin.forceunclaim: true
+      townia.admin.deletetown: true
+      townia.admin.deletenation: true
+      townia.admin.bypass: true
+      townia.admin.world: true
+  townia.admin.reload:
+    description: Reload Townia configuration
+    default: op
+  townia.admin.givebonus:
+    description: Give bonus claim blocks to a town
+    default: op
+  townia.admin.forceclaim:
+    description: Force-claim any chunk
+    default: op
+  townia.admin.forceunclaim:
+    description: Force-unclaim any chunk
+    default: op
+  townia.admin.deletetown:
+    description: Force-delete any town
+    default: op
+  townia.admin.deletenation:
+    description: Force-delete any nation
+    default: op
+  townia.admin.bypass:
+    description: Toggle admin bypass mode
+    default: op
+  townia.admin.world:
+    description: Manage world settings
+    default: op

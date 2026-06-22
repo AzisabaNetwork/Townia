@@ -1,0 +1,58 @@
+# Townia Configuration
+config-version: 1
+
+# Database Configuration
+database:
+  type: "sqlite" # "sqlite" or "mysql"
+  host: "localhost"
+  port: 3306
+  database: "townia"
+  username: "root"
+  password: "password"
+  pool-size: 10
+
+# Prefix displayed before all plugin messages (MiniMessage format)
+prefix: "<gray>[<green>Townia<gray>]<reset> "
+
+# Default language when player locale cannot be determined (ja or en)
+default-language: "ja"
+
+# Worlds where claiming land is allowed
+allowed-worlds:
+  - "world"
+
+# Default maximum number of chunks a new town can claim
+default-claim-limit: 8
+
+# Bonus claims granted per resident (0 to disable)
+claims-per-resident: 1
+
+# Maximum bonus claims a town can have from admin bonus
+max-bonus-claims: 100
+
+# Invite expiry time in seconds (120 = 2 minutes)
+invite-timeout: 120
+
+# Town creation cost (requires Vault; set to 0 to disable)
+town-creation-cost: 0.0
+
+# Nation creation cost (requires Vault; set to 0 to disable)
+nation-creation-cost: 0.0
+
+# Daily town upkeep (requires Vault; set to 0 to disable)
+town-upkeep: 0.0
+
+# Default daily tax for newly created towns
+default-town-tax: 0.0
+
+# Default daily tax for newly created nations
+default-nation-tax: 0.0
+
+# PvP settings per plot type (true = PvP allowed)
+pvp:
+  default: false
+  arena: true
+  shop: false
+  embassy: false
+  farm: false
+  inn: false

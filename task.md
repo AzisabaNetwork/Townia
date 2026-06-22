@@ -1,0 +1,33 @@
+- `[ ]` Update Database Schema (`DatabaseManager.java`)
+  - `[ ]` Add `homeblock_world`, `homeblock_x`, `homeblock_z`, `perms_resident`, `perms_ally`, `perms_outsider`, `perms_nation`, `daily_upkeep` to `towns`
+  - `[ ]` Add `is_outpost`, `perms_resident`, `perms_ally`, `perms_outsider`, `perms_nation` to `plots`
+  - `[ ]` Add `spawn_world`, `spawn_x`, `spawn_y`, `spawn_z`, `spawn_yaw`, `spawn_pitch` to `nations`
+  - `[ ]` Create `resident_friends` table
+- `[ ]` Update Data Models
+  - `[ ]` Update `Town.java`
+  - `[ ]` Update `Plot.java`
+  - `[ ]` Update `Nation.java`
+  - `[ ]` Update `TowniaPlayer.java` (Friends list)
+- `[ ]` Update Managers
+  - `[ ]` `TownManager.java` (Homeblock, Outpost logic, DB load/save updates)
+  - `[ ]` `PlotManager.java` (Outpost logic, DB load/save updates)
+  - `[ ]` `NationManager.java` (Nation spawn logic)
+  - `[ ]` `ResidentManager.java` (Friends logic)
+- `[ ]` Implement Permission Matrix
+  - `[ ]` Create `PermissionMatrix.java` or `PermSet.java` (Build, Destroy, Switch, Item for R, A, O, N)
+  - `[ ]` Update `PlotProtectionListener.java` to use the new matrix
+- `[ ]` Implement `/town info` Rewrite
+  - `[ ]` Update `TownCommand.java` -> `handleInfo`
+  - `[ ]` Update `lang_en.yml` and `lang_ja.yml` formats
+- `[ ]` Implement Daily Tasks (Upkeep & Taxes)
+  - `[ ]` Create `DailyTask.java`
+  - `[ ]` Add config options for upkeep amount
+- `[ ]` Implement Action Bar Notifications
+  - `[ ]` Create `PlayerMoveListener.java`
+- `[ ]` Update Commands
+  - `[ ]` `/town claim outpost`
+  - `[ ]` `/nation spawn` and `/nation set spawn`
+  - `[ ]` `/resident friend add/remove/list`
+  - `[ ]` Fix "Chunk has been claimed" message
+- `[ ]` Verification
+  - `[ ]` Build and test locally
