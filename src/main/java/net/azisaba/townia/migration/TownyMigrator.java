@@ -44,6 +44,18 @@ public class TownyMigrator {
                         spawnZ = tTown.getSpawn().getZ();
                         spawnYaw = tTown.getSpawn().getYaw();
                         spawnPitch = tTown.getSpawn().getPitch();
+                    } else if (tTown.hasHomeBlock()) {
+                        try {
+                            spawnWorld = tTown.getHomeBlock().getWorld().getName();
+                            spawnX = tTown.getHomeBlock().getX() * 16 + 8.5;
+                            spawnZ = tTown.getHomeBlock().getZ() * 16 + 8.5;
+                            org.bukkit.World bWorld = org.bukkit.Bukkit.getWorld(spawnWorld);
+                            if (bWorld != null) {
+                                spawnY = bWorld.getHighestBlockYAt((int)spawnX, (int)spawnZ) + 1;
+                            } else {
+                                spawnY = 64;
+                            }
+                        } catch (Exception ignored) {}
                     }
                     
                     net.azisaba.townia.data.Town ourTown = new net.azisaba.townia.data.Town(
@@ -54,7 +66,7 @@ public class TownyMigrator {
                         balance,
                         tTown.getMaxTownBlocks(),
                         tTown.getBonusBlocks(),
-                        tTown.isOpen(),
+                        tTown.isPublic(),
                         tTown.getRegistered(),
                         tTown.getBoard(),
                         tTown.getTaxes(),
@@ -65,6 +77,13 @@ public class TownyMigrator {
                         tTown.getPermissions().fire,
                         spawnWorld, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch
                     );
+                    
+                    ourTown.setOpen(tTown.isOpen());
+                    if (tTown.hasHomeBlock()) {
+                        try {
+                            ourTown.setHomeBlock(tTown.getHomeBlock().getWorld().getName(), tTown.getHomeBlock().getX(), tTown.getHomeBlock().getZ());
+                        } catch (Exception ignored) {}
+                    }
                     
                     plugin.getDatabaseManager().saveTown(ourTown);
                     plugin.getTownManager().cacheTown(ourTown);

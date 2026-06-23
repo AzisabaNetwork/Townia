@@ -90,7 +90,11 @@ public class DatabaseManager {
                 "perms_ally VARCHAR(16) DEFAULT '', " +
                 "perms_outsider VARCHAR(16) DEFAULT '', " +
                 "perms_nation VARCHAR(16) DEFAULT '', " +
-                "daily_upkeep DOUBLE DEFAULT 0)");
+                "daily_upkeep DOUBLE DEFAULT 0, " +
+                "allow_invisibility BOOLEAN DEFAULT true, " +
+                "allow_sit BOOLEAN DEFAULT true, " +
+                "allow_pet_pickup BOOLEAN DEFAULT true, " +
+                "allow_passenger BOOLEAN DEFAULT true)");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS plots (" +
                 "world_name VARCHAR(64) NOT NULL, " +
@@ -101,7 +105,7 @@ public class DatabaseManager {
                 "plot_type VARCHAR(16) NOT NULL DEFAULT 'DEFAULT', " +
                 "for_sale BOOLEAN NOT NULL DEFAULT false, " +
                 "price DOUBLE NOT NULL DEFAULT 0, " +
-                "name VARCHAR(255), " +
+                "name VARCHAR(64), " +
                 "pvp BOOLEAN DEFAULT false, " +
                 "mobs BOOLEAN DEFAULT false, " +
                 "explosions BOOLEAN DEFAULT false, " +
@@ -120,7 +124,14 @@ public class DatabaseManager {
                 "town_uuid VARCHAR(36), " +
                 "rank VARCHAR(16) NOT NULL DEFAULT 'RESIDENT', " +
                 "last_seen BIGINT NOT NULL DEFAULT 0, " +
-                "preferred_lang VARCHAR(8))");
+                "preferred_lang VARCHAR(8), " +
+                "toggle_map INTEGER DEFAULT 0, " +
+                "toggle_town_claim INTEGER DEFAULT 0, " +
+                "toggle_plot_border INTEGER DEFAULT 0, " +
+                "default_perms_friend VARCHAR(16) DEFAULT '', " +
+                "default_perms_ally VARCHAR(16) DEFAULT '', " +
+                "default_perms_outsider VARCHAR(16) DEFAULT '', " +
+                "default_perms_resident VARCHAR(16) DEFAULT 'BDSI')");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS nations (" +
                 "id VARCHAR(36) PRIMARY KEY, " +
@@ -135,7 +146,8 @@ public class DatabaseManager {
                 "spawn_y DOUBLE DEFAULT 64, " +
                 "spawn_z DOUBLE DEFAULT 0, " +
                 "spawn_yaw DOUBLE DEFAULT 0, " +
-                "spawn_pitch DOUBLE DEFAULT 0)");
+                "spawn_pitch DOUBLE DEFAULT 0, " +
+                "neutral BOOLEAN DEFAULT false)");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS nation_relations (" +
                 "nation_uuid VARCHAR(36) NOT NULL, " +
@@ -144,6 +156,14 @@ public class DatabaseManager {
                 "PRIMARY KEY (nation_uuid, target_uuid), " +
                 "FOREIGN KEY (nation_uuid) REFERENCES nations(id) ON DELETE CASCADE, " +
                 "FOREIGN KEY (target_uuid) REFERENCES nations(id) ON DELETE CASCADE)");
+
+            stmt.execute("CREATE TABLE IF NOT EXISTS nation_titles (" +
+                "nation_uuid VARCHAR(36) NOT NULL, " +
+                "uuid VARCHAR(36) NOT NULL, " +
+                "title_type VARCHAR(8) NOT NULL, " +
+                "value VARCHAR(64) NOT NULL, " +
+                "PRIMARY KEY (nation_uuid, uuid, title_type), " +
+                "FOREIGN KEY (nation_uuid) REFERENCES nations(id) ON DELETE CASCADE)");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS invites (" +
                 "id INTEGER PRIMARY KEY " + autoInc + ", " +
@@ -158,6 +178,18 @@ public class DatabaseManager {
                 "PRIMARY KEY (resident_uuid, friend_uuid), " +
                 "FOREIGN KEY (resident_uuid) REFERENCES residents(uuid) ON DELETE CASCADE, " +
                 "FOREIGN KEY (friend_uuid) REFERENCES residents(uuid) ON DELETE CASCADE)");
+
+            stmt.execute("CREATE TABLE IF NOT EXISTS town_outposts (" +
+                "id INTEGER PRIMARY KEY " + autoInc + ", " +
+                "town_uuid VARCHAR(36) NOT NULL, " +
+                "world VARCHAR(64) NOT NULL, " +
+                "x DOUBLE NOT NULL, " +
+                "y DOUBLE NOT NULL, " +
+                "z DOUBLE NOT NULL, " +
+                "yaw FLOAT NOT NULL, " +
+                "pitch FLOAT NOT NULL, " +
+                "is_public BOOLEAN DEFAULT false, " +
+                "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)");
 
             // Schema Migrations (Silent failures if columns already exist)
             try { stmt.execute("ALTER TABLE towns ADD COLUMN board VARCHAR(255)"); } catch (Exception ignored) {}
@@ -175,8 +207,12 @@ public class DatabaseManager {
             try { stmt.execute("ALTER TABLE towns ADD COLUMN perms_outsider VARCHAR(16) DEFAULT ''"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE towns ADD COLUMN perms_nation VARCHAR(16) DEFAULT ''"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE towns ADD COLUMN daily_upkeep DOUBLE DEFAULT 0"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE towns ADD COLUMN allow_invisibility BOOLEAN DEFAULT true"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE towns ADD COLUMN allow_sit BOOLEAN DEFAULT true"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE towns ADD COLUMN allow_pet_pickup BOOLEAN DEFAULT true"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE towns ADD COLUMN allow_passenger BOOLEAN DEFAULT true"); } catch (Exception ignored) {}
             
-            try { stmt.execute("ALTER TABLE plots ADD COLUMN name VARCHAR(255)"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE plots ADD COLUMN name VARCHAR(64)"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE plots ADD COLUMN pvp BOOLEAN DEFAULT false"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE plots ADD COLUMN mobs BOOLEAN DEFAULT false"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE plots ADD COLUMN explosions BOOLEAN DEFAULT false"); } catch (Exception ignored) {}
@@ -195,6 +231,15 @@ public class DatabaseManager {
             try { stmt.execute("ALTER TABLE nations ADD COLUMN spawn_z DOUBLE DEFAULT 0"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE nations ADD COLUMN spawn_yaw DOUBLE DEFAULT 0"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE nations ADD COLUMN spawn_pitch DOUBLE DEFAULT 0"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE nations ADD COLUMN neutral BOOLEAN DEFAULT false"); } catch (Exception ignored) {}
+
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN toggle_map INTEGER DEFAULT 0"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN toggle_town_claim INTEGER DEFAULT 0"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN toggle_plot_border INTEGER DEFAULT 0"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_friend VARCHAR(16) DEFAULT ''"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_ally VARCHAR(16) DEFAULT ''"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_outsider VARCHAR(16) DEFAULT ''"); } catch (Exception ignored) {}
+            try { stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_resident VARCHAR(16) DEFAULT 'BDSI'"); } catch (Exception ignored) {}
 
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_plots_town ON plots(town_uuid)");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_residents_town ON residents(town_uuid)");
@@ -207,8 +252,9 @@ public class DatabaseManager {
             INSERT INTO towns (id, name, mayor_uuid, nation_uuid, balance, claim_limit, bonus_claims,
                                is_public, created_at, board, taxes, plot_price, pvp, mobs, explosions, fire,
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
-                               homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
+                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), mayor_uuid=VALUES(mayor_uuid), nation_uuid=VALUES(nation_uuid),
                 balance=VALUES(balance), claim_limit=VALUES(claim_limit), bonus_claims=VALUES(bonus_claims),
@@ -219,13 +265,16 @@ public class DatabaseManager {
                 spawn_yaw=VALUES(spawn_yaw), spawn_pitch=VALUES(spawn_pitch),
                 homeblock_world=VALUES(homeblock_world), homeblock_x=VALUES(homeblock_x), homeblock_z=VALUES(homeblock_z),
                 perms_resident=VALUES(perms_resident), perms_ally=VALUES(perms_ally), perms_outsider=VALUES(perms_outsider),
-                perms_nation=VALUES(perms_nation), daily_upkeep=VALUES(daily_upkeep)
+                perms_nation=VALUES(perms_nation), daily_upkeep=VALUES(daily_upkeep),
+                allow_invisibility=VALUES(allow_invisibility), allow_sit=VALUES(allow_sit),
+                allow_pet_pickup=VALUES(allow_pet_pickup), allow_passenger=VALUES(allow_passenger)
         """ : """
             INSERT INTO towns (id, name, mayor_uuid, nation_uuid, balance, claim_limit, bonus_claims,
                                is_public, created_at, board, taxes, plot_price, pvp, mobs, explosions, fire,
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
-                               homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
+                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, mayor_uuid=excluded.mayor_uuid, nation_uuid=excluded.nation_uuid,
                 balance=excluded.balance, claim_limit=excluded.claim_limit, bonus_claims=excluded.bonus_claims,
@@ -236,7 +285,9 @@ public class DatabaseManager {
                 spawn_yaw=excluded.spawn_yaw, spawn_pitch=excluded.spawn_pitch,
                 homeblock_world=excluded.homeblock_world, homeblock_x=excluded.homeblock_x, homeblock_z=excluded.homeblock_z,
                 perms_resident=excluded.perms_resident, perms_ally=excluded.perms_ally, perms_outsider=excluded.perms_outsider,
-                perms_nation=excluded.perms_nation, daily_upkeep=excluded.daily_upkeep
+                perms_nation=excluded.perms_nation, daily_upkeep=excluded.daily_upkeep,
+                allow_invisibility=excluded.allow_invisibility, allow_sit=excluded.allow_sit,
+                allow_pet_pickup=excluded.allow_pet_pickup, allow_passenger=excluded.allow_passenger
         """;
         try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, town.getId().toString());
@@ -274,6 +325,10 @@ public class DatabaseManager {
             ps.setString(28, town.getPermsOutsider());
             ps.setString(29, town.getPermsNation());
             ps.setDouble(30, town.getDailyUpkeep());
+            ps.setInt(31, town.isAllowInvisibility() ? 1 : 0);
+            ps.setInt(32, town.isAllowSit() ? 1 : 0);
+            ps.setInt(33, town.isAllowPetPickup() ? 1 : 0);
+            ps.setInt(34, town.isAllowPassenger() ? 1 : 0);
             ps.executeUpdate();
         }
     }
@@ -321,7 +376,7 @@ public class DatabaseManager {
     private Town mapTown(ResultSet rs) throws SQLException {
         String nationStr = rs.getString("nation_uuid");
         String spawnWorld = rs.getString("spawn_world");
-        return new Town(
+        Town town = new Town(
                 UUID.fromString(rs.getString("id")),
                 rs.getString("name"),
                 UUID.fromString(rs.getString("mayor_uuid")),
@@ -353,21 +408,90 @@ public class DatabaseManager {
                 rs.getString("perms_nation"),
                 rs.getDouble("daily_upkeep")
         );
+        try { if (rs.getObject("allow_invisibility") != null) town.setAllowInvisibility(rs.getInt("allow_invisibility") != 0); } catch (Exception ignored) {}
+        try { if (rs.getObject("allow_sit") != null) town.setAllowSit(rs.getInt("allow_sit") != 0); } catch (Exception ignored) {}
+        try { if (rs.getObject("allow_pet_pickup") != null) town.setAllowPetPickup(rs.getInt("allow_pet_pickup") != 0); } catch (Exception ignored) {}
+        try { if (rs.getObject("allow_passenger") != null) town.setAllowPassenger(rs.getInt("allow_passenger") != 0); } catch (Exception ignored) {}
+        return town;
+    }
+
+    public synchronized void loadTownOutposts(Town town) throws SQLException {
+        town.getOutposts().clear();
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement("SELECT * FROM town_outposts WHERE town_uuid = ?")) {
+            ps.setString(1, town.getId().toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    town.getOutposts().add(new TowniaOutpost(
+                        rs.getInt("id"),
+                        rs.getString("world"),
+                        rs.getDouble("x"),
+                        rs.getDouble("y"),
+                        rs.getDouble("z"),
+                        rs.getFloat("yaw"),
+                        rs.getFloat("pitch"),
+                        rs.getInt("is_public") == 1
+                    ));
+                }
+            }
+        }
+    }
+
+    public synchronized void saveTownOutpost(UUID townId, TowniaOutpost outpost) throws SQLException {
+        String sql = isMySQL ? """
+            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch), is_public=VALUES(is_public)
+        """ : """
+            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch, is_public=excluded.is_public
+        """;
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
+            if (outpost.id() == 0) {
+                ps.setNull(1, Types.INTEGER);
+            } else {
+                ps.setInt(1, outpost.id());
+            }
+            ps.setString(2, townId.toString());
+            ps.setString(3, outpost.world());
+            ps.setDouble(4, outpost.x());
+            ps.setDouble(5, outpost.y());
+            ps.setDouble(6, outpost.z());
+            ps.setFloat(7, outpost.yaw());
+            ps.setFloat(8, outpost.pitch());
+            ps.setInt(9, outpost.isPublic() ? 1 : 0);
+            ps.executeUpdate();
+        }
+    }
+
+    public synchronized void deleteTownOutpost(int id) throws SQLException {
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement("DELETE FROM town_outposts WHERE id = ?")) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        }
     }
 
     public synchronized void saveResident(TowniaPlayer player) throws SQLException {
         String sql = isMySQL ? """
-            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
+                                   toggle_map, toggle_town_claim, toggle_plot_border,
+                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), town_uuid=VALUES(town_uuid), rank=VALUES(rank),
-                last_seen=VALUES(last_seen), preferred_lang=VALUES(preferred_lang)
+                last_seen=VALUES(last_seen), preferred_lang=VALUES(preferred_lang),
+                toggle_map=VALUES(toggle_map), toggle_town_claim=VALUES(toggle_town_claim), toggle_plot_border=VALUES(toggle_plot_border),
+                default_perms_friend=VALUES(default_perms_friend), default_perms_ally=VALUES(default_perms_ally),
+                default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident)
         """ : """
-            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
+                                   toggle_map, toggle_town_claim, toggle_plot_border,
+                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uuid) DO UPDATE SET
                 name=excluded.name, town_uuid=excluded.town_uuid, rank=excluded.rank,
-                last_seen=excluded.last_seen, preferred_lang=excluded.preferred_lang
+                last_seen=excluded.last_seen, preferred_lang=excluded.preferred_lang,
+                toggle_map=excluded.toggle_map, toggle_town_claim=excluded.toggle_town_claim, toggle_plot_border=excluded.toggle_plot_border,
+                default_perms_friend=excluded.default_perms_friend, default_perms_ally=excluded.default_perms_ally,
+                default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident
         """;
         try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, player.getUuid().toString());
@@ -376,6 +500,13 @@ public class DatabaseManager {
             ps.setString(4, player.getRank().name());
             ps.setLong(5, player.getLastSeen());
             ps.setString(6, player.getPreferredLang());
+            ps.setInt(7, player.isToggleMap() ? 1 : 0);
+            ps.setInt(8, player.isToggleTownClaim() ? 1 : 0);
+            ps.setInt(9, player.isTogglePlotBorder() ? 1 : 0);
+            ps.setString(10, player.getDefaultPermsFriend());
+            ps.setString(11, player.getDefaultPermsAlly());
+            ps.setString(12, player.getDefaultPermsOutsider());
+            ps.setString(13, player.getDefaultPermsResident());
             ps.executeUpdate();
         }
     }
@@ -430,6 +561,17 @@ public class DatabaseManager {
                 rs.getString("preferred_lang")
         );
         player.setFriends(getFriends(player.getUuid()));
+        player.setToggleMap(rs.getInt("toggle_map") == 1);
+        player.setToggleTownClaim(rs.getInt("toggle_town_claim") == 1);
+        player.setTogglePlotBorder(rs.getInt("toggle_plot_border") == 1);
+        String dpf = rs.getString("default_perms_friend");
+        if (dpf != null) player.setDefaultPermsFriend(dpf);
+        String dpa = rs.getString("default_perms_ally");
+        if (dpa != null) player.setDefaultPermsAlly(dpa);
+        String dpo = rs.getString("default_perms_outsider");
+        if (dpo != null) player.setDefaultPermsOutsider(dpo);
+        String dpr = rs.getString("default_perms_resident");
+        if (dpr != null) player.setDefaultPermsResident(dpr);
         return player;
     }
 
@@ -586,24 +728,26 @@ public class DatabaseManager {
     public synchronized void saveNation(Nation nation) throws SQLException {
         String sql = isMySQL ? """
             INSERT INTO nations (id, name, capital_town_uuid, leader_uuid, balance, board, taxes,
-                                 spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch, neutral)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), capital_town_uuid=VALUES(capital_town_uuid),
                 leader_uuid=VALUES(leader_uuid), balance=VALUES(balance),
                 board=VALUES(board), taxes=VALUES(taxes),
                 spawn_world=VALUES(spawn_world), spawn_x=VALUES(spawn_x), spawn_y=VALUES(spawn_y),
-                spawn_z=VALUES(spawn_z), spawn_yaw=VALUES(spawn_yaw), spawn_pitch=VALUES(spawn_pitch)
+                spawn_z=VALUES(spawn_z), spawn_yaw=VALUES(spawn_yaw), spawn_pitch=VALUES(spawn_pitch),
+                neutral=VALUES(neutral)
         """ : """
             INSERT INTO nations (id, name, capital_town_uuid, leader_uuid, balance, board, taxes,
-                                 spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch, neutral)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, capital_town_uuid=excluded.capital_town_uuid,
                 leader_uuid=excluded.leader_uuid, balance=excluded.balance,
                 board=excluded.board, taxes=excluded.taxes,
                 spawn_world=excluded.spawn_world, spawn_x=excluded.spawn_x, spawn_y=excluded.spawn_y,
-                spawn_z=excluded.spawn_z, spawn_yaw=excluded.spawn_yaw, spawn_pitch=excluded.spawn_pitch
+                spawn_z=excluded.spawn_z, spawn_yaw=excluded.spawn_yaw, spawn_pitch=excluded.spawn_pitch,
+                neutral=excluded.neutral
         """;
         try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setString(1, nation.getId().toString());
@@ -619,8 +763,10 @@ public class DatabaseManager {
             ps.setDouble(11, nation.getSpawnZ());
             ps.setFloat(12, nation.getSpawnYaw());
             ps.setFloat(13, nation.getSpawnPitch());
+            ps.setInt(14, nation.isNeutral() ? 1 : 0);
             ps.executeUpdate();
         }
+        saveNationTitles(nation);
     }
 
     public synchronized Optional<Nation> getNation(UUID id) throws SQLException {
@@ -665,7 +811,7 @@ public class DatabaseManager {
     }
 
     private Nation mapNation(ResultSet rs) throws SQLException {
-        return new Nation(
+        Nation nation = new Nation(
                 UUID.fromString(rs.getString("id")),
                 rs.getString("name"),
                 UUID.fromString(rs.getString("capital_town_uuid")),
@@ -680,6 +826,55 @@ public class DatabaseManager {
                 rs.getFloat("spawn_yaw"),
                 rs.getFloat("spawn_pitch")
         );
+        nation.setNeutral(rs.getInt("neutral") == 1);
+        return nation;
+    }
+
+    public synchronized void saveNationTitles(Nation nation) throws SQLException {
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement("DELETE FROM nation_titles WHERE nation_uuid = ?")) {
+            ps.setString(1, nation.getId().toString());
+            ps.executeUpdate();
+        }
+        if (!nation.getTitles().isEmpty() || !nation.getSurnames().isEmpty()) {
+            String sql = "INSERT INTO nation_titles (nation_uuid, uuid, title_type, value) VALUES (?, ?, ?, ?)";
+            try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement(sql)) {
+                for (Map.Entry<UUID, String> entry : nation.getTitles().entrySet()) {
+                    ps.setString(1, nation.getId().toString());
+                    ps.setString(2, entry.getKey().toString());
+                    ps.setString(3, "TITLE");
+                    ps.setString(4, entry.getValue());
+                    ps.addBatch();
+                }
+                for (Map.Entry<UUID, String> entry : nation.getSurnames().entrySet()) {
+                    ps.setString(1, nation.getId().toString());
+                    ps.setString(2, entry.getKey().toString());
+                    ps.setString(3, "SURNAME");
+                    ps.setString(4, entry.getValue());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+        }
+    }
+
+    public synchronized void loadNationTitles(Nation nation) throws SQLException {
+        nation.getTitles().clear();
+        nation.getSurnames().clear();
+        try (Connection connection = dataSource.getConnection(); PreparedStatement ps = connection.prepareStatement("SELECT * FROM nation_titles WHERE nation_uuid = ?")) {
+            ps.setString(1, nation.getId().toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    UUID uuid = UUID.fromString(rs.getString("uuid"));
+                    String type = rs.getString("title_type");
+                    String value = rs.getString("value");
+                    if ("TITLE".equals(type)) {
+                        nation.setTitle(uuid, value);
+                    } else if ("SURNAME".equals(type)) {
+                        nation.setSurname(uuid, value);
+                    }
+                }
+            }
+        }
     }
 
     public synchronized void addNationRelation(UUID nationId, UUID targetId, String relation) throws SQLException {

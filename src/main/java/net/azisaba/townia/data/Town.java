@@ -1,5 +1,9 @@
 package net.azisaba.townia.data;
 
+import net.azisaba.townia.Townia;
+
+import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class Town {
@@ -12,6 +16,7 @@ public class Town {
     private int claimLimit;
     private int bonusClaims;
     private boolean isPublic;
+    private boolean open;
     private long createdAt;
 
     // Extended features
@@ -36,6 +41,23 @@ public class Town {
     
     private double dailyUpkeep;
 
+    // Extended economy fields
+    private String tag;
+    private boolean taxPercent;
+    private double plotTax;
+    private double shopPrice;
+    private double shopTax;
+    private double embassyPrice;
+    private double embassyTax;
+
+    // TownConfig fields
+    private boolean allowInvisibility = true;
+    private boolean allowSit          = true;
+    private boolean allowPetPickup    = true;
+    private boolean allowPassenger    = true;
+
+
+
     // Spawn point
     private String spawnWorld;
     private double spawnX;
@@ -43,6 +65,8 @@ public class Town {
     private double spawnZ;
     private float spawnYaw;
     private float spawnPitch;
+
+    private final List<TowniaOutpost> outposts = new ArrayList<>();
 
     public Town(UUID id, String name, UUID mayorUuid, UUID nationUuid,
                 double balance, int claimLimit, int bonusClaims, boolean isPublic,
@@ -83,6 +107,8 @@ public class Town {
     public int getBonusClaims() { return bonusClaims; }
     public int getTotalClaimLimit() { return claimLimit + bonusClaims; }
     public boolean isPublic() { return isPublic; }
+    public boolean isOpen() { return open; }
+    public void setOpen(boolean open) { this.open = open; }
     public long getCreatedAt() { return createdAt; }
     
     public String getBoard() { return board; }
@@ -113,6 +139,20 @@ public class Town {
     public String getPermsNation() { return permsNation; }
     
     public double getDailyUpkeep() { return dailyUpkeep; }
+
+    public List<TowniaOutpost> getOutposts() { return outposts; }
+
+    public String getTownSizeRank() {
+        int count = Townia.getInstance().getResidentManager().getResidentsByTown(id).size();
+        if (count >= 28) return "MetroPolis";
+        if (count >= 24) return "Large City";
+        if (count >= 20) return "City";
+        if (count >= 14) return "Large Town";
+        if (count >= 10) return "Town";
+        if (count >= 6) return "Village";
+        if (count >= 2) return "Hamlet";
+        return "Settlement";
+    }
 
     public void setName(String name) { this.name = name; }
     public void setMayorUuid(UUID mayorUuid) { this.mayorUuid = mayorUuid; }
@@ -151,7 +191,35 @@ public class Town {
     public void setPermsNation(String perms) { this.permsNation = perms; }
     
     public void setDailyUpkeep(double dailyUpkeep) { this.dailyUpkeep = dailyUpkeep; }
-    
+
+    public String getTag() { return tag; }
+    public boolean isTaxPercent() { return taxPercent; }
+    public double getPlotTax() { return plotTax; }
+    public double getShopPrice() { return shopPrice; }
+    public double getShopTax() { return shopTax; }
+    public double getEmbassyPrice() { return embassyPrice; }
+    public double getEmbassyTax() { return embassyTax; }
+
+    public void setTag(String tag) { this.tag = tag; }
+    public void setTaxPercent(boolean taxPercent) { this.taxPercent = taxPercent; }
+    public void setPlotTax(double plotTax) { this.plotTax = plotTax; }
+    public void setShopPrice(double shopPrice) { this.shopPrice = shopPrice; }
+    public void setShopTax(double shopTax) { this.shopTax = shopTax; }
+    public void setEmbassyPrice(double embassyPrice) { this.embassyPrice = embassyPrice; }
+    public void setEmbassyTax(double embassyTax) { this.embassyTax = embassyTax; }
+
+    // TownConfig getters / setters
+    public boolean isAllowInvisibility() { return allowInvisibility; }
+    public boolean isAllowSit()          { return allowSit; }
+    public boolean isAllowPetPickup()    { return allowPetPickup; }
+    public boolean isAllowPassenger()    { return allowPassenger; }
+
+    public void setAllowInvisibility(boolean v) { this.allowInvisibility = v; }
+    public void setAllowSit(boolean v)          { this.allowSit = v; }
+    public void setAllowPetPickup(boolean v)    { this.allowPetPickup = v; }
+    public void setAllowPassenger(boolean v)    { this.allowPassenger = v; }
+
+
     // Additional constructor for loading
     public Town(UUID id, String name, UUID mayorUuid, UUID nationUuid,
                 double balance, int claimLimit, int bonusClaims, boolean isPublic,

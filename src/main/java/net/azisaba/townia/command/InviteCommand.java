@@ -126,7 +126,7 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         try {
             Optional<Town> townOpt = townManager.getTownByName(townName);
             if (townOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "error.town-not-found");
+                plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
                 return;
             }
             UUID townUuid = townOpt.get().getId();
@@ -159,7 +159,7 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         Optional<Town> townOpt = townManager.getTown(townUuid);
         if (townOpt.isEmpty()) {
             databaseManager.deleteInvite(invite.id());
-            plugin.getMessageManager().sendMessage(player, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
             return;
         }
 
@@ -175,7 +175,7 @@ public class InviteCommand implements CommandExecutor, TabCompleter {
         try {
             Optional<Town> townOpt = townManager.getTownByName(townName);
             if (townOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "error.town-not-found");
+                plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
                 return;
             }
             UUID townUuid = townOpt.get().getId();

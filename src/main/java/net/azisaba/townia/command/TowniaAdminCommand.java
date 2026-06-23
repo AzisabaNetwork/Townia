@@ -105,7 +105,7 @@ public class TowniaAdminCommand implements CommandExecutor, TabCompleter {
         if (args.length >= 2) {
             Optional<Town> townOpt = townManager.getTownByName(args[1]);
             if (townOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+                plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
                 return;
             }
             townUuid = townOpt.get().getId();
@@ -120,7 +120,7 @@ public class TowniaAdminCommand implements CommandExecutor, TabCompleter {
 
         try {
             plotManager.forceClaimChunk(townUuid, chunk);
-            plugin.getMessageManager().sendMessage(sender, "admin.force-claimed");
+            plugin.getMessageManager().sendMessage(sender, "admin.force-claimed", "town", "Unknown");
         } catch (TowniaException e) {
             plugin.getMessageManager().sendMessage(sender, e.getMessageKey(), e.getReplacements());
         }
@@ -153,7 +153,7 @@ public class TowniaAdminCommand implements CommandExecutor, TabCompleter {
         String townName = args[1];
         Optional<Town> townOpt = townManager.getTownByName(townName);
         if (townOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
         Town town = townOpt.get();
@@ -187,7 +187,7 @@ public class TowniaAdminCommand implements CommandExecutor, TabCompleter {
         String nationName = args[1];
         Optional<Nation> nationOpt = nationManager.getNationByName(nationName);
         if (nationOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
             return;
         }
 
@@ -207,7 +207,7 @@ public class TowniaAdminCommand implements CommandExecutor, TabCompleter {
 
         Optional<Town> townOpt = townManager.getTownByName(args[1]);
         if (townOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
 

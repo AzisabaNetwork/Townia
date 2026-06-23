@@ -52,7 +52,7 @@ public class PlotManager {
     }
 
     public boolean isClaimed(Chunk chunk) {
-        return !cache.containsKey(ChunkKey.of(chunk));
+        return cache.containsKey(ChunkKey.of(chunk));
     }
 
     public boolean isClaimed(String worldName, int chunkX, int chunkZ) {
@@ -70,6 +70,11 @@ public class PlotManager {
     public int countPlotsByTown(UUID townId) {
         return (int) cache.values().stream().filter(p -> townId.equals(p.getTownUuid())).count();
     }
+
+    public int countPlotsByOwner(UUID ownerUuid) {
+        return (int) cache.values().stream().filter(p -> ownerUuid.equals(p.getOwnerUuid())).count();
+    }
+
 
     public void claimChunk(UUID townId, Chunk chunk) throws TowniaException {
         String worldName = chunk.getWorld().getName();
@@ -182,7 +187,7 @@ public class PlotManager {
         return p;
     }
 
-    private void persistPlot(Plot plot) {
+    public void persistPlot(Plot plot) {
         cache.put(new ChunkKey(plot.getWorldName(), plot.getChunkX(), plot.getChunkZ()), plot);
         try {
             db.savePlot(plot);

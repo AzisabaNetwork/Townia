@@ -8,6 +8,8 @@ import net.azisaba.townia.listener.PlayerMoveListener;
 import net.azisaba.townia.listener.PlotProtectionListener;
 import net.azisaba.townia.manager.*;
 import net.milkbowl.vault.economy.Economy;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -27,6 +29,7 @@ public final class Townia extends JavaPlugin {
     private NationManager nationManager;
     private PlotManager plotManager;
     private Economy economy;
+    private long nextUpkeepTime;
 
     @Override
     public void onEnable() {
@@ -35,7 +38,6 @@ public final class Townia extends JavaPlugin {
         saveDefaultConfig();
         towniaConfig = new TowniaConfig(this);
 
-        // Database
         databaseManager = new DatabaseManager(this);
         try {
             databaseManager.initialize();
@@ -45,7 +47,6 @@ public final class Townia extends JavaPlugin {
             return;
         }
 
-        // Messages
         messageManager = new MessageManager(this);
 
         residentManager = new ResidentManager(this, databaseManager);
@@ -57,14 +58,19 @@ public final class Townia extends JavaPlugin {
 
         registerCommands();
 
-        getServer().getPluginManager().registerEvents(
-                new PlayerJoinListener(this), this);
-        getServer().getPluginManager().registerEvents(
-                new PlotProtectionListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayerJoinListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlotProtectionListener(this), this);
+
+        for (org.bukkit.entity.Player p : getServer().getOnlinePlayers()) {
+            residentManager.getOrCreate(p);
+        }
 
         new net.azisaba.townia.manager.ActionBarTask(this).runTaskTimer(this, 40L, 40L);
 
-        new net.azisaba.townia.manager.DailyTask(this).runTaskTimer(this, 1728000L, 1728000L);
+        long upkeepTicks = 1728000L;
+        nextUpkeepTime = System.currentTimeMillis() + upkeepTicks * 50L;
+        new net.azisaba.townia.manager.DailyTask(this).runTaskTimer(this, upkeepTicks, upkeepTicks);
 
         getLogger().info("Townia " + getDescription().getVersion() + " enabled.");
     }
@@ -101,6 +107,7 @@ public final class Townia extends JavaPlugin {
         TowniaAdminCommand taCmd= new TowniaAdminCommand(this);
         TowniaWorldCommand twCmd= new TowniaWorldCommand(this);
         InviteCommand invCmd    = new InviteCommand(this);
+        TownConfigCommand tcCmd = new TownConfigCommand(this);
 
         bind("town",        townCmd,   townCmd);
         bind("nation",      nationCmd, nationCmd);
@@ -110,19 +117,16 @@ public final class Townia extends JavaPlugin {
         bind("towniaadmin", taCmd,     taCmd);
         bind("towniaworld", twCmd,     twCmd);
         bind("invite",      invCmd,    invCmd);
+        bind("townconfig",  tcCmd,     tcCmd);
     }
 
-    private void bind(String name,
-                      org.bukkit.command.CommandExecutor executor,
-                      org.bukkit.command.TabCompleter completer) {
+    private void bind(String name, CommandExecutor executor, TabCompleter completer) {
         var cmd = Objects.requireNonNull(getCommand(name), "Command '" + name + "' not registered in plugin.yml");
         cmd.setExecutor(executor);
         cmd.setTabCompleter(completer);
     }
 
-    public static Townia getInstance() {
-        return instance;
-    }
+    public static Townia getInstance() { return instance; }
 
     public TowniaConfig getTowniaConfig()       { return towniaConfig; }
     public DatabaseManager getDatabaseManager() { return databaseManager; }
@@ -134,4 +138,8 @@ public final class Townia extends JavaPlugin {
 
     public Economy getEconomy()   { return economy; }
     public boolean hasEconomy()   { return economy != null; }
+    public long getNextUpkeepTime() { return nextUpkeepTime; }
+    public void resetNextUpkeepTime() {
+        nextUpkeepTime = System.currentTimeMillis() + 1728000L * 50L;
+    }
 }

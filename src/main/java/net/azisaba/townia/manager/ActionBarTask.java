@@ -3,6 +3,7 @@ package net.azisaba.townia.manager;
 import net.azisaba.townia.Townia;
 import net.azisaba.townia.data.Plot;
 import net.azisaba.townia.data.Town;
+import net.azisaba.townia.data.TowniaPlayer;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.entity.Player;
@@ -31,7 +32,7 @@ public class ActionBarTask extends BukkitRunnable {
                 if (townOpt.isPresent()) {
                     Town town = townOpt.get();
                     String mayorName = plugin.getResidentManager().getResident(town.getMayorUuid())
-                            .map(r -> r.getName())
+                            .map(TowniaPlayer::getName)
                             .orElse("Unknown");
                     plugin.getMessageManager().sendActionBar(player, "town.actionbar-town", 
                             "town", town.getName(), 

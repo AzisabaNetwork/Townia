@@ -14,8 +14,11 @@ public class Nation {
     private double taxes;
     private final java.util.Set<UUID> allies = new java.util.HashSet<>();
     private final java.util.Set<UUID> enemies = new java.util.HashSet<>();
-    
-    // Spawn point
+
+    private boolean neutral = false;
+    private final java.util.Map<UUID, String> titles = new java.util.HashMap<>();
+    private final java.util.Map<UUID, String> surnames = new java.util.HashMap<>();
+
     private String spawnWorld;
     private double spawnX;
     private double spawnY;
@@ -53,6 +56,9 @@ public class Nation {
     public double getTaxes() { return taxes; }
     public java.util.Set<UUID> getAllies() { return allies; }
     public java.util.Set<UUID> getEnemies() { return enemies; }
+    public boolean isNeutral() { return neutral; }
+    public java.util.Map<UUID, String> getTitles() { return titles; }
+    public java.util.Map<UUID, String> getSurnames() { return surnames; }
     
     public String getSpawnWorld() { return spawnWorld; }
     public double getSpawnX() { return spawnX; }
@@ -69,6 +75,15 @@ public class Nation {
     public void setBalance(double balance) { this.balance = balance; }
     public void setBoard(String board) { this.board = board; }
     public void setTaxes(double taxes) { this.taxes = taxes; }
+    public void setNeutral(boolean neutral) { this.neutral = neutral; }
+
+    public void setTitle(UUID uuid, String title) { this.titles.put(uuid, title); }
+    public void removeTitle(UUID uuid) { this.titles.remove(uuid); }
+    public String getTitle(UUID uuid) { return this.titles.get(uuid); }
+
+    public void setSurname(UUID uuid, String surname) { this.surnames.put(uuid, surname); }
+    public void removeSurname(UUID uuid) { this.surnames.remove(uuid); }
+    public String getSurname(UUID uuid) { return this.surnames.get(uuid); }
     
     public void setSpawn(String world, double x, double y, double z, float yaw, float pitch) {
         this.spawnWorld = world;

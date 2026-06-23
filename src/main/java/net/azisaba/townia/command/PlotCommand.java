@@ -50,30 +50,47 @@ public class PlotCommand implements CommandExecutor, TabCompleter {
         }
 
         switch (args[0].toLowerCase()) {
-            case "info" -> handleInfo(player);
+            case "info", "perm" -> handleInfo(player);
             case "set" -> {
-                if (args.length < 3) {
+                if (args.length < 2) {
                     sendHelp(player);
                     return true;
                 }
-                if (args[1].equalsIgnoreCase("type")) {
+                if (args[1].equalsIgnoreCase("type") && args.length >= 3) {
                     handleSetType(player, args[2]);
-                } else if (args[1].equalsIgnoreCase("name")) {
+                } else if (args[1].equalsIgnoreCase("name") && args.length >= 3) {
                     handleSetName(player, String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
+                } else if (args[1].equalsIgnoreCase("reset")) {
+                    handleSetReset(player);
+                } else if (args[1].equalsIgnoreCase("perm")) {
+                    if (args.length >= 3 && args[2].equalsIgnoreCase("reset")) {
+                        handleSetReset(player);
+                    } else {
+                        handleSetPerm(player, Arrays.copyOfRange(args, 2, args.length));
+                    }
                 } else {
                     sendHelp(player);
                 }
             }
             case "toggle" -> handleToggle(player, args);
-            case "forsale" -> {
+            case "forsale", "fs" -> {
                 if (args.length < 2) {
                     sendHelp(player);
                     return true;
                 }
                 handleForSale(player, args[1]);
             }
-            case "notforsale" -> handleNotForSale(player);
-            case "buy" -> handleBuy(player);
+            case "notforsale", "nfs" -> handleNotForSale(player);
+            case "buy", "claim" -> {
+                if (args.length > 1 && args[1].equalsIgnoreCase("auto")) {
+                    handleClaimAuto(player);
+                } else {
+                    handleBuy(player);
+                }
+            }
+            case "clear" -> handleClear(player);
+            case "evict" -> handleEvict(player);
+            case "?", "help" -> sendHelp(player);
             default -> sendHelp(player);
         }
         return true;
@@ -109,7 +126,7 @@ public class PlotCommand implements CommandExecutor, TabCompleter {
 
     private void handleSetType(Player player, String typeName) {
         PlotType plotType = PlotType.fromString(typeName);
-        // fromString returns DEFAULT as fallback — check if the input was actually valid
+        // fromString returns DEFAULT as fallback  Echeck if the input was actually valid
         boolean validInput = java.util.Arrays.stream(PlotType.values())
                 .anyMatch(t -> t.name().equalsIgnoreCase(typeName));
         if (!validInput) {
@@ -348,13 +365,23 @@ public class PlotCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
         if (args.length == 1) {
             StringUtil.copyPartialMatches(args[0],
-                    List.of("info", "set", "forsale", "notforsale", "buy"), completions);
+                    List.of("info", "set", "forsale", "notforsale", "buy", "perm"), completions);
         } else if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
-            StringUtil.copyPartialMatches(args[1], List.of("type"), completions);
+            StringUtil.copyPartialMatches(args[1], List.of("type", "name", "reset", "perm"), completions);
         } else if (args.length == 3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("type")) {
             List<String> types = new ArrayList<>();
             for (PlotType pt : PlotType.values()) types.add(pt.name().toLowerCase());
             StringUtil.copyPartialMatches(args[2], types, completions);
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("perm")) {
+            StringUtil.copyPartialMatches(args[2], List.of("resident", "ally", "outsider", "nation", "build", "destroy", "switch", "itemuse", "on", "off"), completions);
+        } else if (args.length == 4 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("perm")) {
+            if (!args[2].equalsIgnoreCase("on") && !args[2].equalsIgnoreCase("off")) {
+                StringUtil.copyPartialMatches(args[3], List.of("build", "destroy", "switch", "itemuse", "on", "off"), completions);
+            }
+        } else if (args.length == 5 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("perm")) {
+            if (!args[3].equalsIgnoreCase("on") && !args[3].equalsIgnoreCase("off")) {
+                StringUtil.copyPartialMatches(args[4], List.of("on", "off"), completions);
+            }
         }
         return completions;
     }
@@ -381,5 +408,148 @@ public class PlotCommand implements CommandExecutor, TabCompleter {
         }
         plugin.getMessageManager().sendMessage(player, "error.no-permission");
         return null;
+    }
+
+    private void handleSetReset(Player player) {
+        org.bukkit.Chunk chunk = player.getLocation().getChunk();
+        java.util.Optional<Plot> plotOpt = plotManager.getPlot(chunk);
+        if (plotOpt.isEmpty()) {
+            plugin.getMessageManager().sendMessage(player, "plot.no-plot-here");
+            return;
+        }
+        Plot plot = plotOpt.get();
+        TowniaPlayer res = requireMayorOrOwner(player, plot);
+        if (res == null) return;
+
+        plot.setPvp(false);
+        plot.setMobs(false);
+        plot.setExplosions(false);
+        plot.setFire(false);
+        plot.setName(null);
+        try {
+            plugin.getDatabaseManager().savePlot(plot);
+        } catch (java.sql.SQLException e) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to save plot reset", e);
+        }
+        plugin.getMessageManager().sendMessage(player, "plot.reset");
+    }
+
+    private void handleSetPerm(Player player, String[] args) {
+        org.bukkit.Chunk chunk = player.getLocation().getChunk();
+        net.azisaba.townia.data.Plot plot = plugin.getPlotManager().getPlot(chunk.getWorld().getName(), chunk.getX(), chunk.getZ()).orElse(null);
+        if (plot == null) {
+            plugin.getMessageManager().sendMessage(player, "plot.not-owned-by-your-town");
+            return;
+        }
+        net.azisaba.townia.data.TowniaPlayer res = plugin.getResidentManager().getResident(player.getUniqueId()).orElse(null);
+        if (res == null || res.getTownUuid() == null || !res.getTownUuid().equals(plot.getTownUuid())) {
+            plugin.getMessageManager().sendMessage(player, "plot.not-owned-by-your-town");
+            return;
+        }
+
+        if (plot.getOwnerUuid() != null) {
+            if (!plot.getOwnerUuid().equals(res.getUuid()) && !res.isAssistantOrHigher()) {
+                plugin.getMessageManager().sendMessage(player, "error.no-permission");
+                return;
+            }
+        } else {
+            if (!res.isAssistantOrHigher()) {
+                plugin.getMessageManager().sendMessage(player, "error.no-permission");
+                return;
+            }
+        }
+
+        if (args.length < 1) {
+            plugin.getMessageManager().sendMessage(player, "error.invalid-args");
+            return;
+        }
+
+        String groupStr = null;
+        String actionStr = null;
+        String stateStr = null;
+
+        if (args.length == 1) {
+            stateStr = args[0];
+        } else if (args.length == 2) {
+            String first = args[0].toLowerCase();
+            if (first.equals("resident") || first.equals("ally") || first.equals("outsider") || first.equals("nation")) {
+                groupStr = args[0];
+            } else {
+                actionStr = args[0];
+            }
+            stateStr = args[1];
+        } else if (args.length >= 3) {
+            groupStr = args[0];
+            actionStr = args[1];
+            stateStr = args[2];
+        }
+
+        boolean state = stateStr.equalsIgnoreCase("on") || stateStr.equalsIgnoreCase("true");
+
+        java.util.List<String> groups = new java.util.ArrayList<>();
+        if (groupStr == null) {
+            groups.addAll(java.util.Arrays.asList("resident", "ally", "outsider", "nation"));
+        } else {
+            if (groupStr.equalsIgnoreCase("resident")) groups.add("resident");
+            else if (groupStr.equalsIgnoreCase("ally")) groups.add("ally");
+            else if (groupStr.equalsIgnoreCase("outsider")) groups.add("outsider");
+            else if (groupStr.equalsIgnoreCase("nation")) groups.add("nation");
+            else {
+                plugin.getMessageManager().sendMessage(player, "error.invalid-args");
+                return;
+            }
+        }
+
+        java.util.List<Character> actions = new java.util.ArrayList<>();
+        if (actionStr == null) {
+            actions.addAll(java.util.Arrays.asList('B', 'D', 'S', 'I'));
+        } else {
+            if (actionStr.equalsIgnoreCase("build")) actions.add('B');
+            else if (actionStr.equalsIgnoreCase("destroy")) actions.add('D');
+            else if (actionStr.equalsIgnoreCase("switch")) actions.add('S');
+            else if (actionStr.equalsIgnoreCase("item") || actionStr.equalsIgnoreCase("itemuse")) actions.add('I');
+            else {
+                plugin.getMessageManager().sendMessage(player, "error.invalid-args");
+                return;
+            }
+        }
+
+        for (String group : groups) {
+            String current = "";
+            if (group.equals("resident")) current = plot.getPermsResident() != null ? plot.getPermsResident() : "";
+            else if (group.equals("ally")) current = plot.getPermsAlly() != null ? plot.getPermsAlly() : "";
+            else if (group.equals("outsider")) current = plot.getPermsOutsider() != null ? plot.getPermsOutsider() : "";
+            else if (group.equals("nation")) current = plot.getPermsNation() != null ? plot.getPermsNation() : "";
+
+            for (char action : actions) {
+                current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action, state);
+            }
+
+            if (group.equals("resident")) plot.setPermsResident(current);
+            else if (group.equals("ally")) plot.setPermsAlly(current);
+            else if (group.equals("outsider")) plot.setPermsOutsider(current);
+            else if (group.equals("nation")) plot.setPermsNation(current);
+        }
+        
+        try {
+            plugin.getDatabaseManager().savePlot(plot);
+        } catch (java.sql.SQLException e) {
+            e.printStackTrace();
+            plugin.getMessageManager().sendMessage(player, "error.database");
+            return;
+        }
+        plugin.getMessageManager().sendMessage(player, "town.perm-set", "perm", (groupStr!=null?groupStr+" ":"")+(actionStr!=null?actionStr:"all"), "state", state?"ON":"OFF");
+    }
+
+    private void handleClaimAuto(Player player) {
+        plugin.getMessageManager().sendMessage(player, "error.not-implemented");
+    }
+
+    private void handleClear(Player player) {
+        plugin.getMessageManager().sendMessage(player, "error.not-implemented");
+    }
+
+    private void handleEvict(Player player) {
+        plugin.getMessageManager().sendMessage(player, "error.not-implemented");
     }
 }

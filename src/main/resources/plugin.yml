@@ -13,7 +13,10 @@ softdepend:
 commands:
   townia:
     description: Main command for Townia
-    usage: /townia <help|reload|info>
+    usage: /townia <help|reload|info|map|price|time|top>
+  townconfig:
+    description: Town configuration command (mayor only)
+    usage: /townconfig <allowInvisibility|allowSit|allowPetPickup|allowPassenger> <true|false>
   nation:
     description: Nation command
     usage: /nation <subcommand>

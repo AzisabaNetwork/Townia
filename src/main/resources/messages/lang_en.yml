@@ -1,4 +1,4 @@
-# Townia – English Messages
+# Townia - English Messages
 # Format: MiniMessage (https://docs.advntr.dev/minimessage/format.html)
 # Placeholders use {curly_braces} syntax.
 
@@ -20,6 +20,10 @@ error:
   cannot-kick-mayor: "<red>You cannot kick the mayor of a town."
   not-same-town: "<red>That player is not in your town."
   rank-not-found: "<red>Unknown rank <yellow>{rank}</yellow>. Valid ranks: ASSISTANT, CO_MAYOR"
+  not-implemented: "<yellow>Missing translation: not-implemented"
+  outpost-not-found: "<yellow>Missing translation: outpost-not-found"
+  outpost-not-public: "<yellow>Missing translation: outpost-not-public"
+  town-not-open: "<yellow>Missing translation: town-not-open"
 
 # ── Town ──────────────────────────────────────────────────────
 town:
@@ -48,6 +52,7 @@ town:
   spawn-not-set: "<red>This town does not have a spawn point set."
   teleporting: "<green>Teleporting to <yellow>{town}</yellow>..."
   renamed: "<green>Town has been renamed from <yellow>{old}</yellow> to <yellow>{new}</yellow>."
+  info-perms: "<gold>Permissions: <gray>Resident:<white>{resident} <gray>Ally:<white>{ally} <gray>Outsider:<white>{outsider} <gray>Nation:<white>{nation}"
   set-public: "<green>Town is now <green>public</green>. Anyone can join."
   set-private: "<yellow>Town is now <red>private</red>. Invitations required."
   rank-set: "<green>Set <yellow>{player}</yellow>'s rank to <yellow>{rank}</yellow>."
@@ -59,6 +64,24 @@ town:
   toggled: "<green>Toggled <yellow>{setting}</yellow> to <aqua>{state}</aqua>."
   homeblock-set: "<green>Set the current chunk as the town's homeblock."
   not-owned-plot: "<red>Your town does not own this chunk."
+  outpost-claimed: "<green>Successfully claimed outpost chunk <yellow>({x}, {z})</yellow> for <yellow>{town}</yellow>.</green>"
+  unclaimed-all: "<yellow>All town land has been unclaimed."
+  reslist-header: "<dark_gray>┃<gold>Residents of {town} <dark_gray>(<yellow>{count}</yellow>) ┃"
+  reslist-entry: "  <yellow>{player} <gray>| Rank: <white>{rank}"
+  perm-set: "<green>Set <yellow>{perm}</yellow> permission to <aqua>{state}</aqua>."
+  tag-set: "<green>Set town tag to <yellow>{tag}</yellow>."
+  tag-cleared: "<yellow>Town tag has been cleared."
+  tag-invalid: "<red>Tag must be alphanumeric (max 4 characters)."
+  mayor-transferred: "<green>Transferred mayor role to <yellow>{player}</yellow>."
+  plottax-set: "<green>Set plot tax to <yellow>{amount}"
+  shopprice-set: "<green>Set shop plot price to <yellow>{amount}"
+  shoptax-set: "<green>Set shop plot tax to <yellow>{amount}"
+  embassyprice-set: "<green>Set embassy price to <yellow>{amount}"
+  embassytax-set: "<green>Set embassy tax to <yellow>{amount}"
+  joined: "<yellow>{town}</yellow> joined!"
+  reslist: "<yellow>Missing translation: reslist"
+  teleport-outpost: "<yellow>Missing translation: teleport-outpost"
+
   actionbar-wilderness: "<dark_green>~ Wilderness ~"
   actionbar-town: "<gold>{town} <gray>(Mayor: {mayor})"
   info:
@@ -80,7 +103,7 @@ town:
     - "<gold>Nation: <white>{nation}"
     - "<gold>Residents: <white>{residents}"
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  list-header: "<dark_gray>━ <gold>Towns <dark_gray>(<yellow>{count}</yellow>) ━"
+  list-header: "<dark_gray>┃<gold>Towns <dark_gray>(<yellow>{count}</yellow>) ┃"
   list-entry: "  <yellow>{town} <gray>| Mayor: <white>{mayor} <gray>| Residents: <white>{residents}"
   help:
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -129,7 +152,7 @@ nation:
     - "<gray>Towns: <white>{towns}"
     - "<gray>Balance: <white>{balance}"
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  list-header: "<dark_gray>━ <aqua>Nations <dark_gray>(<yellow>{count}</yellow>) ━"
+  list-header: "<dark_gray>┃<aqua>Nations <dark_gray>(<yellow>{count}</yellow>) ┃"
   list-entry: "  <yellow>{nation} <gray>| Leader: <white>{leader} <gray>| Towns: <white>{towns}"
   help:
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -144,6 +167,7 @@ nation:
     - "<gray>/nation list <dark_gray>- <white>List all nations"
     - "<gray>/nation delete <dark_gray>- <white>Disband the nation"
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  not-in-nation: "<yellow>Missing translation: not-in-nation"
 
 # ── Plot ──────────────────────────────────────────────────────
 plot:
@@ -174,6 +198,7 @@ plot:
     - "<gray>/plot notforsale <dark_gray>- <white>Remove from sale"
     - "<gray>/plot buy <dark_gray>- <white>Buy the current plot"
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  reset: "<yellow>Missing translation: reset"
 
 # ── Resident ──────────────────────────────────────────────────
 resident:
@@ -205,6 +230,11 @@ invite:
   no-pending: "<red>You have no pending invites."
   accepted: "<green>You have accepted the invite and joined <yellow>{town}</yellow>."
   denied: "<yellow>You have denied the invite to <yellow>{town}</yellow>."
+  accept-success: "<yellow>Missing translation: accept-success"
+  decline-success: "<yellow>Missing translation: decline-success"
+  expired: "<yellow>Missing translation: expired"
+  list-entry: "<yellow>Missing translation: list-entry"
+  list-header: "<yellow>Missing translation: list-header"
 
 # ── Protection ────────────────────────────────────────────────
 protection:
@@ -212,10 +242,11 @@ protection:
   build-denied: "<red>You do not have permission to build here."
   destroy-denied: "<red>You do not have permission to destroy blocks here."
   pvp-denied: "<red>PvP is disabled in this plot."
+  item-denied: "<yellow>Missing translation: item-denied"
 
 # ── World ─────────────────────────────────────────────────────
 world:
-  list-header: "<dark_gray>━ <aqua>Allowed Worlds <dark_gray>(<yellow>{count}</yellow>) ━"
+  list-header: "<dark_gray>┃<aqua>Allowed Worlds <dark_gray>(<yellow>{count}</yellow>) ┃"
   list-entry: "  <yellow>{world}"
   added: "<green>World <yellow>{world}</yellow> is now allowed for claims."
   removed: "<yellow>World <yellow>{world}</yellow> is no longer allowed for claims."
@@ -232,6 +263,9 @@ admin:
   town-deleted: "<green>Town <yellow>{town}</yellow> has been forcefully deleted."
   nation-deleted: "<green>Nation <yellow>{nation}</yellow> has been forcefully deleted."
   bonus-given: "<green>Gave <yellow>{amount}</yellow> bonus blocks to town <yellow>{town}</yellow>."
+  migration_start: "<yellow>Starting migration from Towny..."
+  migration_success: "<green>Successfully migrated <yellow>{towns}</yellow> towns, <yellow>{nations}</yellow> nations, and <yellow>{residents}</yellow> residents."
+  migration_failed: "<red>Migration failed. Check console for details."
   help:
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     - "<red>Admin Commands"
@@ -243,3 +277,46 @@ admin:
     - "<gray>/towniaadmin deletenation <nation> <dark_gray>- <white>Force delete nation"
     - "<gray>/towniaadmin givebonus <town> <amount> <dark_gray>- <white>Give bonus claims"
     - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# ── TownConfig ──────────────────────────────────────────────────
+townconfig:
+  help:
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - "<gold>/townconfig allowInvisibility [true/false] <gray>- Allow/Deny invisibility in town"
+    - "<gold>/townconfig allowSit [true/false] <gray>- Allow/Deny /sit command"
+    - "<gold>/townconfig allowPetPickup [true/false] <gray>- Allow/Deny pet pickup"
+    - "<gold>/townconfig allowPassenger [true/false] <gray>- Allow/Deny passenger"
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  set: "<green>Set <yellow>{key}</yellow> to <yellow>{value}</yellow>."
+  migration_failed: "<yellow>Missing translation: migration_failed"
+  migration_start: "<yellow>Missing translation: migration_start"
+  migration_success: "<yellow>Missing translation: migration_success"
+
+# ── Townia ──────────────────────────────────────────────────────
+townia:
+  price:
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - "<gold>Town/Nation Creation & Upkeep Costs"
+    - "<gray>New Town: <white>1000"
+    - "<gray>New Nation: <white>5000"
+    - "<gray>Town Upkeep: <white>100/day"
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  time:
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - "<gold>Time until next upkeep: <white>{hours}h {minutes}m"
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  top-entry-nation: "<yellow>Missing translation: top-entry-nation"
+  top-entry-resident: "<yellow>Missing translation: top-entry-resident"
+  top-entry-town: "<yellow>Missing translation: top-entry-town"
+  top-header: "<yellow>Missing translation: top-header"
+
+  help:
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - "<gold>/townia <gray>- Show all command help"
+    - "<gold>/townia ? <gray>- Show /townia help"
+    - "<gold>/townia map <gray>- Show nearby map"
+    - "<gold>/townia price <gray>- Show town/nation creation costs"
+    - "<gold>/townia time <gray>- Show time until next upkeep"
+    - "<gold>/townia top residents all/town/nation <gray>- Show resident rankings"
+    - "<gold>/townia top land all/town/resident <gray>- Show land rankings"
+    - "<dark_gray>━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+

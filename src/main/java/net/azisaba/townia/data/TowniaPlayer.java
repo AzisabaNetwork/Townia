@@ -12,6 +12,15 @@ public class TowniaPlayer {
     private String preferredLang;
     private java.util.List<String> friends = new java.util.ArrayList<>();
 
+    private boolean toggleMap = false;
+    private boolean toggleTownClaim = false;
+    private boolean togglePlotBorder = false;
+
+    private String defaultPermsFriend = "";
+    private String defaultPermsAlly = "";
+    private String defaultPermsOutsider = "";
+    private String defaultPermsResident = "BDSI";
+
     public TowniaPlayer(UUID uuid, String name, UUID townUuid, TownRank rank, long lastSeen, String preferredLang) {
         this.uuid = uuid;
         this.name = name;
@@ -39,6 +48,15 @@ public class TowniaPlayer {
     public String getPreferredLang() { return preferredLang; }
     public java.util.List<String> getFriends() { return friends; }
 
+    public boolean isToggleMap() { return toggleMap; }
+    public boolean isToggleTownClaim() { return toggleTownClaim; }
+    public boolean isTogglePlotBorder() { return togglePlotBorder; }
+
+    public String getDefaultPermsFriend() { return defaultPermsFriend; }
+    public String getDefaultPermsAlly() { return defaultPermsAlly; }
+    public String getDefaultPermsOutsider() { return defaultPermsOutsider; }
+    public String getDefaultPermsResident() { return defaultPermsResident; }
+
     public boolean isInTown() { return townUuid != null; }
     public boolean isMayor() { return rank == TownRank.MAYOR; }
     public boolean isCoMayor() { return rank == TownRank.CO_MAYOR; }
@@ -52,4 +70,13 @@ public class TowniaPlayer {
     public void setLastSeen(long lastSeen) { this.lastSeen = lastSeen; }
     public void setPreferredLang(String preferredLang) { this.preferredLang = preferredLang; }
     public void setFriends(java.util.List<String> friends) { this.friends = friends; }
+
+    public void setToggleMap(boolean toggleMap) { this.toggleMap = toggleMap; }
+    public void setToggleTownClaim(boolean toggleTownClaim) { this.toggleTownClaim = toggleTownClaim; }
+    public void setTogglePlotBorder(boolean togglePlotBorder) { this.togglePlotBorder = togglePlotBorder; }
+
+    public void setDefaultPermsFriend(String defaultPermsFriend) { this.defaultPermsFriend = defaultPermsFriend; }
+    public void setDefaultPermsAlly(String defaultPermsAlly) { this.defaultPermsAlly = defaultPermsAlly; }
+    public void setDefaultPermsOutsider(String defaultPermsOutsider) { this.defaultPermsOutsider = defaultPermsOutsider; }
+    public void setDefaultPermsResident(String defaultPermsResident) { this.defaultPermsResident = defaultPermsResident; }
 }

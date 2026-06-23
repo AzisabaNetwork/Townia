@@ -34,6 +34,7 @@ public class NationManager {
         nameIndex.clear();
         try {
             for (Nation n : db.getAllNations()) {
+                db.loadNationTitles(n);
                 cache.put(n.getId(), n);
                 nameIndex.put(n.getName().toLowerCase(), n.getId());
             }

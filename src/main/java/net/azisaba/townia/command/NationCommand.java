@@ -47,7 +47,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
 
         switch (args[0].toLowerCase()) {
             case "new"      -> handleNew(sender, args);
-            case "invite"   -> handleInvite(sender, args);
+            case "invite", "add" -> handleInvite(sender, args);
             case "join"     -> handleJoin(sender, args);
             case "leave"    -> handleLeave(sender);
             case "kick"     -> handleKick(sender, args);
@@ -61,6 +61,9 @@ public class NationCommand implements CommandExecutor, TabCompleter {
             case "spawn"    -> handleSpawn(sender);
             case "setspawn" -> handleSetSpawn(sender);
             case "delete"   -> handleDelete(sender, args);
+            case "online"   -> handleOnline(sender);
+            case "toggle"   -> handleToggle(sender, args);
+            case "?", "help"-> sendHelp(sender);
             default         -> sendHelp(sender);
         }
         return true;
@@ -81,7 +84,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         UUID townUuid = res.getTownUuid();
         Optional<Town> townOpt = townManager.getTown(townUuid);
         if (townOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
         Town town = townOpt.get();
@@ -109,7 +112,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         String name = args[1];
         try {
             nationManager.createNation(name, townUuid, player.getUniqueId());
-            plugin.getMessageManager().sendMessage(sender, "nation.created", "{nation}", name);
+            plugin.getMessageManager().sendMessage(sender, "nation.created", "nation", "{nation}", name);
         } catch (TowniaException e) {
             if (cost > 0 && plugin.hasEconomy()) plugin.getEconomy().depositPlayer(player, cost);
             plugin.getMessageManager().sendMessage(sender, e.getMessageKey(), e.getReplacements());
@@ -138,7 +141,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         String targetTownName = args[1];
         Optional<Town> targetTownOpt = townManager.getTownByName(targetTownName);
         if (targetTownOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
         Town targetTown = targetTownOpt.get();
@@ -178,7 +181,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         UUID townUuid = res.getTownUuid();
         Optional<Town> townOpt = townManager.getTown(townUuid);
         if (townOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
         Town town = townOpt.get();
@@ -197,7 +200,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         String nationName = args[1];
         Optional<Nation> nationOpt = nationManager.getNationByName(nationName);
         if (nationOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
             return;
         }
         Nation nation = nationOpt.get();
@@ -209,7 +212,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         try {
             nationManager.addTownToNation(nation.getId(), townUuid);
             pendingNationInvites.remove(townUuid);
-            plugin.getMessageManager().sendMessage(sender, "nation.joined", "{nation}", nation.getName());
+            plugin.getMessageManager().sendMessage(sender, "nation.joined", "nation", "{nation}", nation.getName());
         } catch (TowniaException e) {
             plugin.getMessageManager().sendMessage(sender, e.getMessageKey(), e.getReplacements());
         }
@@ -240,7 +243,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         try {
             nationManager.removeTownFromNation(nationUuid, townUuid);
             String nationName = nationOpt.map(Nation::getName).orElse("Unknown");
-            plugin.getMessageManager().sendMessage(sender, "nation.left", "{nation}", nationName);
+            plugin.getMessageManager().sendMessage(sender, "nation.left", "nation", "{nation}", nationName);
         } catch (TowniaException e) {
             plugin.getMessageManager().sendMessage(sender, e.getMessageKey(), e.getReplacements());
         }
@@ -268,7 +271,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         String targetTownName = args[1];
         Optional<Town> targetOpt = townManager.getTownByName(targetTownName);
         if (targetOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.town-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.town-not-found", "town", "Unknown");
             return;
         }
         Town targetTown = targetOpt.get();
@@ -390,7 +393,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         try {
             Optional<Nation> nationOpt = nationManager.getNation(nationUuid);
             if (nationOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
                 return;
             }
             Nation nation = nationOpt.get();
@@ -451,6 +454,18 @@ public class NationCommand implements CommandExecutor, TabCompleter {
                     plugin.getMessageManager().sendMessage(sender, "error.invalid-amount");
                 }
             }
+            case "king" -> {
+                plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+            }
+            case "capital" -> {
+                plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+            }
+            case "title" -> {
+                plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+            }
+            case "surname" -> {
+                plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+            }
             default -> plugin.getMessageManager().sendMessage(sender, "error.invalid-args");
         }
     }
@@ -494,7 +509,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
 
         Nation targetNation = nationManager.getNationByName(targetName).orElse(null);
         if (targetNation == null) {
-            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
             return;
         }
 
@@ -536,7 +551,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         if (args.length >= 2) {
             Optional<Nation> nationOpt = nationManager.getNationByName(args[1]);
             if (nationOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
                 return;
             }
             nation = nationOpt.get();
@@ -554,7 +569,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
             }
             Optional<Nation> nationOpt = nationManager.getNation(townOpt.get().getNationUuid());
             if (nationOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+                plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
                 return;
             }
             nation = nationOpt.get();
@@ -724,7 +739,7 @@ public class NationCommand implements CommandExecutor, TabCompleter {
         UUID nationUuid = town.getNationUuid();
         Optional<Nation> nationOpt = nationManager.getNation(nationUuid);
         if (nationOpt.isEmpty()) {
-            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found");
+            plugin.getMessageManager().sendMessage(sender, "error.nation-not-found", "nation", "Unknown");
             return null;
         }
         Nation nation = nationOpt.get();
@@ -765,5 +780,14 @@ public class NationCommand implements CommandExecutor, TabCompleter {
             }
         }
         return completions;
+    }
+
+
+    private void handleOnline(CommandSender sender) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+    }
+
+    private void handleToggle(CommandSender sender, String[] args) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
     }
 }

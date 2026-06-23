@@ -287,7 +287,7 @@ public class PlotProtectionListener implements Listener {
         }
         
         if (perms == null) perms = "";
-        return perms.indexOf(type.id) < 0;
+        return !net.azisaba.townia.data.PermissionMatrix.hasPerm(perms, type.id);
     }
     
     private String getTownPerms(Town town, Relationship rel) {

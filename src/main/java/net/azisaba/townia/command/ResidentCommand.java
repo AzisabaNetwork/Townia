@@ -4,7 +4,6 @@ import net.azisaba.townia.Townia;
 import net.azisaba.townia.data.Nation;
 import net.azisaba.townia.data.Town;
 import net.azisaba.townia.data.TowniaPlayer;
-import net.azisaba.townia.data.TownRank;
 import net.azisaba.townia.manager.NationManager;
 import net.azisaba.townia.manager.ResidentManager;
 import net.azisaba.townia.manager.TownManager;
@@ -42,7 +41,6 @@ public class ResidentCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
-            // Show own info (player only)
             Player player = requirePlayer(sender);
             if (player == null) return true;
             showResidentInfo(sender, player.getUniqueId().toString(), player.getName());
@@ -58,13 +56,18 @@ public class ResidentCommand implements CommandExecutor, TabCompleter {
                     } else {
                         plugin.getMessageManager().sendMessage(sender, "error.player-only");
                     }
+                } else if (args.length >= 2 && args[1].equalsIgnoreCase("perm")) {
+                    handleSetPerm(sender, args);
                 } else {
                     plugin.getMessageManager().sendMessage(sender, "error.invalid-args");
                 }
             }
+            case "toggle" -> handleToggle(sender, args);
+            case "spawn" -> handleSpawn(sender, args);
+            case "tax" -> handleTax(sender, args);
             case "friend" -> handleFriend(sender, args);
+            case "?", "help" -> plugin.getMessageManager().sendMessage(sender, "townia.help");
             default -> {
-                // Show info for named player
                 String targetName = args[0];
                 Optional<TowniaPlayer> targetOpt = residentManager.getResidentByName(targetName);
                 if (targetOpt.isEmpty()) {
@@ -244,5 +247,22 @@ public class ResidentCommand implements CommandExecutor, TabCompleter {
             return null;
         }
         return player;
+    }
+
+
+    private void handleSetPerm(CommandSender sender, String[] args) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+    }
+
+    private void handleToggle(CommandSender sender, String[] args) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+    }
+
+    private void handleSpawn(CommandSender sender, String[] args) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
+    }
+
+    private void handleTax(CommandSender sender, String[] args) {
+        plugin.getMessageManager().sendMessage(sender, "error.not-implemented");
     }
 }

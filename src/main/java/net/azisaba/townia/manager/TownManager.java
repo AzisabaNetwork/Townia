@@ -37,6 +37,7 @@ public class TownManager {
         nameIndex.clear();
         try {
             for (Town t : db.getAllTowns()) {
+                db.loadTownOutposts(t);
                 cache.put(t.getId(), t);
                 nameIndex.put(t.getName().toLowerCase(), t.getId());
             }
@@ -67,6 +68,14 @@ public class TownManager {
         list.sort(Comparator.comparing(Town::getName));
         return list;
     }
+
+    public List<Town> getTownsByNation(UUID nationId) {
+        return cache.values().stream()
+                .filter(t -> nationId.equals(t.getNationUuid()))
+                .sorted(Comparator.comparing(Town::getName))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
 
     public boolean townExists(String name) {
         return nameIndex.containsKey(name.toLowerCase());
@@ -200,6 +209,28 @@ public class TownManager {
         Town town = cache.get(townId);
         if (town == null) throw new TowniaException("error.town-not-found");
         return town;
+    }
+
+    public void addTownOutpost(UUID townId, net.azisaba.townia.data.TowniaOutpost outpost) throws TowniaException {
+        Town town = requireTown(townId);
+        try {
+            db.saveTownOutpost(townId, outpost);
+            db.loadTownOutposts(town); // Reload to get ID if auto-incremented
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to save outpost", e);
+            throw new TowniaException("error.database");
+        }
+    }
+
+    public void removeTownOutpost(UUID townId, int outpostId) throws TowniaException {
+        Town town = requireTown(townId);
+        try {
+            db.deleteTownOutpost(outpostId);
+            town.getOutposts().removeIf(o -> o.id() == outpostId);
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to delete outpost", e);
+            throw new TowniaException("error.database");
+        }
     }
 
     private void persist(Town town) {

@@ -35,6 +35,12 @@ public class MessageManager {
 
         for (String code : List.of("en", "ja")) {
             File target = new File(messagesDir, "lang_" + code + ".yml");
+            // Always try to load the latest from JAR to ensure new keys are present.
+            // In a production plugin, you'd merge the YAMLs, but for now we rely on the JAR as the source of truth if it's updated.
+            // Actually, we will just copy if missing. To fix the issue for the user, we will overwrite the file if we detect missing keys, 
+            // or just load missing keys directly from the JAR as a fallback!
+            
+            // Let's copy it if it doesn't exist
             if (!target.exists()) {
                 try (InputStream in = plugin.getResource("messages/lang_" + code + ".yml")) {
                     if (in != null) {
@@ -53,19 +59,38 @@ public class MessageManager {
 
         for (File langFile : langFiles) {
             String langCode = langFile.getName().replace("lang_", "").replace(".yml", "");
+            
+            // Load external file
+            Map<String, Object> messages = new LinkedHashMap<>();
             try (InputStreamReader reader = new InputStreamReader(new FileInputStream(langFile), StandardCharsets.UTF_8)) {
                 FileConfiguration cfg = YamlConfiguration.loadConfiguration(reader);
-                Map<String, Object> messages = new LinkedHashMap<>();
                 for (String key : cfg.getKeys(true)) {
                     if (!cfg.isConfigurationSection(key)) {
                         messages.put(key, cfg.get(key));
                     }
                 }
-                allMessages.put(langCode, messages);
-                plugin.getLogger().info("Loaded language file: " + langFile.getName() + " (" + messages.size() + " keys)");
             } catch (IOException e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to load " + langFile.getName(), e);
             }
+            
+            // Merge with internal JAR file to ensure no keys are missing!
+            try (InputStream in = plugin.getResource("messages/lang_" + langCode + ".yml")) {
+                if (in != null) {
+                    try (InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                        FileConfiguration internalCfg = YamlConfiguration.loadConfiguration(reader);
+                        for (String key : internalCfg.getKeys(true)) {
+                            if (!internalCfg.isConfigurationSection(key) && !messages.containsKey(key)) {
+                                messages.put(key, internalCfg.get(key));
+                            }
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                plugin.getLogger().log(Level.WARNING, "Failed to load internal lang_" + langCode + ".yml", e);
+            }
+
+            allMessages.put(langCode, messages);
+            plugin.getLogger().info("Loaded language file: " + langFile.getName() + " (" + messages.size() + " keys)");
         }
     }
 
@@ -125,9 +150,18 @@ public class MessageManager {
     }
 
     private Object getMessageObject(String lang, String key) {
-        Map<String, Object> messages = allMessages.getOrDefault(lang, allMessages.get(defaultLang));
-        if (messages == null) return "<red>No language file loaded for: " + lang;
-        return messages.getOrDefault(key, "<red>Missing message key: " + key);
+        // Fallback to default lang per-key if missing
+        Map<String, Object> messages = allMessages.get(lang);
+        Map<String, Object> defaultMessages = allMessages.get(defaultLang);
+        
+        if (messages != null && messages.containsKey(key)) {
+            return messages.get(key);
+        }
+        if (defaultMessages != null && defaultMessages.containsKey(key)) {
+            return defaultMessages.get(key);
+        }
+        
+        return "<red>Missing message key: " + key;
     }
 
     private String replacePlaceholders(String text, String... replacements) {

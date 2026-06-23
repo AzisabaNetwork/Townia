@@ -1,7 +1,6 @@
 package net.azisaba.townia.manager;
 
 import net.azisaba.townia.Townia;
-import net.azisaba.townia.data.Nation;
 import net.azisaba.townia.data.Town;
 import net.azisaba.townia.data.TowniaPlayer;
 import net.milkbowl.vault.economy.Economy;

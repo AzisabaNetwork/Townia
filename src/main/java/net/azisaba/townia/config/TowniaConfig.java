@@ -4,7 +4,6 @@ import net.azisaba.townia.Townia;
 
 import java.util.List;
 
-/** Typed wrapper around the plugin's config.yml. Reload via {@link #reload()}. */
 public class TowniaConfig {
 
     private final Townia plugin;
@@ -64,4 +63,7 @@ public class TowniaConfig {
     public double getTownUpkeep() { return townUpkeep; }
     public double getDefaultTownTax() { return defaultTownTax; }
     public double getDefaultNationTax() { return defaultNationTax; }
+    /** Alias for townUpkeep – used as the "claim cost" display in /townia price */
+    public double getClaimCost() { return plugin.getConfig().getDouble("claim-cost", 0.0); }
 }
+
