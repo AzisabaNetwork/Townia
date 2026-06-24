@@ -34,7 +34,7 @@ class MessageManager(private val plugin: Townia) {
             val targetFile = File(messagesDir, "lang_$code.yml")
             if (!targetFile.exists()) {
                 try {
-                    plugin.getResource("messages/lang$code.yml")?.use { inputStream ->
+                    plugin.getResource("messages/lang_$code.yml")?.use { inputStream ->
                         targetFile.outputStream().use { outputStream ->
                             inputStream.copyTo(outputStream)
                         }
@@ -94,10 +94,9 @@ class MessageManager(private val plugin: Townia) {
             else -> listOf(mesageObject)
         }
 
-        // TODO: TowniaConfigのgetterの名称に合わせて調整
-        val prefix = plugin.config.getString("message-prefix", "&7[Townia] &f")
+        val prefix = plugin.towniaConfig.prefix
         for (line in lines) {
-            val raw = prefix + replacePlaceholders(line.toString(), *replacements)
+            val raw = replaceLegacyColors(prefix + replacePlaceholders(line.toString(), *replacements))
             sender.sendMessage(miniMessage.deserialize(raw))
         }
     }
@@ -112,7 +111,7 @@ class MessageManager(private val plugin: Townia) {
             messageObject.toString()
         }
 
-        val processedRaw = replacePlaceholders(raw, *replacements)
+        val processedRaw = replaceLegacyColors(replacePlaceholders(raw, *replacements))
         player.sendActionBar(miniMessage.deserialize(processedRaw))
     }
 
@@ -126,7 +125,7 @@ class MessageManager(private val plugin: Townia) {
             obj.toString()
         }
 
-        val processedRaw = replacePlaceholders(raw, *replacements)
+        val processedRaw = replaceLegacyColors(replacePlaceholders(raw, *replacements))
         val component = miniMessage.deserialize(processedRaw)
         return PlainTextComponentSerializer.plainText().serialize(component)
     }
@@ -167,5 +166,35 @@ class MessageManager(private val plugin: Townia) {
             }
         }
         return result
+    }
+
+    private fun replaceLegacyColors(text: String): String {
+        return text.replace(Regex("[&§]([0-9a-fk-orA-FK-OR])")) { match ->
+            when (match.groupValues[1].lowercase()) {
+                "0" -> "<black>"
+                "1" -> "<dark_blue>"
+                "2" -> "<dark_green>"
+                "3" -> "<dark_aqua>"
+                "4" -> "<dark_red>"
+                "5" -> "<dark_purple>"
+                "6" -> "<gold>"
+                "7" -> "<gray>"
+                "8" -> "<dark_gray>"
+                "9" -> "<blue>"
+                "a" -> "<green>"
+                "b" -> "<aqua>"
+                "c" -> "<red>"
+                "d" -> "<light_purple>"
+                "e" -> "<yellow>"
+                "f" -> "<white>"
+                "k" -> "<obfuscated>"
+                "l" -> "<bold>"
+                "m" -> "<strikethrough>"
+                "n" -> "<underlined>"
+                "o" -> "<italic>"
+                "r" -> "<reset>"
+                else -> match.value
+            }
+        }
     }
 }
