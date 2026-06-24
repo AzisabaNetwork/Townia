@@ -15,7 +15,7 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     compileOnly("com.palmergames.bukkit.towny:towny:0.100.3.0")
     implementation("org.xerial:sqlite-jdbc:3.45.3.0")
-    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation("com.zaxxer:HikariCP:7.1.0")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
 }
 
