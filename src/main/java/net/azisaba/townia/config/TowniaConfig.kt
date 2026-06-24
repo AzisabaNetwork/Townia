@@ -1,69 +1,68 @@
-package net.azisaba.townia.config;
+package net.azisaba.townia.config
 
-import net.azisaba.townia.Townia;
+import net.azisaba.townia.Townia
 
-import java.util.List;
+class TowniaConfig(private val plugin: Townia) {
 
-public class TowniaConfig {
+    var prefix: String = ""
+        private set
+    var defaultLanguage: String = ""
+        private set
+    var allowedWorlds: List<String> = emptyList()
+        private set
+    var defaultClaimLimit: Int = 0
+        private set
+    var claimsPerResident: Int = 0
+        private set
+    var maxBonusClaims: Int = 0
+        private set
+    var inviteTimeout: Int = 0
+        private set
+    var townCreationCost: Double = 0.0
+        private set
+    var nationCreationCost: Double = 0.0
+        private set
+    var townUpkeep: Double = 0.0
+        private set
+    var defaultTownTax: Double = 0.0
+        private set
+    var defaultNationTax: Double = 0.0
+        private set
 
-    private final Townia plugin;
+    val claimCost: Double
+        get() = plugin.config.getDouble("claim-cost", 0.0)
 
-    private String prefix;
-    private String defaultLanguage;
-    private List<String> allowedWorlds;
-    private int defaultClaimLimit;
-    private int claimsPerResident;
-    private int maxBonusClaims;
-    private int inviteTimeout;
-    private double townCreationCost;
-    private double nationCreationCost;
-    private double townUpkeep;
-    private double defaultTownTax;
-    private double defaultNationTax;
-
-    public TowniaConfig(Townia plugin) {
-        this.plugin = plugin;
-        reload();
+    init {
+        reload()
     }
 
-    public void reload() {
-        plugin.reloadConfig();
-        prefix           = plugin.getConfig().getString("prefix", "<gray>[<green>Townia<gray>]<reset> ");
-        defaultLanguage  = plugin.getConfig().getString("default-language", "ja");
-        allowedWorlds    = plugin.getConfig().getStringList("allowed-worlds");
-        defaultClaimLimit= plugin.getConfig().getInt("default-claim-limit", 8);
-        claimsPerResident= plugin.getConfig().getInt("claims-per-resident", 1);
-        maxBonusClaims   = plugin.getConfig().getInt("max-bonus-claims", 100);
-        inviteTimeout    = plugin.getConfig().getInt("invite-timeout", 120);
-        townCreationCost = plugin.getConfig().getDouble("town-creation-cost", 0.0);
-        nationCreationCost = plugin.getConfig().getDouble("nation-creation-cost", 0.0);
-        townUpkeep       = plugin.getConfig().getDouble("town-upkeep", 0.0);
-        defaultTownTax   = plugin.getConfig().getDouble("default-town-tax", 0.0);
-        defaultNationTax = plugin.getConfig().getDouble("default-nation-tax", 0.0);
+    fun reload() {
+        plugin.reloadConfig()
+        val config = plugin.config
+
+        prefix             = config.getString("prefix", "<gray>[<green>Townia<gray>]<reset> ") ?: ""
+        defaultLanguage    = config.getString("default-language", "ja") ?: "ja"
+        allowedWorlds      = config.getStringList("allowed-worlds")
+        defaultClaimLimit  = config.getInt("default-claim-limit", 8)
+        claimsPerResident  = config.getInt("claims-per-resident", 1)
+        maxBonusClaims     = config.getInt("max-bonus-claims", 100)
+        inviteTimeout      = config.getInt("invite-timeout", 120)
+        townCreationCost   = config.getDouble("town-creation-cost", 0.0)
+        nationCreationCost = config.getDouble("nation-creation-cost", 0.0)
+        townUpkeep         = config.getDouble("town-upkeep", 0.0)
+        defaultTownTax     = config.getDouble("default-town-tax", 0.0)
+        defaultNationTax   = config.getDouble("default-nation-tax", 0.0)
 
         if (allowedWorlds.isEmpty()) {
-            allowedWorlds = List.of("world");
+            allowedWorlds = listOf("world")
         }
     }
 
-    public boolean isPvpEnabled(String plotTypeName) {
-        return plugin.getConfig().getBoolean("pvp." + plotTypeName.toLowerCase(), false);
+    fun isPvpEnabled(plotTypeName: String): Boolean {
+        return plugin.config.getBoolean("pvp.${plotTypeName.lowercase()}", false)
     }
 
-    public String getPrefix() { return prefix; }
-    public String getDefaultLanguage() { return defaultLanguage; }
-    public List<String> getAllowedWorlds() { return allowedWorlds; }
-    public boolean isWorldAllowed(String worldName) { return allowedWorlds.contains(worldName); }
-    public int getDefaultClaimLimit() { return defaultClaimLimit; }
-    public int getClaimsPerResident() { return claimsPerResident; }
-    public int getMaxBonusClaims() { return maxBonusClaims; }
-    public int getInviteTimeout() { return inviteTimeout; }
-    public double getTownCreationCost() { return townCreationCost; }
-    public double getNationCreationCost() { return nationCreationCost; }
-    public double getTownUpkeep() { return townUpkeep; }
-    public double getDefaultTownTax() { return defaultTownTax; }
-    public double getDefaultNationTax() { return defaultNationTax; }
-    /** Alias for townUpkeep – used as the "claim cost" display in /townia price */
-    public double getClaimCost() { return plugin.getConfig().getDouble("claim-cost", 0.0); }
+    fun isWorldAllowed(worldName: String): Boolean {
+        return allowedWorlds.contains(worldName)
+    }
 }
-

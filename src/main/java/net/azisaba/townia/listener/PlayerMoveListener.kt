@@ -1,60 +1,55 @@
-package net.azisaba.townia.listener;
+package net.azisaba.townia.listener
 
-import net.azisaba.townia.Townia;
-import net.azisaba.townia.data.Plot;
-import net.azisaba.townia.data.Town;
-import net.azisaba.townia.manager.PlotManager;
-import net.azisaba.townia.manager.TownManager;
-import org.bukkit.Chunk;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerMoveEvent;
+import net.azisaba.townia.Townia
+import net.azisaba.townia.data.Plot
+import net.azisaba.townia.data.Town
+import net.azisaba.townia.manager.PlotManager
+import net.azisaba.townia.manager.TownManager
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerMoveEvent
+import java.util.*
 
-import java.util.Objects;
-import java.util.Optional;
+class PlayerMoveListener(private val plugin: Townia) : Listener {
+    private val plotManager: PlotManager
+    private val townManager: TownManager
 
-public class PlayerMoveListener implements Listener {
-
-    private final Townia plugin;
-    private final PlotManager plotManager;
-    private final TownManager townManager;
-
-    public PlayerMoveListener(Townia plugin) {
-        this.plugin = plugin;
-        this.plotManager = plugin.getPlotManager();
-        this.townManager = plugin.getTownManager();
+    init {
+        this.plotManager = plugin.plotManager
+        this.townManager = plugin.townManager
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerMove(PlayerMoveEvent event) {
-        if (event.getTo() == null) return;
-        
-        Chunk fromChunk = event.getFrom().getChunk();
-        Chunk toChunk = event.getTo().getChunk();
-        
+    fun onPlayerMove(event: PlayerMoveEvent) {
+        if (event.getTo() == null) return
+
+        val fromChunk = event.getFrom().getChunk()
+        val toChunk = event.getTo().getChunk()
+
         if (fromChunk.getX() == toChunk.getX() && fromChunk.getZ() == toChunk.getZ()) {
-            return;
+            return
         }
 
-        Player player = event.getPlayer();
-        
-        Optional<Plot> toPlotOpt = plotManager.getPlot(toChunk);
-        Optional<Plot> fromPlotOpt = plotManager.getPlot(fromChunk);
+        val player = event.getPlayer()
+
+        val toPlotOpt: Optional<Plot> = plotManager.getPlot(toChunk)
+        val fromPlotOpt: Optional<Plot> = plotManager.getPlot(fromChunk)
 
         if (toPlotOpt.isEmpty()) {
-            plugin.getMessageManager().sendActionBar(player, "town.actionbar-wilderness");
+            plugin.messageManager!!.sendActionBar(player, "town.actionbar-wilderness")
         } else {
-            Optional<Town> townOpt = townManager.getTown(toPlotOpt.get().getTownUuid());
+            val townOpt: Optional<Town> = townManager.getTown(toPlotOpt.get().townUuid)
             if (townOpt.isPresent()) {
-                Town town = townOpt.get();
-                String mayorName = plugin.getResidentManager().getResident(town.getMayorUuid())
-                        .map(r -> r.getName())
-                        .orElse("Unknown");
-                plugin.getMessageManager().sendActionBar(player, "town.actionbar-town", 
-                        "town", town.getName(), 
-                        "mayor", mayorName);
+                val town: Town = townOpt.get()
+                val mayorName: String? = plugin.residentManager.getResident(town.mayorUuid)
+                    .map({ r -> r.name })
+                    .orElse("Unknown")
+                plugin.messageManager!!.sendActionBar(
+                    player, "town.actionbar-town",
+                    "town", town.name!!,
+                    "mayor", mayorName!!
+                )
             }
         }
     }

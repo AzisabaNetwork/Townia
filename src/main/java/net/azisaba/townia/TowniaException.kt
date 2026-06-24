@@ -1,21 +1,11 @@
-package net.azisaba.townia;
+package net.azisaba.townia
 
-public class TowniaException extends Exception {
+class TowniaException(val messageKey: String?, vararg replacements: String?) : Exception(
+    messageKey
+) {
+    val replacements: Array<out String?>
 
-    private final String messageKey;
-    private final String[] replacements;
-
-    public TowniaException(String messageKey, String... replacements) {
-        super(messageKey);
-        this.messageKey = messageKey;
-        this.replacements = replacements;
-    }
-
-    public String getMessageKey() {
-        return messageKey;
-    }
-
-    public String[] getReplacements() {
-        return replacements;
+    init {
+        this.replacements = replacements
     }
 }

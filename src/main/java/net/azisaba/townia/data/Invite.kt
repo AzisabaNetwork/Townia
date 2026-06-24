@@ -1,10 +1,16 @@
-package net.azisaba.townia.data;
+package net.azisaba.townia.data
 
-import java.util.UUID;
+import java.util.*
 
-public record Invite(int id, UUID targetUuid, UUID townUuid, UUID inviterUuid, long createdAt) {
-
-    public boolean isExpired(int expirySeconds) {
-        return System.currentTimeMillis() - createdAt > (long) expirySeconds * 1000L;
+@JvmRecord
+data class Invite(
+    val id: Int,
+    val targetUuid: UUID?,
+    val townUuid: UUID?,
+    val inviterUuid: UUID?,
+    val createdAt: Long
+) {
+    fun isExpired(expirySeconds: Int): Boolean {
+        return System.currentTimeMillis() - createdAt > expirySeconds.toLong() * 1000L
     }
 }

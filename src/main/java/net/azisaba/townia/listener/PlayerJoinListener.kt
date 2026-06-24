@@ -1,45 +1,41 @@
-package net.azisaba.townia.listener;
+package net.azisaba.townia.listener
 
-import net.azisaba.townia.Townia;
-import net.azisaba.townia.manager.ResidentManager;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
+import net.azisaba.townia.Townia
+import net.azisaba.townia.manager.ResidentManager
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerJoinEvent
+import org.bukkit.event.player.PlayerQuitEvent
 
-public class PlayerJoinListener implements Listener {
+class PlayerJoinListener(private val plugin: Townia) : Listener {
+    private val residentManager: ResidentManager
 
-    private final Townia plugin;
-    private final ResidentManager residentManager;
-
-    public PlayerJoinListener(Townia plugin) {
-        this.plugin = plugin;
-        this.residentManager = plugin.getResidentManager();
+    init {
+        this.residentManager = plugin.residentManager
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+    fun onPlayerJoin(event: PlayerJoinEvent) {
+        val player = event.getPlayer()
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
             try {
-                residentManager.getOrCreate(player);
-            } catch (Exception e) {
-                plugin.getLogger().severe("Failed to load/create resident for " + player.getName() + ": " + e.getMessage());
+                residentManager.getOrCreate(player)
+            } catch (e: Exception) {
+                plugin.getLogger().severe("Failed to load/create resident for " + player.name + ": " + e.message)
             }
-        });
+        })
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+    fun onPlayerQuit(event: PlayerQuitEvent) {
+        val player = event.getPlayer()
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
             try {
-                residentManager.updateLastSeen(player.getUniqueId());
-            } catch (Exception e) {
-                plugin.getLogger().severe("Failed to update last-seen for " + player.getName() + ": " + e.getMessage());
+                residentManager.updateLastSeen(player.getUniqueId())
+            } catch (e: Exception) {
+                plugin.getLogger().severe("Failed to update last-seen for " + player.name + ": " + e.message)
             }
-        });
+        })
     }
 }

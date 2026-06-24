@@ -1,180 +1,171 @@
-package net.azisaba.townia.manager;
+package net.azisaba.townia.manager
 
-import net.azisaba.townia.Townia;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.Player;
+import net.azisaba.townia.Townia
+import net.kyori.adventure.text.minimessage.MiniMessage
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+import org.bukkit.command.CommandSender
+import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.Player
+import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
+import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
+import java.util.logging.Level
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.logging.Level;
+class MessageManager(private val plugin: Townia) {
 
-public class MessageManager {
+    private val allMessages = HashMap<String, Map<String, Any>>()
+    private lateinit var defaultLanguage: String
+    private val miniMessage = MiniMessage.miniMessage()
 
-    private final Townia plugin;
-    private final Map<String, Map<String, Object>> allMessages = new HashMap<>();
-    private String defaultLang;
-    private final MiniMessage miniMessage = MiniMessage.miniMessage();
-
-    public MessageManager(Townia plugin) {
-        this.plugin = plugin;
-        loadAllMessages();
+    init {
+        loadAllMessages()
     }
 
-    public void loadAllMessages() {
-        allMessages.clear();
-        defaultLang = plugin.getConfig().getString("default-language", "ja");
+    fun loadAllMessages() {
+        allMessages.clear()
+        defaultLanguage = plugin.config.getString("default-language", "ja") ?: "ja"
 
-        File messagesDir = new File(plugin.getDataFolder(), "messages");
-        if (!messagesDir.exists()) messagesDir.mkdirs();
+        val messagesDir = File(plugin.dataFolder, "messages")
+        if (!messagesDir.exists()) messagesDir.mkdirs()
 
-        for (String code : List.of("en", "ja")) {
-            File target = new File(messagesDir, "lang_" + code + ".yml");
-            // Always try to load the latest from JAR to ensure new keys are present.
-            // In a production plugin, you'd merge the YAMLs, but for now we rely on the JAR as the source of truth if it's updated.
-            // Actually, we will just copy if missing. To fix the issue for the user, we will overwrite the file if we detect missing keys, 
-            // or just load missing keys directly from the JAR as a fallback!
-            
-            // Let's copy it if it doesn't exist
-            if (!target.exists()) {
-                try (InputStream in = plugin.getResource("messages/lang_" + code + ".yml")) {
-                    if (in != null) {
-                        try (OutputStream out = new FileOutputStream(target)) {
-                            in.transferTo(out);
+        for (code in listOf("ja", "en")) {
+            val targetFile = File(messagesDir, "lang_$code.yml")
+            if (!targetFile.exists()) {
+                try {
+                    plugin.getResource("messages/lang$code.yml")?.use { inputStream ->
+                        targetFile.outputStream().use { outputStream ->
+                            inputStream.copyTo(outputStream)
                         }
                     }
-                } catch (IOException e) {
-                    plugin.getLogger().log(Level.WARNING, "Failed to extract lang_" + code + ".yml", e);
+                } catch (e: IOException) {
+                    plugin.logger.log(Level.WARNING, "Failed to extract lang_$code.yml", e)
                 }
             }
         }
 
-        File[] langFiles = messagesDir.listFiles((dir, name) -> name.matches("lang_\\w+\\.yml"));
-        if (langFiles == null) return;
+        val langFiles = messagesDir.listFiles { _, name -> name.matches(Regex("lang_\\w+\\.yml")) }
+        if (langFiles == null) return
 
-        for (File langFile : langFiles) {
-            String langCode = langFile.getName().replace("lang_", "").replace(".yml", "");
-            
-            // Load external file
-            Map<String, Object> messages = new LinkedHashMap<>();
-            try (InputStreamReader reader = new InputStreamReader(new FileInputStream(langFile), StandardCharsets.UTF_8)) {
-                FileConfiguration cfg = YamlConfiguration.loadConfiguration(reader);
-                for (String key : cfg.getKeys(true)) {
-                    if (!cfg.isConfigurationSection(key)) {
-                        messages.put(key, cfg.get(key));
+        for (langFile in langFiles) {
+            val langCode = langFile.name.replace("lang_", "").replace(".yml", "")
+
+            val messages = LinkedHashMap<String, Any>()
+            try {
+                InputStreamReader(FileInputStream(langFile), StandardCharsets.UTF_8).use { reader ->
+                    val cfg = YamlConfiguration.loadConfiguration(reader)
+                    for (key in cfg.getKeys(true)) {
+                        if (!cfg.isConfigurationSection(key)) {
+                            cfg.get(key)?.let { messages.put(key, it) }
+                        }
                     }
                 }
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.WARNING, "Failed to load " + langFile.getName(), e);
+            } catch (e: IOException) {
+                plugin.logger.log(Level.WARNING, "Failed to load ${langFile.name}", e)
             }
-            
-            // Merge with internal JAR file to ensure no keys are missing!
-            try (InputStream in = plugin.getResource("messages/lang_" + langCode + ".yml")) {
-                if (in != null) {
-                    try (InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-                        FileConfiguration internalCfg = YamlConfiguration.loadConfiguration(reader);
-                        for (String key : internalCfg.getKeys(true)) {
+
+            try {
+                plugin.getResource("messages/lang_$langCode.yml")?.use { input ->
+                    InputStreamReader(input, StandardCharsets.UTF_8).use { reader ->
+                        val internalCfg = YamlConfiguration.loadConfiguration(reader)
+                        for (key in internalCfg.getKeys(true)) {
                             if (!internalCfg.isConfigurationSection(key) && !messages.containsKey(key)) {
-                                messages.put(key, internalCfg.get(key));
+                                internalCfg.get(key)?.let { messages.put(key, it) }
                             }
                         }
                     }
                 }
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.WARNING, "Failed to load internal lang_" + langCode + ".yml", e);
+            } catch (e: IOException) {
+                plugin.logger.log(Level.WARNING, "Failed to load internal lang_$langCode.yml", e)
             }
 
-            allMessages.put(langCode, messages);
-            plugin.getLogger().info("Loaded language file: " + langFile.getName() + " (" + messages.size() + " keys)");
+            allMessages[langCode] = messages
+            plugin.logger.info("Loaded language file: ${langFile.name} (${messages.size} keys)")
         }
     }
 
-    public void sendMessage(CommandSender sender, String key, String... replacements) {
-        String lang = getLang(sender);
-        Object messageObject = getMessageObject(lang, key);
+    fun sendMessage(sender: CommandSender, key: String, vararg replacements: String) {
+        val language = getLanguage(sender)
+        val mesageObject = getMessageObject(language, key)
 
-        List<?> lines;
-        if (messageObject instanceof List<?> l) {
-            lines = l;
+        val lines: List<*> = when (mesageObject) {
+            is List<*> -> mesageObject
+            else -> listOf(mesageObject)
+        }
+
+        // TODO: TowniaConfigのgetterの名称に合わせて調整
+        val prefix = plugin.config.getString("message-prefix", "&7[Townia] &f")
+        for (line in lines) {
+            val raw = prefix + replacePlaceholders(line.toString(), *replacements)
+            sender.sendMessage(miniMessage.deserialize(raw))
+        }
+    }
+
+    fun sendActionBar(player: Player, key: String, vararg replacements: String) {
+        val language = getLanguage(player)
+        val messageObject = getMessageObject(language, key)
+
+        val raw = if (messageObject is List<*> && messageObject.isNotEmpty()) {
+            messageObject.first().toString()
         } else {
-            lines = Collections.singletonList(messageObject);
+            messageObject.toString()
         }
 
-        String prefix = plugin.getTowniaConfig().getPrefix();
-        for (Object line : lines) {
-            String raw = prefix + replacePlaceholders(String.valueOf(line), replacements);
-            sender.sendMessage(miniMessage.deserialize(raw));
-        }
+        val processedRaw = replacePlaceholders(raw, *replacements)
+        player.sendActionBar(miniMessage.deserialize(processedRaw))
     }
 
-    public void sendActionBar(Player player, String key, String... replacements) {
-        String lang = getLang(player);
-        Object messageObject = getMessageObject(lang, key);
+    fun getPlainMessage(sender: CommandSender, key: String, vararg replacements: String): String {
+        val language = getLanguage(sender)
+        val obj = getMessageObject(language, key)
 
-        String raw;
-        if (messageObject instanceof List<?> l && !l.isEmpty()) {
-            raw = String.valueOf(l.get(0));
+        val raw = if (obj is List<*> && obj.isNotEmpty()) {
+            obj.first().toString()
         } else {
-            raw = String.valueOf(messageObject);
+            obj.toString()
         }
 
-        raw = replacePlaceholders(raw, replacements);
-        player.sendActionBar(miniMessage.deserialize(raw));
+        val processedRaw = replacePlaceholders(raw, *replacements)
+        val component = miniMessage.deserialize(processedRaw)
+        return PlainTextComponentSerializer.plainText().serialize(component)
     }
 
-    public String getPlainMessage(CommandSender sender, String key, String... replacements) {
-        String lang = getLang(sender);
-        Object obj = getMessageObject(lang, key);
-        String raw;
-        if (obj instanceof List<?> list && !list.isEmpty()) {
-            raw = String.valueOf(list.getFirst());
-        } else {
-            raw = String.valueOf(obj);
+
+    private fun getLanguage(sender: CommandSender): String {
+        if (sender is Player) {
+            val clientLanguage = sender.locale().language.lowercase()
+            if (allMessages.containsKey(clientLanguage)) return clientLanguage
         }
-        raw = replacePlaceholders(raw, replacements);
-        Component component = miniMessage.deserialize(raw);
-        return PlainTextComponentSerializer.plainText().serialize(component);
+        return defaultLanguage
     }
 
-    private String getLang(CommandSender sender) {
-        if (sender instanceof Player player) {
-            String clientLang = player.locale().getLanguage().toLowerCase();
-            if (allMessages.containsKey(clientLang)) return clientLang;
-        }
-        return defaultLang;
-    }
+    private fun getMessageObject(language: String, key: String): Any? {
+        val messages = allMessages[language]
+        val defaultMessages = allMessages[defaultLanguage]
 
-    private Object getMessageObject(String lang, String key) {
-        // Fallback to default lang per-key if missing
-        Map<String, Object> messages = allMessages.get(lang);
-        Map<String, Object> defaultMessages = allMessages.get(defaultLang);
-        
         if (messages != null && messages.containsKey(key)) {
-            return messages.get(key);
+            return messages[key] ?: "<red>Missing message key: $key"
         }
+
         if (defaultMessages != null && defaultMessages.containsKey(key)) {
-            return defaultMessages.get(key);
+            return defaultMessages[key] ?: "<red>Missing message key: $key"
         }
-        
-        return "<red>Missing message key: " + key;
+
+        return "<red>Missing message key: $key"
     }
 
-    private String replacePlaceholders(String text, String... replacements) {
-        if (replacements.length % 2 != 0) {
-            throw new IllegalArgumentException("Replacements must be in pairs (key, value, key, value, …)");
-        }
-        for (int i = 0; i < replacements.length; i += 2) {
-            String key = replacements[i];
-            if (!key.startsWith("{") && !key.endsWith("}")) {
-                key = "{" + key + "}";
+    private fun replacePlaceholders(text: String, vararg replacements: String): String {
+        require(replacements.size % 2 == 0) { "Replacements must be in pairs (key, value, key, value, ...)" }
+        var result = text
+        replacements.asSequence().chunked(2).forEach { pair ->
+            if (pair.size == 2) {
+                val rawKey = pair[0]
+                val value = pair[1]
+                val formattedKey = if (rawKey.startsWith("{") && rawKey.endsWith("}")) rawKey else "{${rawKey}}"
+                result = result.replace(formattedKey, value)
             }
-            text = text.replace(key, replacements[i + 1]);
         }
-        return text;
+        return result
     }
 }

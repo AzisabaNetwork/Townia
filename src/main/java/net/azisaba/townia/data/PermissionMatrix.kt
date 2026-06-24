@@ -1,22 +1,23 @@
-package net.azisaba.townia.data;
+package net.azisaba.townia.data
 
-public class PermissionMatrix {
-    public static final String FULL_PERMS = "BDSI";
-    public static final String NO_PERMS = "";
+object PermissionMatrix {
+    const val FULL_PERMS: String = "BDSI"
+    const val NO_PERMS: String = ""
 
-    public static boolean hasPerm(String permString, char type) {
-        if (permString == null) return false;
-        return permString.indexOf(type) >= 0;
+    fun hasPerm(permString: String?, type: Char): Boolean {
+        if (permString == null) return false
+        return permString.indexOf(type) >= 0
     }
 
-    public static String setPerm(String permString, char type, boolean value) {
-        if (permString == null) permString = "";
-        boolean has = hasPerm(permString, type);
+    fun setPerm(permString: String?, type: Char, value: Boolean): String {
+        var permString = permString
+        if (permString == null) permString = ""
+        val has = hasPerm(permString, type)
         if (value && !has) {
-            return permString + type;
+            return permString + type
         } else if (!value && has) {
-            return permString.replace(String.valueOf(type), "");
+            return permString.replace(type.toString(), "")
         }
-        return permString;
+        return permString
     }
 }

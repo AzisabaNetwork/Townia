@@ -1,89 +1,81 @@
-package net.azisaba.townia.manager;
+package net.azisaba.townia.manager
 
-import net.azisaba.townia.Townia;
-import net.azisaba.townia.data.Town;
-import net.azisaba.townia.data.TowniaPlayer;
-import net.milkbowl.vault.economy.Economy;
-import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.scheduler.BukkitRunnable;
+import net.azisaba.townia.Townia
+import net.milkbowl.vault.economy.Economy
+import org.bukkit.Bukkit
+import org.bukkit.OfflinePlayer
+import org.bukkit.scheduler.BukkitRunnable
 
-import java.util.logging.Logger;
+class DailyTask(private val plugin: Townia) : BukkitRunnable() {
+    private val economy: Economy?
 
-public class DailyTask extends BukkitRunnable {
-
-    private final Townia plugin;
-    private final Economy economy;
-
-    public DailyTask(Townia plugin) {
-        this.plugin = plugin;
-        this.economy = plugin.getEconomy();
+    init {
+        this.economy = plugin.economy
     }
 
-    @Override
-    public void run() {
-        Logger logger = plugin.getLogger();
-        logger.info("[Townia] Running daily upkeep and taxes collection...");
+    override fun run() {
+        val logger = plugin.getLogger()
+        logger.info("[Townia] Running daily upkeep and taxes collection...")
 
-        for (TowniaPlayer resident : plugin.getResidentManager().getAllResidents()) {
-            if (resident.isInTown()) {
-                plugin.getTownManager().getTown(resident.getTownUuid()).ifPresent(town -> {
-                    double townTax = town.getTaxes();
+        for (resident in plugin.residentManager.allResidents) {
+            if (resident.isInTown) {
+                plugin.townManager.getTown(resident.townUuid).ifPresent({ town ->
+                    val townTax: Double = town.taxes
                     if (townTax > 0 && economy != null) {
-                        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(resident.getUuid());
+                        val offlinePlayer: org.bukkit.OfflinePlayer = Bukkit.getOfflinePlayer(resident.uuid!!)
                         if (economy.has(offlinePlayer, townTax)) {
-                            economy.withdrawPlayer(offlinePlayer, townTax);
-                            town.setBalance(town.getBalance() + townTax);
-                            plugin.getTownManager().saveTown(town);
+                            economy.withdrawPlayer(offlinePlayer, townTax)
+                            town.balance = town.balance + townTax
+                            plugin.townManager.saveTown(town)
                         } else {
-                            logger.info("[Townia] " + resident.getName() + " could not pay taxes and was kicked from " + town.getName());
-                            resident.setTownUuid(null);
-                            plugin.getResidentManager().saveResident(resident);
+                            logger.info("[Townia] " + resident.name + " could not pay taxes and was kicked from " + town.name)
+                            resident.townUuid = null
+                            plugin.residentManager.saveResident(resident)
                         }
                     }
-                });
+                })
             }
         }
 
-        for (Town town : plugin.getTownManager().getAllTowns()) {
-            if (town.isInNation()) {
-                plugin.getNationManager().getNation(town.getNationUuid()).ifPresent(nation -> {
-                    double nationTax = nation.getTaxes();
+        for (town in plugin.townManager.allTowns) {
+            if (town.isInNation) {
+                plugin.nationManager.getNation(town.nationUuid).ifPresent({ nation ->
+                    val nationTax: Double = nation.taxes
                     if (nationTax > 0) {
-                        if (town.getBalance() >= nationTax) {
-                            town.setBalance(town.getBalance() - nationTax);
-                            nation.setBalance(nation.getBalance() + nationTax);
-                            plugin.getTownManager().saveTown(town);
-                            plugin.getNationManager().saveNation(nation);
+                        if (town.balance >= nationTax) {
+                            town.balance = town.balance - nationTax
+                            nation.balance = nation.balance + nationTax
+                            plugin.townManager.saveTown(town)
+                            plugin.nationManager.saveNation(nation)
                         } else {
-                            logger.info("[Townia] Town " + town.getName() + " could not pay nation taxes and was kicked from " + nation.getName());
-                            town.setNationUuid(null);
-                            plugin.getTownManager().saveTown(town);
+                            logger.info("[Townia] Town " + town.name + " could not pay nation taxes and was kicked from " + nation.name)
+                            town.nationUuid = null
+                            plugin.townManager.saveTown(town)
                         }
                     }
-                });
+                })
             }
         }
 
-        for (Town town : plugin.getTownManager().getAllTowns()) {
-            double upkeep = town.getDailyUpkeep();
+        for (town in plugin.townManager.allTowns) {
+            val upkeep: Double = town.dailyUpkeep
             if (upkeep > 0) {
-                if (town.getBalance() >= upkeep) {
-                    town.setBalance(town.getBalance() - upkeep);
-                    plugin.getTownManager().saveTown(town);
+                if (town.balance >= upkeep) {
+                    town.balance = town.balance - upkeep
+                    plugin.townManager.saveTown(town)
                 } else {
-                    logger.info("[Townia] Town " + town.getName() + " fell into ruin because it could not pay its daily upkeep.");
-                    Bukkit.getScheduler().runTask(plugin, () -> {
+                    logger.info("[Townia] Town " + town.name + " fell into ruin because it could not pay its daily upkeep.")
+                    Bukkit.getScheduler().runTask(plugin, Runnable {
                         try {
-                            plugin.getTownManager().deleteTown(town.getId());
-                        } catch (Exception e) {
-                            logger.severe("Failed to delete town " + town.getName() + " due to unpaid upkeep: " + e.getMessage());
+                            plugin.townManager.deleteTown(town.id!!)
+                        } catch (e: Exception) {
+                            logger.severe("Failed to delete town " + town.name + " due to unpaid upkeep: " + e.message)
                         }
-                    });
+                    })
                 }
             }
         }
 
-        logger.info("[Townia] Daily tasks completed.");
+        logger.info("[Townia] Daily tasks completed.")
     }
 }

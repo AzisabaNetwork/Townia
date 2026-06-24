@@ -1,6 +1,8 @@
-package net.azisaba.townia.data;
+package net.azisaba.townia.data
 
-public enum PlotType {
+import java.util.*
+
+enum class PlotType {
     DEFAULT,
     SHOP,
     ARENA,
@@ -8,11 +10,13 @@ public enum PlotType {
     FARM,
     INN;
 
-    public static PlotType fromString(String s) {
-        try {
-            return PlotType.valueOf(s.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return DEFAULT;
+    companion object {
+        fun fromString(s: String): PlotType {
+            try {
+                return valueOf(s.uppercase(Locale.getDefault()))
+            } catch (e: IllegalArgumentException) {
+                return PlotType.DEFAULT
+            }
         }
     }
 }

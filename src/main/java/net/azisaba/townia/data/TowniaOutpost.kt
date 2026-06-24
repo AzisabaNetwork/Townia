@@ -1,4 +1,13 @@
-package net.azisaba.townia.data;
+package net.azisaba.townia.data
 
-public record TowniaOutpost(int id, String world, double x, double y, double z, float yaw, float pitch, boolean isPublic) {
-}
+@JvmRecord
+data class TowniaOutpost(
+    val id: Int,
+    val world: String?,
+    val x: Double,
+    val y: Double,
+    val z: Double,
+    val yaw: Float,
+    val pitch: Float,
+    val isPublic: Boolean
+)

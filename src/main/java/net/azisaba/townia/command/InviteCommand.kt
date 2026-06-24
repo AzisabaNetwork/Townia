@@ -1,226 +1,249 @@
-package net.azisaba.townia.command;
+package net.azisaba.townia.command
 
-import net.azisaba.townia.Townia;
-import net.azisaba.townia.TowniaException;
-import net.azisaba.townia.data.Invite;
-import net.azisaba.townia.data.Town;
-import net.azisaba.townia.data.TowniaPlayer;
-import net.azisaba.townia.database.DatabaseManager;
-import net.azisaba.townia.manager.ResidentManager;
-import net.azisaba.townia.manager.TownManager;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
-import org.bukkit.entity.Player;
-import org.bukkit.util.StringUtil;
+import net.azisaba.townia.Townia
+import net.azisaba.townia.TowniaException
+import net.azisaba.townia.data.Invite
+import net.azisaba.townia.data.Town
+import net.azisaba.townia.data.TownRank
+import net.azisaba.townia.data.TowniaPlayer
+import net.azisaba.townia.database.DatabaseManager
+import net.azisaba.townia.manager.ResidentManager
+import net.azisaba.townia.manager.TownManager
+import org.bukkit.command.Command
+import org.bukkit.command.CommandExecutor
+import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
+import org.bukkit.entity.Player
+import org.bukkit.util.StringUtil
+import java.sql.SQLException
+import java.util.*
+import java.util.logging.Level
 
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.logging.Level;
+class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
+    private val databaseManager: DatabaseManager?
+    private val residentManager: ResidentManager
+    private val townManager: TownManager
 
-public class InviteCommand implements CommandExecutor, TabCompleter {
-
-    private final Townia plugin;
-    private final DatabaseManager databaseManager;
-    private final ResidentManager residentManager;
-    private final TownManager townManager;
-
-    public InviteCommand(Townia plugin) {
-        this.plugin = plugin;
-        this.databaseManager = plugin.getDatabaseManager();
-        this.residentManager = plugin.getResidentManager();
-        this.townManager = plugin.getTownManager();
+    init {
+        this.databaseManager = plugin.databaseManager
+        this.residentManager = plugin.residentManager
+        this.townManager = plugin.townManager
     }
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        Player player = requirePlayer(sender);
-        if (player == null) return true;
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+        val player = requirePlayer(sender)
+        if (player == null) return true
 
-        UUID playerUuid = player.getUniqueId();
+        val playerUuid = player.getUniqueId()
 
-        if (args.length == 0 || args[0].equalsIgnoreCase("list")) {
-            handleList(player, playerUuid);
-            return true;
+        if (args.size == 0 || args[0].equals("list", ignoreCase = true)) {
+            handleList(player, playerUuid)
+            return true
         }
 
-        switch (args[0].toLowerCase()) {
-            case "accept" -> {
-                if (args.length < 2) {
-                    handleAcceptOldest(player, playerUuid);
+        when (args[0]!!.lowercase(Locale.getDefault())) {
+            "accept" -> {
+                if (args.size < 2) {
+                    handleAcceptOldest(player, playerUuid)
                 } else {
-                    handleAcceptByTown(player, playerUuid, args[1]);
+                    handleAcceptByTown(player, playerUuid, args[1]!!)
                 }
             }
-            case "decline" -> {
-                if (args.length < 2) {
-                    plugin.getMessageManager().sendMessage(player, "error.invalid-args");
-                    return true;
+
+            "decline" -> {
+                if (args.size < 2) {
+                    plugin.messageManager!!.sendMessage(player, "error.invalid-args")
+                    return true
                 }
-                handleDecline(player, playerUuid, args[1]);
+                handleDecline(player, playerUuid, args[1]!!)
             }
-            default -> handleList(player, playerUuid);
+
+            else -> handleList(player, playerUuid)
         }
-        return true;
+        return true
     }
 
-    private void handleList(Player player, UUID playerUuid) {
+    private fun handleList(player: Player, playerUuid: UUID) {
         try {
-            List<Invite> invites = databaseManager.getInvitesByTarget(playerUuid);
-            int timeoutSecs = plugin.getTowniaConfig().getInviteTimeout();
+            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid) as MutableList<Invite>
+            val timeoutSecs = plugin.towniaConfig!!.inviteTimeout
 
             if (invites.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "invite.no-pending");
-                return;
+                plugin.messageManager!!.sendMessage(player, "invite.no-pending")
+                return
             }
 
-            plugin.getMessageManager().sendMessage(player, "invite.list-header");
-            for (Invite invite : invites) {
+            plugin.messageManager!!.sendMessage(player, "invite.list-header")
+            for (invite in invites) {
                 if (invite.isExpired(timeoutSecs)) {
-                    databaseManager.deleteInvite(invite.id());
-                    continue;
+                    databaseManager.deleteInvite(invite.id)
+                    continue
                 }
-                Optional<Town> townOpt = townManager.getTown(invite.townUuid());
-                String townName = townOpt.map(Town::getName).orElse("Unknown");
-                Optional<TowniaPlayer> inviterOpt = residentManager.getResident(invite.inviterUuid());
-                String inviterName = inviterOpt.map(TowniaPlayer::getName).orElse("Unknown");
-                plugin.getMessageManager().sendMessage(player, "invite.list-entry", "town", townName, "inviter", inviterName);
+                val townOpt = townManager.getTown(invite.townUuid)
+                val townName = townOpt.map<String?>(Town::name).orElse("Unknown")
+                val inviterOpt = residentManager.getResident(invite.inviterUuid)
+                val inviterName = inviterOpt.map<String?>(TowniaPlayer::name).orElse("Unknown")
+                plugin.messageManager!!.sendMessage(
+                    player,
+                    "invite.list-entry",
+                    "town",
+                    townName,
+                    "inviter",
+                    inviterName
+                )
             }
-        } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "DB error listing invites", e);
-            plugin.getMessageManager().sendMessage(player, "error.database");
+        } catch (e: SQLException) {
+            plugin.getLogger().log(Level.SEVERE, "DB error listing invites", e)
+            plugin.messageManager!!.sendMessage(player, "error.database")
         }
     }
 
-    private void handleAcceptOldest(Player player, UUID playerUuid) {
+    private fun handleAcceptOldest(player: Player, playerUuid: UUID) {
         try {
-            List<Invite> invites = databaseManager.getInvitesByTarget(playerUuid);
-            int timeoutSecs = plugin.getTowniaConfig().getInviteTimeout();
+            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid) as MutableList<Invite>
+            val timeoutSecs = plugin.towniaConfig!!.inviteTimeout
 
-            Invite toAccept = null;
-            for (Invite invite : invites) {
+            var toAccept: Invite? = null
+            for (invite in invites) {
                 if (invite.isExpired(timeoutSecs)) {
-                    databaseManager.deleteInvite(invite.id());
+                    databaseManager.deleteInvite(invite.id)
                 } else {
-                    toAccept = invite;
-                    break;
+                    toAccept = invite
+                    break
                 }
             }
 
             if (toAccept == null) {
-                plugin.getMessageManager().sendMessage(player, "invite.no-pending");
-                return;
+                plugin.messageManager!!.sendMessage(player, "invite.no-pending")
+                return
             }
 
-            acceptInvite(player, playerUuid, toAccept);
-        } catch (SQLException | TowniaException e) {
-            handleError(player, e);
+            acceptInvite(player, playerUuid, toAccept)
+        } catch (e: SQLException) {
+            handleError(player, e)
+        } catch (e: TowniaException) {
+            handleError(player, e)
         }
     }
 
-    private void handleAcceptByTown(Player player, UUID playerUuid, String townName) {
+    private fun handleAcceptByTown(player: Player, playerUuid: UUID, townName: String) {
         try {
-            Optional<Town> townOpt = townManager.getTownByName(townName);
+            val townOpt = townManager.getTownByName(townName)
             if (townOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
-                return;
+                plugin.messageManager!!.sendMessage(player, "error.town-not-found", "town", "Unknown")
+                return
             }
-            UUID townUuid = townOpt.get().getId();
-            Optional<Invite> inviteOpt = databaseManager.getInvite(playerUuid, townUuid);
+            val townUuid = townOpt.get().id
+            val inviteOpt: Optional<Invite> = databaseManager!!.getInvite(playerUuid, townUuid!!)
             if (inviteOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "invite.no-pending");
-                return;
+                plugin.messageManager!!.sendMessage(player, "invite.no-pending")
+                return
             }
-            Invite invite = inviteOpt.get();
-            int timeoutSecs = plugin.getTowniaConfig().getInviteTimeout();
+            val invite = inviteOpt.get()
+            val timeoutSecs = plugin.towniaConfig!!.inviteTimeout
             if (invite.isExpired(timeoutSecs)) {
-                databaseManager.deleteInvite(invite.id());
-                plugin.getMessageManager().sendMessage(player, "invite.expired");
-                return;
+                databaseManager.deleteInvite(invite.id)
+                plugin.messageManager!!.sendMessage(player, "invite.expired")
+                return
             }
-            acceptInvite(player, playerUuid, invite);
-        } catch (SQLException | TowniaException e) {
-            handleError(player, e);
+            acceptInvite(player, playerUuid, invite)
+        } catch (e: SQLException) {
+            handleError(player, e)
+        } catch (e: TowniaException) {
+            handleError(player, e)
         }
     }
 
-    private void acceptInvite(Player player, UUID playerUuid, Invite invite) throws SQLException, TowniaException {
-        Optional<TowniaPlayer> residentOpt = residentManager.getResident(playerUuid);
-        if (residentOpt.isPresent() && residentOpt.get().isInTown()) {
-            plugin.getMessageManager().sendMessage(player, "error.already-in-town");
-            return;
+    @Throws(SQLException::class, TowniaException::class)
+    private fun acceptInvite(player: Player, playerUuid: UUID, invite: Invite) {
+        val residentOpt = residentManager.getResident(playerUuid)
+        if (residentOpt.isPresent() && residentOpt.get().isInTown) {
+            plugin.messageManager!!.sendMessage(player, "error.already-in-town")
+            return
         }
 
-        UUID townUuid = invite.townUuid();
-        Optional<Town> townOpt = townManager.getTown(townUuid);
+        val townUuid = invite.townUuid
+        val townOpt = townManager.getTown(townUuid)
         if (townOpt.isEmpty()) {
-            databaseManager.deleteInvite(invite.id());
-            plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
-            return;
+            databaseManager!!.deleteInvite(invite.id)
+            plugin.messageManager!!.sendMessage(player, "error.town-not-found", "town", "Unknown")
+            return
         }
 
-        residentManager.setTown(playerUuid, townUuid, net.azisaba.townia.data.TownRank.RESIDENT);
-        databaseManager.deleteInvitesByTarget(playerUuid);
+        residentManager.setTown(playerUuid, townUuid, TownRank.RESIDENT)
+        databaseManager!!.deleteInvitesByTarget(playerUuid)
 
-        String townName = townOpt.get().getName();
-        plugin.getMessageManager().sendMessage(player, "invite.accept-success", "town", townName);
-        plugin.getMessageManager().sendMessage(player, "town.joined", "town", townName);
+        val townName: String = townOpt.get().name!!
+        plugin.messageManager!!.sendMessage(player, "invite.accept-success", "town", townName)
+        plugin.messageManager!!.sendMessage(player, "town.joined", "town", townName)
     }
 
-    private void handleDecline(Player player, UUID playerUuid, String townName) {
+    private fun handleDecline(player: Player, playerUuid: UUID, townName: String) {
         try {
-            Optional<Town> townOpt = townManager.getTownByName(townName);
+            val townOpt = townManager.getTownByName(townName)
             if (townOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "error.town-not-found", "town", "Unknown");
-                return;
+                plugin.messageManager!!.sendMessage(player, "error.town-not-found", "town", "Unknown")
+                return
             }
-            UUID townUuid = townOpt.get().getId();
-            Optional<Invite> inviteOpt = databaseManager.getInvite(playerUuid, townUuid);
+            val townUuid = townOpt.get().id
+            val inviteOpt: Optional<Invite> = databaseManager!!.getInvite(playerUuid, townUuid!!)
             if (inviteOpt.isEmpty()) {
-                plugin.getMessageManager().sendMessage(player, "invite.no-pending");
-                return;
+                plugin.messageManager!!.sendMessage(player, "invite.no-pending")
+                return
             }
-            databaseManager.deleteInvite(inviteOpt.get().id());
-            plugin.getMessageManager().sendMessage(player, "invite.decline-success",
-                    "town", townOpt.get().getName());
-        } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "DB error declining invite", e);
-            plugin.getMessageManager().sendMessage(player, "error.database");
+            databaseManager.deleteInvite(inviteOpt.get().id)
+            plugin.messageManager!!.sendMessage(
+                player, "invite.decline-success",
+                "town", townOpt.get().name!!
+            )
+        } catch (e: SQLException) {
+            plugin.getLogger().log(Level.SEVERE, "DB error declining invite", e)
+            plugin.messageManager!!.sendMessage(player, "error.database")
         }
     }
 
-    private void handleError(Player player, Exception e) {
-        if (e instanceof TowniaException te) {
-            plugin.getMessageManager().sendMessage(player, te.getMessageKey(), te.getReplacements());
-        } else if (e instanceof SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "DB error in InviteCommand", e);
-            plugin.getMessageManager().sendMessage(player, "error.database");
+    private fun handleError(player: Player, e: Exception?) {
+        if (e is TowniaException) {
+            plugin.messageManager!!.sendMessage(player, e.messageKey!!, *(e.replacements as? Array<out String> ?: emptyArray()))
+        } else if (e is SQLException) {
+            plugin.getLogger().log(Level.SEVERE, "DB error in InviteCommand", e)
+            plugin.messageManager!!.sendMessage(player, "error.database")
         }
     }
 
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        List<String> completions = new ArrayList<>();
-        if (args.length == 1) {
-            StringUtil.copyPartialMatches(args[0], List.of("list", "accept", "decline"), completions);
-        } else if (args.length == 2 && (args[0].equalsIgnoreCase("accept") || args[0].equalsIgnoreCase("decline"))) {
-            townManager.getAllTowns().stream()
-                    .map(Town::getName)
-                    .filter(n -> n.toLowerCase().startsWith(args[1].toLowerCase()))
-                    .forEach(completions::add);
+    override fun onTabComplete(
+        sender: CommandSender,
+        command: Command,
+        label: String,
+        args: Array<out String>
+    ): MutableList<String?> {
+        val completions: MutableList<String?> = ArrayList<String?>()
+        if (args.size == 1) {
+            StringUtil.copyPartialMatches<MutableList<String?>?>(
+                args[0]!!,
+                mutableListOf<String?>("list", "accept", "decline"),
+                completions
+            )
+        } else if (args.size == 2 && (args[0].equals("accept", ignoreCase = true) || args[0].equals(
+                "decline",
+                ignoreCase = true
+            ))
+        ) {
+            townManager.allTowns.stream()
+                .map<String?>(Town::name)
+                .filter { n: String? ->
+                    n!!.lowercase(Locale.getDefault()).startsWith(args[1]!!.lowercase(Locale.getDefault()))
+                }
+                .forEach { e: String? -> completions.add(e) }
         }
-        return completions;
+        return completions
     }
 
-    private Player requirePlayer(CommandSender sender) {
-        if (!(sender instanceof Player player)) {
-            plugin.getMessageManager().sendMessage(sender, "error.player-only");
-            return null;
+    private fun requirePlayer(sender: CommandSender): Player? {
+        if (sender !is Player) {
+            plugin.messageManager!!.sendMessage(sender, "error.player-only")
+            return null
         }
-        return player;
+        return sender
     }
 }

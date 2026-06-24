@@ -1,116 +1,119 @@
-package net.azisaba.townia.command;
+package net.azisaba.townia.command
 
-import net.azisaba.townia.Townia;
-import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
-import org.bukkit.util.StringUtil;
+import net.azisaba.townia.Townia
+import org.bukkit.Bukkit
+import org.bukkit.command.Command
+import org.bukkit.command.CommandExecutor
+import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
+import org.bukkit.util.StringUtil
+import java.util.*
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class TowniaWorldCommand implements CommandExecutor, TabCompleter {
-
-    private final Townia plugin;
-
-    public TowniaWorldCommand(Townia plugin) {
-        this.plugin = plugin;
-    }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("townia.admin.world")) {
-            plugin.getMessageManager().sendMessage(sender, "error.no-permission");
-            return true;
+            plugin.messageManager.sendMessage(sender, "error.no-permission")
+            return true
         }
 
-        if (args.length == 0) {
-            handleList(sender);
-            return true;
+        if (args.size == 0) {
+            handleList(sender)
+            return true
         }
 
-        switch (args[0].toLowerCase()) {
-            case "list"   -> handleList(sender);
-            case "add"    -> {
-                if (args.length < 2) {
-                    plugin.getMessageManager().sendMessage(sender, "error.invalid-args");
-                    return true;
+        when (args[0]!!.lowercase(Locale.getDefault())) {
+            "list" -> handleList(sender)
+            "add" -> {
+                if (args.size < 2) {
+                    plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return true
                 }
-                handleAdd(sender, args[1]);
+                handleAdd(sender, args[1]!!)
             }
-            case "remove" -> {
-                if (args.length < 2) {
-                    plugin.getMessageManager().sendMessage(sender, "error.invalid-args");
-                    return true;
+
+            "remove" -> {
+                if (args.size < 2) {
+                    plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return true
                 }
-                handleRemove(sender, args[1]);
+                handleRemove(sender, args[1]!!)
             }
-            default -> handleList(sender);
+
+            else -> handleList(sender)
         }
-        return true;
+        return true
     }
 
-    private void handleList(CommandSender sender) {
-        List<String> worlds = plugin.getTowniaConfig().getAllowedWorlds();
-        plugin.getMessageManager().sendMessage(sender, "world.list-header",
-                "count", String.valueOf(worlds.size()));
-        for (String world : worlds) {
-            plugin.getMessageManager().sendMessage(sender, "world.list-entry", "world", world);
+    private fun handleList(sender: CommandSender) {
+        val worlds = plugin.towniaConfig.allowedWorlds
+        plugin.messageManager.sendMessage(
+            sender, "world.list-header",
+            "count", worlds.size.toString()
+        )
+        for (world in worlds) {
+            plugin.messageManager.sendMessage(sender, "world.list-entry", "world", world!!)
         }
     }
 
-    private void handleAdd(CommandSender sender, String worldName) {
-        if (plugin.getTowniaConfig().isWorldAllowed(worldName)) {
-            plugin.getMessageManager().sendMessage(sender, "world.already-allowed", "world", worldName);
-            return;
+    private fun handleAdd(sender: CommandSender, worldName: String) {
+        if (plugin.towniaConfig.isWorldAllowed(worldName)) {
+            plugin.messageManager.sendMessage(sender, "world.already-allowed", "world", worldName)
+            return
         }
 
-        List<String> current = new ArrayList<>(plugin.getTowniaConfig().getAllowedWorlds());
-        current.add(worldName);
+        val current = java.util.ArrayList(plugin.towniaConfig.allowedWorlds)
+        current.add(worldName)
 
-        plugin.getConfig().set("allowed-worlds", current);
-        plugin.saveConfig();
-        plugin.getTowniaConfig().reload();
+        plugin.getConfig().set("allowed-worlds", current)
+        plugin.saveConfig()
+        plugin.towniaConfig.reload()
 
-        plugin.getMessageManager().sendMessage(sender, "world.added", "world", worldName);
+        plugin.messageManager.sendMessage(sender, "world.added", "world", worldName)
     }
 
-    private void handleRemove(CommandSender sender, String worldName) {
-        if (!plugin.getTowniaConfig().isWorldAllowed(worldName)) {
-            plugin.getMessageManager().sendMessage(sender, "world.not-allowed", "world", worldName);
-            return;
+    private fun handleRemove(sender: CommandSender, worldName: String) {
+        if (!plugin.towniaConfig.isWorldAllowed(worldName)) {
+            plugin.messageManager.sendMessage(sender, "world.not-allowed", "world", worldName)
+            return
         }
 
-        List<String> current = new ArrayList<>(plugin.getTowniaConfig().getAllowedWorlds());
-        current.remove(worldName);
+        val current = java.util.ArrayList(plugin.towniaConfig.allowedWorlds)
+        current.remove(worldName)
 
-        plugin.getConfig().set("allowed-worlds", current);
-        plugin.saveConfig();
-        plugin.getTowniaConfig().reload();
+        plugin.getConfig().set("allowed-worlds", current)
+        plugin.saveConfig()
+        plugin.towniaConfig.reload()
 
-        plugin.getMessageManager().sendMessage(sender, "world.removed", "world", worldName);
+        plugin.messageManager.sendMessage(sender, "world.removed", "world", worldName)
     }
 
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission("townia.admin.world")) return new ArrayList<>();
+    override fun onTabComplete(
+        sender: CommandSender,
+        command: Command,
+        label: String,
+        args: Array<out String>
+    ): MutableList<String?>? {
+        if (!sender.hasPermission("townia.admin.world")) return ArrayList<String?>()
 
-        List<String> completions = new ArrayList<>();
-        if (args.length == 1) {
-            StringUtil.copyPartialMatches(args[0], List.of("list", "add", "remove"), completions);
-        } else if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("add")) {
-                List<String> worldNames = new ArrayList<>();
-                for (World w : Bukkit.getWorlds()) worldNames.add(w.getName());
-                StringUtil.copyPartialMatches(args[1], worldNames, completions);
-            } else if (args[0].equalsIgnoreCase("remove")) {
-                StringUtil.copyPartialMatches(args[1],
-                        plugin.getTowniaConfig().getAllowedWorlds(), completions);
+        val completions: MutableList<String?> = ArrayList<String?>()
+        if (args.size == 1) {
+            StringUtil.copyPartialMatches(
+                args[0]!!,
+                mutableListOf<String?>("list", "add", "remove"),
+                completions
+            )
+        } else if (args.size == 2) {
+            if (args[0].equals("add", ignoreCase = true)) {
+                val worldNames: MutableList<String?> = ArrayList<String?>()
+                for (w in Bukkit.getWorlds()) worldNames.add(w.name)
+                StringUtil.copyPartialMatches(args[1]!!, worldNames, completions)
+            } else if (args[0].equals("remove", ignoreCase = true)) {
+                StringUtil.copyPartialMatches(
+                    args[1]!!,
+                    plugin.towniaConfig.allowedWorlds, completions
+                )
             }
         }
-        return completions;
+        return completions
     }
 }

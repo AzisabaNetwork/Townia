@@ -1,30 +1,24 @@
-package net.azisaba.townia.data;
+package net.azisaba.townia.data
 
-public enum TownRank {
+import java.util.*
+
+enum class TownRank(val level: Int) {
     RESIDENT(0),
     ASSISTANT(1),
     CO_MAYOR(2),
     MAYOR(3);
 
-    private final int level;
-
-    TownRank(int level) {
-        this.level = level;
+    fun isAtLeast(other: TownRank): Boolean {
+        return this.level >= other.level
     }
 
-    public int getLevel() {
-        return level;
-    }
-
-    public boolean isAtLeast(TownRank other) {
-        return this.level >= other.level;
-    }
-
-    public static TownRank fromString(String s) {
-        try {
-            return TownRank.valueOf(s.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return RESIDENT;
+    companion object {
+        fun fromString(s: String): TownRank {
+            try {
+                return valueOf(s.uppercase(Locale.getDefault()))
+            } catch (e: IllegalArgumentException) {
+                return TownRank.RESIDENT
+            }
         }
     }
 }

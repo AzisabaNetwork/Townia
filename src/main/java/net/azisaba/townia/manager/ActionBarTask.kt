@@ -1,42 +1,33 @@
-package net.azisaba.townia.manager;
+package net.azisaba.townia.manager
 
-import net.azisaba.townia.Townia;
-import net.azisaba.townia.data.Plot;
-import net.azisaba.townia.data.Town;
-import net.azisaba.townia.data.TowniaPlayer;
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
+import net.azisaba.townia.Townia
+import net.azisaba.townia.data.Plot
+import net.azisaba.townia.data.Town
+import net.azisaba.townia.data.TowniaPlayer
+import org.bukkit.Bukkit
+import org.bukkit.scheduler.BukkitRunnable
+import java.util.*
 
-import java.util.Optional;
+class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
+    override fun run() {
+        for (player in Bukkit.getOnlinePlayers()) {
+            val chunk = player.getLocation().getChunk()
+            val plotOpt: Optional<Plot> = plugin.plotManager.getPlot(chunk)
 
-public class ActionBarTask extends BukkitRunnable {
-
-    private final Townia plugin;
-
-    public ActionBarTask(Townia plugin) {
-        this.plugin = plugin;
-    }
-
-    @Override
-    public void run() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            Chunk chunk = player.getLocation().getChunk();
-            Optional<Plot> plotOpt = plugin.getPlotManager().getPlot(chunk);
-            
             if (plotOpt.isEmpty()) {
-                plugin.getMessageManager().sendActionBar(player, "town.actionbar-wilderness");
+                plugin.messageManager!!.sendActionBar(player, "town.actionbar-wilderness")
             } else {
-                Optional<Town> townOpt = plugin.getTownManager().getTown(plotOpt.get().getTownUuid());
+                val townOpt: Optional<Town> = plugin.townManager.getTown(plotOpt.get().townUuid)
                 if (townOpt.isPresent()) {
-                    Town town = townOpt.get();
-                    String mayorName = plugin.getResidentManager().getResident(town.getMayorUuid())
-                            .map(TowniaPlayer::getName)
-                            .orElse("Unknown");
-                    plugin.getMessageManager().sendActionBar(player, "town.actionbar-town", 
-                            "town", town.getName(), 
-                            "mayor", mayorName);
+                    val town: Town = townOpt.get()
+                    val mayorName: String? = plugin.residentManager.getResident(town.mayorUuid)
+                        .map { it.name }
+                        .orElse("Unknown")
+                    plugin.messageManager!!.sendActionBar(
+                        player, "town.actionbar-town",
+                        "town", (town.name ?: ""),
+                        "mayor", mayorName!!
+                    )
                 }
             }
         }

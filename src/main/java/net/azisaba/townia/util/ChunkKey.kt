@@ -1,15 +1,16 @@
-package net.azisaba.townia.util;
+package net.azisaba.townia.util
 
-import org.bukkit.Chunk;
+import org.bukkit.Chunk
 
-public record ChunkKey(String world, int x, int z) {
+@JvmRecord
+data class ChunkKey(val world: String?, val x: Int, val z: Int) {
+    companion object {
+        fun of(chunk: Chunk): ChunkKey {
+            return ChunkKey(chunk.getWorld().name, chunk.getX(), chunk.getZ())
+        }
 
-    public static ChunkKey of(Chunk chunk) {
-        return new ChunkKey(chunk.getWorld().getName(), chunk.getX(), chunk.getZ());
+        fun of(world: String?, x: Int, z: Int): ChunkKey {
+            return ChunkKey(world, x, z)
+        }
     }
-
-    public static ChunkKey of(String world, int x, int z) {
-        return new ChunkKey(world, x, z);
-    }
-
 }
