@@ -10,20 +10,18 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 
-class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
-    private val db: DatabaseManager
+class ResidentManager(private val plugin: Townia, private val db: DatabaseManager) {
 
-    private val cache: MutableMap<UUID?, TowniaPlayer> = ConcurrentHashMap<UUID?, TowniaPlayer>()
-    private val nameIndex: MutableMap<String?, UUID?> = ConcurrentHashMap<String?, UUID?>()
+    private val cache: ConcurrentHashMap<UUID, TowniaPlayer> = ConcurrentHashMap<UUID, TowniaPlayer>()
+    private val nameIndex: ConcurrentHashMap<String, UUID> = ConcurrentHashMap<String, UUID>()
 
     init {
-        this.db = db
         loadAll()
     }
 
     fun cacheResident(res: TowniaPlayer) {
-        cache.put(res.uuid, res)
-        nameIndex.put(res.name!!.lowercase(java.util.Locale.getDefault()), res.uuid)
+        res.uuid?.let { cache.put(it, res) }
+        res.uuid?.let { nameIndex.put(res.name!!.lowercase(Locale.getDefault()), it) }
     }
 
     private fun loadAll() {
@@ -32,27 +30,26 @@ class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
         try {
             for (p in db.allResidents) {
                 if (p == null) continue
-                cache.put(p.uuid, p)
-                nameIndex.put(p.name!!.lowercase(java.util.Locale.getDefault()), p.uuid)
+                p.uuid?.let { cache.put(it, p) }
+                p.uuid?.let { nameIndex.put(p.name!!.lowercase(Locale.getDefault()), it) }
             }
-            plugin.getLogger().info("Loaded " + cache.size + " residents.")
+            plugin.logger.info("Loaded " + cache.size + " residents.")
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to load residents from database", e)
+            plugin.logger.log(Level.SEVERE, "Failed to load residents from database", e)
         }
     }
 
     fun getResident(uuid: UUID?): Optional<TowniaPlayer> {
-        return Optional.ofNullable(cache.get(uuid))
+        return Optional.ofNullable(cache[uuid])
     }
 
     fun getResidentByName(name: String): Optional<TowniaPlayer> {
-        val uuid = nameIndex.get(name.lowercase(Locale.getDefault()))
-        if (uuid == null) return Optional.empty<TowniaPlayer>()
-        return Optional.ofNullable(cache.get(uuid))
+        val uuid = nameIndex[name.lowercase(Locale.getDefault())] ?: return Optional.empty<TowniaPlayer>()
+        return Optional.ofNullable(cache[uuid])
     }
 
     val allResidents: MutableList<TowniaPlayer>
-        get() = ArrayList(cache.values.filterNotNull())
+        get() = ArrayList(cache.values.toList())
 
     fun getResidentsByTown(townUuid: UUID): MutableList<TowniaPlayer> {
         val list: MutableList<TowniaPlayer> = ArrayList<TowniaPlayer>()
@@ -67,59 +64,54 @@ class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
         return cache.containsKey(uuid)
     }
 
-    fun getOrCreate(player: Player): TowniaPlayer? {
-        val existing: TowniaPlayer? = cache.get(player.getUniqueId())
+    fun getOrCreate(player: Player): TowniaPlayer {
+        val existing: TowniaPlayer? = cache[player.uniqueId]
         if (existing != null) {
-            // Refresh name in case of rename
             if (!existing.name.equals(player.name)) {
-                nameIndex.remove(existing.name!!.lowercase(java.util.Locale.getDefault()))
+                nameIndex.remove(existing.name!!.lowercase(Locale.getDefault()))
                 existing.name = player.name
-                nameIndex.put(player.name.lowercase(Locale.getDefault()), player.getUniqueId())
+                nameIndex[player.name.lowercase(Locale.getDefault())] = player.uniqueId
                 persist(existing)
             }
             return existing
         }
 
         val newPlayer: TowniaPlayer = TowniaPlayer(
-            player.getUniqueId(),
+            player.uniqueId,
             player.name,
             null,
             TownRank.RESIDENT,
             System.currentTimeMillis(),
             null
         )
-        cache.put(newPlayer.uuid, newPlayer)
-        nameIndex.put(newPlayer.name!!.lowercase(java.util.Locale.getDefault()), newPlayer.uuid)
+        newPlayer.uuid?.let { cache.put(it, newPlayer) }
+        newPlayer.uuid?.let { nameIndex.put(newPlayer.name!!.lowercase(Locale.getDefault()), it) }
         persist(newPlayer)
         return newPlayer
     }
 
     fun setTown(playerUuid: UUID?, townUuid: UUID?, rank: TownRank?) {
-        val p: TowniaPlayer? = cache.get(playerUuid)
-        if (p == null) return
+        val p: TowniaPlayer = cache[playerUuid] ?: return
         p.townUuid = townUuid
         p.rank = rank ?: TownRank.RESIDENT
         persist(p)
     }
 
     fun clearTown(playerUuid: UUID?) {
-        val p: TowniaPlayer? = cache.get(playerUuid)
-        if (p == null) return
+        val p: TowniaPlayer = cache[playerUuid] ?: return
         p.townUuid = null
         p.rank = TownRank.RESIDENT
         persist(p)
     }
 
     fun setRank(playerUuid: UUID?, rank: TownRank?) {
-        val p: TowniaPlayer? = cache.get(playerUuid)
-        if (p == null) return
+        val p: TowniaPlayer = cache[playerUuid] ?: return
         p.rank = rank ?: TownRank.RESIDENT
         persist(p)
     }
 
     fun updateLastSeen(playerUuid: UUID?) {
-        val p: TowniaPlayer? = cache.get(playerUuid)
-        if (p == null) return
+        val p: TowniaPlayer = cache.get(playerUuid) ?: return
         p.lastSeen = System.currentTimeMillis()
         persist(p)
     }
@@ -129,11 +121,11 @@ class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
     }
 
     private fun persist(player: TowniaPlayer) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
                 db.saveResident(player)
             } catch (e: SQLException) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to save resident " + player.name, e)
+                plugin.logger.log(Level.SEVERE, "Failed to save resident " + player.name, e)
             }
         })
     }
@@ -141,11 +133,11 @@ class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
     fun addFriend(player: TowniaPlayer, friend: TowniaPlayer) {
         if (!player.friends!!.contains(friend.uuid.toString())) {
             player.friends!!.add(friend.uuid.toString())
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
+            plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
                 try {
                     db.addFriend(player.uuid!!, friend.uuid!!)
                 } catch (e: SQLException) {
-                    plugin.getLogger().log(Level.SEVERE, "Failed to add friend for resident " + player.name, e)
+                    plugin.logger.log(Level.SEVERE, "Failed to add friend for resident " + player.name, e)
                 }
             })
         }
@@ -154,11 +146,11 @@ class ResidentManager(private val plugin: Townia, db: DatabaseManager) {
     fun removeFriend(player: TowniaPlayer, friend: TowniaPlayer) {
         if (player.friends!!.contains(friend.uuid.toString())) {
             player.friends!!.remove(friend.uuid.toString())
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
+            plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
                 try {
                     db.removeFriend(player.uuid!!, friend.uuid!!)
                 } catch (e: SQLException) {
-                    plugin.getLogger().log(Level.SEVERE, "Failed to remove friend for resident " + player.name, e)
+                    plugin.logger.log(Level.SEVERE, "Failed to remove friend for resident " + player.name, e)
                 }
             })
         }

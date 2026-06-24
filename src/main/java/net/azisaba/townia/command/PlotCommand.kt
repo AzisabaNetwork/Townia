@@ -20,9 +20,7 @@ import org.bukkit.util.StringUtil
 
 import java.sql.SQLException
 import java.util.*
-import java.util.function.Function
 import java.util.logging.Level
-import kotlin.Any
 import kotlin.Array
 import kotlin.Boolean
 import kotlin.Char
@@ -32,29 +30,21 @@ import kotlin.text.equals
 import kotlin.text.format
 import kotlin.text.lowercase
 import kotlin.text.toDouble
-import kotlin.text.toLowerCase
 
 class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    private val plotManager: PlotManager
-    private val residentManager: ResidentManager
-    private val townManager: TownManager
-
-    init {
-        this.plotManager = plugin.plotManager
-        this.residentManager = plugin.residentManager
-        this.townManager = plugin.townManager
-    }
+    private val plotManager: PlotManager = plugin.plotManager
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val townManager: TownManager = plugin.townManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        val player = requirePlayer(sender)
-        if (player == null) return true
+        val player = requirePlayer(sender) ?: return true
 
-        if (args.size == 0) {
+        if (args.isEmpty()) {
             sendHelp(player)
             return true
         }
 
-        when (args[0]!!.lowercase(Locale.getDefault())) {
+        when (args[0].lowercase(Locale.getDefault())) {
             "info", "perm" -> handleInfo(player)
             "set" -> {
                 if (args.size < 2) {
@@ -64,14 +54,14 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 if (args[1].equals("type", ignoreCase = true) && args.size >= 3) {
                     handleSetType(player, args[2])
                 } else if (args[1].equals("name", ignoreCase = true) && args.size >= 3) {
-                    handleSetName(player, Arrays.copyOfRange(args, 2, args.size).joinToString(" "))
+                    handleSetName(player, args.copyOfRange(2, args.size).joinToString(" "))
                 } else if (args[1].equals("reset", ignoreCase = true)) {
                     handleSetReset(player)
                 } else if (args[1].equals("perm", ignoreCase = true)) {
                     if (args.size >= 3 && args[2].equals("reset", ignoreCase = true)) {
                         handleSetReset(player)
                     } else {
-                        handleSetPerm(player, Arrays.copyOfRange(args, 2, args.size))
+                        handleSetPerm(player, args.copyOfRange(2, args.size))
                     }
                 } else {
                     sendHelp(player)
@@ -84,7 +74,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                     sendHelp(player)
                     return true
                 }
-                handleForSale(player, args[1]!!)
+                handleForSale(player, args[1])
             }
 
             "notforsale", "nfs" -> handleNotForSale(player)
@@ -105,39 +95,38 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun handleInfo(player: Player) {
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) {
+        if (plotOpt.isEmpty) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
         val plot: Plot = plotOpt.get()
         val townOpt: Optional<Town> = townManager.getTown(plot.townUuid)
         val townName = townOpt.map { it.name }.orElse("Unknown")
-        val owner: kotlin.String? = if (plot.isTownOwned) townName else resolveOwnerName(plot.ownerUuid)
+        val owner: String? = if (plot.isTownOwned) townName else resolveOwnerName(plot.ownerUuid)
         val forSale = if (plot.isForSale) "Yes (" + formatMoney(plot.price) + ")" else "No"
         plugin.messageManager.sendMessage(
             player, "plot.info",
-            "world", chunk.getWorld().name,
+            "world", chunk.world.name,
             "town", (townName ?: "Unknown"),
             "type", (plot.plotType?.name ?: "Unknown"),
             "owner", (owner ?: "Unknown"),
             "for_sale", forSale,
-            "x", chunk.getX().toString(),
-            "z", chunk.getZ().toString()
+            "x", chunk.x.toString(),
+            "z", chunk.z.toString()
         )
     }
 
-    private fun resolveOwnerName(ownerUuid: UUID?): kotlin.String {
+    private fun resolveOwnerName(ownerUuid: UUID?): String {
         if (ownerUuid == null) return "Town"
         val res: Optional<TowniaPlayer> = residentManager.getResident(ownerUuid)
-        return (res.map { it?.name ?: "Unknown" }.orElse("Unknown") ?: "Unknown")
+        return (res.map { it.name ?: "Unknown" }.orElse("Unknown") ?: "Unknown")
     }
 
-    private fun handleSetType(player: Player, typeName: kotlin.String?) {
+    private fun handleSetType(player: Player, typeName: String?) {
         val plotType: PlotType = PlotType.fromString(typeName ?: "")
-        // fromString returns DEFAULT as fallback  Echeck if the input was actually valid
-        val validInput: Boolean = Arrays.stream(PlotType.values())
+        val validInput: Boolean = Arrays.stream(PlotType.entries.toTypedArray())
             .anyMatch({ t -> t.name.equals(typeName, ignoreCase = true) })
         if (!validInput) {
             plugin.messageManager.sendMessage(
@@ -147,7 +136,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         if (plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
@@ -160,28 +149,30 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         try {
             plotManager.setPlotType(
-                chunk.getWorld().name,
-                chunk.getX(),
-                chunk.getZ(),
+                chunk.world.name,
+                chunk.x,
+                chunk.z,
                 plotType
             )
             plugin.messageManager.sendMessage(player, "plot.set-type", "{type}", plotType.name)
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
-    private fun handleForSale(player: Player, priceStr: kotlin.String) {
+    private fun handleForSale(player: Player, priceStr: String) {
         val price: Double
         try {
             price = priceStr.toDouble()
             if (price < 0) throw NumberFormatException()
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(player, "error.invalid-amount")
             return
         }
 
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         if (plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
@@ -194,19 +185,21 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         try {
             plotManager.setForSale(
-                chunk.getWorld().name,
-                chunk.getX(),
-                chunk.getZ(),
+                chunk.world.name,
+                chunk.x,
+                chunk.z,
                 true, price
             )
             plugin.messageManager.sendMessage(player, "plot.for-sale", "{price}", formatMoney(price))
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
     private fun handleNotForSale(player: Player) {
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         if (plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
@@ -218,7 +211,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) {
+        if (plotOpt.isEmpty) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
@@ -233,27 +226,28 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             )
             plugin.messageManager.sendMessage(player, "plot.not-for-sale")
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
-    private fun handleSetName(player: Player, name: kotlin.String?) {
-        val plot: Plot? = plotManager.getPlot(player.getLocation().getChunk()).orElse(null)
+    private fun handleSetName(player: Player, name: String?) {
+        val plot: Plot? = plotManager.getPlot(player.location.chunk).orElse(null)
         if (plot == null) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
 
-        val res: TowniaPlayer? = requireMayorOrOwner(player, plot)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorOrOwner(player, plot) ?: return
 
         plot.name = (name ?: "")
         try {
-            plugin.databaseManager.savePlot(plot!!)
+            plugin.databaseManager.savePlot(plot)
             plugin.messageManager.sendMessage(player, "plot.name-set", "name", (name ?: "Unknown"))
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to update plot name", e)
-            plugin.messageManager.sendMessage(player!!, "error.database")
+            plugin.logger.log(Level.SEVERE, "Failed to update plot name", e)
+            plugin.messageManager.sendMessage(player, "error.database")
         }
     }
 
@@ -263,16 +257,15 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
-        val plot: Plot? = plotManager.getPlot(player.getLocation().getChunk()).orElse(null)
+        val plot: Plot? = plotManager.getPlot(player.location.chunk).orElse(null)
         if (plot == null) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
 
-        val res: TowniaPlayer? = requireMayorOrOwner(player, plot)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorOrOwner(player, plot) ?: return
 
-        when (args[1]!!.lowercase(Locale.getDefault())) {
+        when (args[1].lowercase(Locale.getDefault())) {
             "pvp" -> {
                 plot.setPvp(!plot.hasPvp())
                 savePlotToggle(player, plot, "PvP", plot.hasPvp())
@@ -297,13 +290,13 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
     }
 
-    private fun savePlotToggle(player: Player?, plot: Plot?, setting: kotlin.String?, state: Boolean) {
+    private fun savePlotToggle(player: Player?, plot: Plot?, setting: String?, state: Boolean) {
         try {
             plugin.databaseManager.savePlot(plot!!)
             plugin.messageManager
                 .sendMessage(player!!, "plot.toggled", "setting", (setting ?: ""), "state", if (state) "ON" else "OFF")
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save plot toggle", e)
+            plugin.logger.log(Level.SEVERE, "Failed to save plot toggle", e)
             plugin.messageManager.sendMessage(player!!, "error.database")
         }
     }
@@ -314,9 +307,9 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) {
+        if (plotOpt.isEmpty) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
@@ -350,41 +343,43 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
             townManager.addBalance(plot.townUuid, price)
             plotManager.transferOwnership(
-                chunk.getWorld().name,
-                chunk.getX(),
-                chunk.getZ(),
-                player.getUniqueId()
+                chunk.world.name,
+                chunk.x,
+                chunk.z,
+                player.uniqueId
             )
 
             plotManager.setForSale(
-                chunk.getWorld().name,
-                chunk.getX(),
-                chunk.getZ(),
+                chunk.world.name,
+                chunk.x,
+                chunk.z,
                 false, 0.0
             )
 
             plugin.messageManager.sendMessage(player, "plot.bought", "{price}", formatMoney(price))
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
     private fun isAssistantOrHigherInPlotTown(player: Player, chunk: Chunk?): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) return true
+        if (plotOpt.isEmpty) return true
         val plotTownId: UUID = plotOpt.get().townUuid!!
 
-        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.getUniqueId())
-        if (resOpt.isEmpty()) return true
+        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.uniqueId)
+        if (resOpt.isEmpty) return true
         val res: TowniaPlayer = resOpt.get()
         if (!res.isInTown) return true
         if (plotTownId != res.townUuid) return true
         return !res.isAssistantOrHigher
     }
 
-    private fun formatMoney(amount: Double): kotlin.String {
+    private fun formatMoney(amount: Double): String {
         if (plugin.hasEconomy()) return plugin.economy!!.format(amount)
-        return kotlin.String.format("%.2f", amount)
+        return String.format("%.2f", amount)
     }
 
     private fun sendHelp(player: Player?) {
@@ -400,13 +395,13 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         val completions = ArrayList<String>()
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
-                args[0]!!,
-                mutableListOf<String>("info", "set", "forsale", "notforsale", "buy", "perm"), completions
+                args[0],
+                mutableListOf("info", "set", "forsale", "notforsale", "buy", "perm"), completions
             )
         } else if (args.size == 2 && args[0].equals("set", ignoreCase = true)) {
             StringUtil.copyPartialMatches(
-                args[1]!!,
-                mutableListOf<String>("type", "name", "reset", "perm"),
+                args[1],
+                mutableListOf("type", "name", "reset", "perm"),
                 completions
             )
         } else if (args.size == 3 && args[0].equals("set", ignoreCase = true) && args[1].equals(
@@ -415,16 +410,16 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             )
         ) {
             val types = ArrayList<String>()
-            for (pt in PlotType.values()) types.add(pt.name.lowercase(java.util.Locale.getDefault()))
-            StringUtil.copyPartialMatches(args[2]!!, types, completions)
+            for (pt in PlotType.entries) types.add(pt.name.lowercase(Locale.getDefault()))
+            StringUtil.copyPartialMatches(args[2], types, completions)
         } else if (args.size == 3 && args[0].equals("set", ignoreCase = true) && args[1].equals(
                 "perm",
                 ignoreCase = true
             )
         ) {
             StringUtil.copyPartialMatches(
-                args[2]!!,
-                mutableListOf<String>(
+                args[2],
+                mutableListOf(
                     "resident",
                     "ally",
                     "outsider",
@@ -445,8 +440,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         ) {
             if (!args[2].equals("on", ignoreCase = true) && !args[2].equals("off", ignoreCase = true)) {
                 StringUtil.copyPartialMatches(
-                    args[3]!!,
-                    mutableListOf<String>("build", "destroy", "switch", "itemuse", "on", "off"),
+                    args[3],
+                    mutableListOf("build", "destroy", "switch", "itemuse", "on", "off"),
                     completions
                 )
             }
@@ -457,8 +452,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         ) {
             if (!args[3].equals("on", ignoreCase = true) && !args[3].equals("off", ignoreCase = true)) {
                 StringUtil.copyPartialMatches(
-                    args[4]!!,
-                    mutableListOf<String>("on", "off"),
+                    args[4],
+                    mutableListOf("on", "off"),
                     completions
                 )
             }
@@ -475,7 +470,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun requireMayorOrOwner(player: Player, plot: Plot): TowniaPlayer? {
-        val res: TowniaPlayer? = residentManager.getResident(player.getUniqueId()).orElse(null)
+        val res: TowniaPlayer? = residentManager.getResident(player.uniqueId).orElse(null)
         if (res == null) {
             plugin.messageManager.sendMessage(player, "error.player-not-found")
             return null
@@ -491,15 +486,14 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun handleSetReset(player: Player) {
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) {
+        if (plotOpt.isEmpty) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
         val plot: Plot = plotOpt.get()
-        val res: TowniaPlayer? = requireMayorOrOwner(player, plot)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorOrOwner(player, plot) ?: return
 
         plot.setPvp(false)
         plot.setMobs(false)
@@ -507,23 +501,23 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         plot.setFire(false)
         plot.name = null
         try {
-            plugin.databaseManager.savePlot(plot!!)
+            plugin.databaseManager.savePlot(plot)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save plot reset", e)
+            plugin.logger.log(Level.SEVERE, "Failed to save plot reset", e)
         }
         plugin.messageManager.sendMessage(player, "plot.reset")
     }
 
     private fun handleSetPerm(player: Player, args: Array<out String>) {
-        val chunk = player.getLocation().getChunk()
-        val plot: net.azisaba.townia.data.Plot? =
-            plugin.plotManager.getPlot(chunk.getWorld().name, chunk.getX(), chunk.getZ()).orElse(null)
+        val chunk = player.location.chunk
+        val plot: Plot? =
+            plugin.plotManager.getPlot(chunk.world.name, chunk.x, chunk.z).orElse(null)
         if (plot == null) {
             plugin.messageManager.sendMessage(player, "plot.not-owned-by-your-town")
             return
         }
-        val res: net.azisaba.townia.data.TowniaPlayer? =
-            plugin.residentManager.getResident(player.getUniqueId()).orElse(null)
+        val res: TowniaPlayer? =
+            plugin.residentManager.getResident(player.uniqueId).orElse(null)
         if (res == null || res.townUuid == null || res.townUuid != plot.townUuid) {
             plugin.messageManager.sendMessage(player, "plot.not-owned-by-your-town")
             return
@@ -541,19 +535,19 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             }
         }
 
-        if (args.size < 1) {
+        if (args.isEmpty()) {
             plugin.messageManager.sendMessage(player, "error.invalid-args")
             return
         }
 
-        var groupStr: kotlin.String? = null
-        var actionStr: kotlin.String? = null
-        var stateStr: kotlin.String? = null
+        var groupStr: String? = null
+        var actionStr: String? = null
+        var stateStr: String? = null
 
         if (args.size == 1) {
             stateStr = args[0]
         } else if (args.size == 2) {
-            val first = args[0]!!.lowercase(Locale.getDefault())
+            val first = args[0].lowercase(Locale.getDefault())
             if (first == "resident" || first == "ally" || first == "outsider" || first == "nation") {
                 groupStr = args[0]
             } else {
@@ -568,9 +562,9 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         val state = stateStr.equals("on", ignoreCase = true) || stateStr.equals("true", ignoreCase = true)
 
-        val groups: MutableList<kotlin.String> = ArrayList<kotlin.String>()
+        val groups: MutableList<String> = ArrayList<String>()
         if (groupStr == null) {
-            groups.addAll(mutableListOf<String>("resident", "ally", "outsider", "nation"))
+            groups.addAll(mutableListOf("resident", "ally", "outsider", "nation"))
         } else {
             if (groupStr.equals("resident", ignoreCase = true)) groups.add("resident")
             else if (groupStr.equals("ally", ignoreCase = true)) groups.add("ally")
@@ -601,7 +595,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         for (group in groups) {
-            var current: kotlin.String? = ""
+            var current: String? = ""
             if (group == "resident") current = if (plot.permsResident != null) plot.permsResident else ""
             else if (group == "ally") current = if (plot.permsAlly != null) plot.permsAlly else ""
             else if (group == "outsider") current = if (plot.permsOutsider != null) plot.permsOutsider else ""
@@ -618,17 +612,17 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         try {
-            plugin.databaseManager.savePlot(plot!!)
+            plugin.databaseManager.savePlot(plot)
         } catch (e: SQLException) {
             e.printStackTrace()
-            plugin.messageManager.sendMessage(player!!, "error.database")
+            plugin.messageManager.sendMessage(player, "error.database")
             return
         }
         plugin.messageManager.sendMessage(
             player,
             "town.perm-set",
             "perm",
-            (if (groupStr != null) groupStr + " " else "") + (if (actionStr != null) actionStr else "all"),
+            (if (groupStr != null) "$groupStr " else "") + (actionStr ?: "all"),
             "state",
             if (state) "ON" else "OFF"
         )

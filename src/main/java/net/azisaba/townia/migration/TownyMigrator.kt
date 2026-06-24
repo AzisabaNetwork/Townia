@@ -16,8 +16,8 @@ import kotlin.math.max
 
 object TownyMigrator {
     fun migrate(plugin: Townia, sender: CommandSender) {
-        if (!plugin.getServer().getPluginManager().isPluginEnabled("Towny")) {
-            plugin.messageManager!!.sendMessage(
+        if (!plugin.server.pluginManager.isPluginEnabled("Towny")) {
+            plugin.messageManager.sendMessage(
                 sender,
                 "admin.migration_failed",
                 "{0}",
@@ -26,19 +26,19 @@ object TownyMigrator {
             return
         }
 
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
-            plugin.messageManager!!.sendMessage(sender, "admin.migration_start")
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            plugin.messageManager.sendMessage(sender, "admin.migration_start")
             var towns = 0
             var nations = 0
             var residents = 0
             var plots = 0
             try {
-                for (tTown in TownyUniverse.getInstance().getTowns()) {
-                    val nationUuid = if (tTown.hasNation()) tTown.getNation().uuid else null
+                for (tTown in TownyUniverse.getInstance().towns) {
+                    val nationUuid = if (tTown.hasNation()) tTown.nation.uuid else null
                     var balance = 0.0
                     try {
                         balance = tTown.getAccount().getCachedBalance()
-                    } catch (ignored: Exception) {
+                    } catch (_: Exception) {
                     }
 
                     var spawnWorld: String? = null
@@ -49,43 +49,43 @@ object TownyMigrator {
                     var spawnPitch = 0f
                     if (tTown.hasSpawn()) {
                         spawnWorld = tTown.getSpawn().getWorld().name
-                        spawnX = tTown.getSpawn().getX()
-                        spawnY = tTown.getSpawn().getY()
-                        spawnZ = tTown.getSpawn().getZ()
-                        spawnYaw = tTown.getSpawn().getYaw()
-                        spawnPitch = tTown.getSpawn().getPitch()
+                        spawnX = tTown.getSpawn().x
+                        spawnY = tTown.getSpawn().y
+                        spawnZ = tTown.getSpawn().z
+                        spawnYaw = tTown.getSpawn().yaw
+                        spawnPitch = tTown.getSpawn().pitch
                     } else if (tTown.hasHomeBlock()) {
                         try {
-                            spawnWorld = tTown.getHomeBlock().getWorld().name
-                            spawnX = tTown.getHomeBlock().getX() * 16 + 8.5
-                            spawnZ = tTown.getHomeBlock().getZ() * 16 + 8.5
+                            spawnWorld = tTown.homeBlock.world.name
+                            spawnX = tTown.homeBlock.x * 16 + 8.5
+                            spawnZ = tTown.homeBlock.z * 16 + 8.5
                             val bWorld = Bukkit.getWorld(spawnWorld)
                             if (bWorld != null) {
                                 spawnY = (bWorld.getHighestBlockYAt(spawnX.toInt(), spawnZ.toInt()) + 1).toDouble()
                             } else {
                                 spawnY = 64.0
                             }
-                        } catch (ignored: Exception) {
+                        } catch (_: Exception) {
                         }
                     }
 
-                    val ourTown: Town = Town(
+                    val ourTown = Town(
                         tTown.uuid,
                         tTown.name,
-                        tTown.getMayor().uuid,
+                        tTown.mayor.uuid,
                         nationUuid,
                         balance,
-                        tTown.getMaxTownBlocks(),
-                        tTown.getBonusBlocks(),
-                        tTown.isPublic(),
-                        tTown.getRegistered(),
+                        tTown.maxTownBlocks,
+                        tTown.bonusBlocks,
+                        tTown.isPublic,
+                        tTown.registered,
                         tTown.board,
                         tTown.taxes,
-                        tTown.getPlotTax(),
-                        tTown.getPermissions().pvp,
-                        tTown.getPermissions().mobs,
-                        tTown.getPermissions().explosion,
-                        tTown.getPermissions().fire,
+                        tTown.plotTax,
+                        tTown.permissions.pvp,
+                        tTown.permissions.mobs,
+                        tTown.permissions.explosion,
+                        tTown.permissions.fire,
                         spawnWorld, spawnX, spawnY, spawnZ, spawnYaw, spawnPitch
                     )
 
@@ -93,11 +93,11 @@ object TownyMigrator {
                     if (tTown.hasHomeBlock()) {
                         try {
                             ourTown.setHomeBlock(
-                                tTown.getHomeBlock().getWorld().name,
-                                tTown.getHomeBlock().getX(),
-                                tTown.getHomeBlock().getZ()
+                                tTown.homeBlock.world.name,
+                                tTown.homeBlock.x,
+                                tTown.homeBlock.z
                             )
-                        } catch (ignored: Exception) {
+                        } catch (_: Exception) {
                         }
                     }
 
@@ -106,18 +106,18 @@ object TownyMigrator {
                     towns++
                 }
 
-                for (tNation in TownyUniverse.getInstance().getNations()) {
+                for (tNation in TownyUniverse.getInstance().nations) {
                     var balance = 0.0
                     try {
                         balance = tNation.getAccount().getCachedBalance()
-                    } catch (ignored: Exception) {
+                    } catch (_: Exception) {
                     }
 
-                    val ourNation: Nation = Nation(
+                    val ourNation = Nation(
                         tNation.uuid,
                         tNation.name,
-                        tNation.getCapital().uuid,
-                        tNation.getKing().uuid,
+                        tNation.capital.uuid,
+                        tNation.king.uuid,
                         balance,
                         tNation.board,
                         tNation.taxes
@@ -128,8 +128,8 @@ object TownyMigrator {
                     nations++
                 }
 
-                for (tRes in TownyUniverse.getInstance().getResidents()) {
-                    val townUuid = if (tRes.hasTown()) tRes.getTown().uuid else null
+                for (tRes in TownyUniverse.getInstance().residents) {
+                    val townUuid = if (tRes.hasTown()) tRes.town.uuid else null
                     var rank: TownRank = TownRank.RESIDENT
                     if (tRes.isMayor) {
                         rank = TownRank.MAYOR
@@ -137,12 +137,12 @@ object TownyMigrator {
                         rank = TownRank.ASSISTANT
                     }
 
-                    val player: TowniaPlayer = TowniaPlayer(
+                    val player = TowniaPlayer(
                         tRes.uuid,
                         tRes.name,
                         townUuid,
                         rank,
-                        tRes.getLastOnline(),
+                        tRes.lastOnline,
                         null
                     )
 
@@ -151,27 +151,27 @@ object TownyMigrator {
                     residents++
                 }
 
-                for (tb in TownyUniverse.getInstance().getTownBlocks().values) {
+                for (tb in TownyUniverse.getInstance().townBlocks.values) {
                     if (!tb.hasTown()) continue
 
                     val ownerUuid = if (tb.hasResident()) tb.getResident().uuid else null
 
                     var type: PlotType? = PlotType.DEFAULT
                     try {
-                        var typeName = tb.getType().name.uppercase(Locale.getDefault())
+                        var typeName = tb.type.name.uppercase(Locale.getDefault())
                         if (typeName == "COMMERCIAL") typeName = "SHOP"
                         if (typeName == "JAIL" || typeName == "WILDS") typeName = "DEFAULT"
                         type = PlotType.valueOf(typeName)
-                    } catch (ignored: Exception) {
+                    } catch (_: Exception) {
                     }
 
                     val forSale = tb.plotPrice >= 0
                     val price = max(0.0, tb.plotPrice)
 
-                    val plot: Plot = Plot(
-                        tb.getWorld().name,
-                        tb.getX(),
-                        tb.getZ(),
+                    val plot = Plot(
+                        tb.world.name,
+                        tb.x,
+                        tb.z,
                         tb.getTown().uuid,
                         ownerUuid,
                         type,
@@ -189,17 +189,17 @@ object TownyMigrator {
                     plots++
                 }
 
-                plugin.messageManager!!.sendMessage(
+                plugin.messageManager.sendMessage(
                     sender, "admin.migration_success",
                     "{0}", towns.toString(),
                     "{1}", nations.toString(),
                     "{2}", residents.toString(),
                     "{3}", plots.toString()
                 )
-                plugin.getLogger().info("Towny Migration successful.")
+                plugin.logger.info("Towny Migration successful.")
             } catch (e: Exception) {
-                plugin.getLogger().log(Level.SEVERE, "Migration failed", e)
-                plugin.messageManager!!.sendMessage(
+                plugin.logger.log(Level.SEVERE, "Migration failed", e)
+                plugin.messageManager.sendMessage(
                     sender,
                     "admin.migration_failed",
                     "{0}",

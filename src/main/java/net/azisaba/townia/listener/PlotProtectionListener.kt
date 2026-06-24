@@ -27,10 +27,10 @@ import org.bukkit.event.player.PlayerInteractEvent
 import java.util.*
 
 class PlotProtectionListener(private val plugin: Townia) : Listener {
-    private val plotManager: PlotManager
-    private val residentManager: ResidentManager
-    private val townManager: TownManager
-    private val nationManager: NationManager
+    private val plotManager: PlotManager = plugin.plotManager
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val townManager: TownManager = plugin.townManager
+    private val nationManager: NationManager = plugin.nationManager
 
     enum class ActionType(val id: Char) {
         BUILD('B'), DESTROY('D'), SWITCH('S'), ITEM('I')
@@ -40,73 +40,66 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         RESIDENT, ALLY, NATION, OUTSIDER
     }
 
-    init {
-        this.plotManager = plugin.plotManager
-        this.residentManager = plugin.residentManager
-        this.townManager = plugin.townManager
-        this.nationManager = plugin.nationManager
-    }
-
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
-        if (handleAction(event.getPlayer(), event.getBlock().getChunk(), ActionType.DESTROY)) {
-            event.setCancelled(true)
-            plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.build-denied")
+        if (handleAction(event.player, event.getBlock().chunk, ActionType.DESTROY)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.player, "protection.build-denied")
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockPlace(event: BlockPlaceEvent) {
-        if (handleAction(event.getPlayer(), event.getBlock().getChunk(), ActionType.BUILD)) {
-            event.setCancelled(true)
-            plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.build-denied")
+        if (handleAction(event.getPlayer(), event.getBlock().chunk, ActionType.BUILD)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.getPlayer(), "protection.build-denied")
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerInteract(event: PlayerInteractEvent) {
-        if (event.getAction() == Action.PHYSICAL) {
-            val block = event.getClickedBlock()
-            if (block != null && block.getType() == Material.FARMLAND) {
-                if (handleAction(event.getPlayer(), block.getChunk(), ActionType.DESTROY)) {
+        if (event.action == Action.PHYSICAL) {
+            val block = event.clickedBlock
+            if (block != null && block.type == Material.FARMLAND) {
+                if (handleAction(event.getPlayer(), block.chunk, ActionType.DESTROY)) {
                     event.setCancelled(true)
                 }
             }
             return
         }
 
-        val block = event.getClickedBlock()
+        val block = event.clickedBlock
         if (block == null) {
-            if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
-                if (event.getItem() != null && ITEM_USE_MATERIALS.contains(event.getItem()!!.getType())) {
-                    if (handleAction(event.getPlayer(), event.getPlayer().getLocation().getChunk(), ActionType.ITEM)) {
+            if (event.action == Action.RIGHT_CLICK_AIR || event.action == Action.RIGHT_CLICK_BLOCK) {
+                if (event.item != null && ITEM_USE_MATERIALS.contains(event.item!!.type)) {
+                    if (handleAction(event.getPlayer(), event.getPlayer().location.chunk, ActionType.ITEM)) {
                         event.setCancelled(true)
-                        plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.item-denied")
+                        plugin.messageManager.sendMessage(event.getPlayer(), "protection.item-denied")
                     }
                 }
             }
             return
         }
 
-        val type = block.getType()
+        val type = block.type
         if (CONTAINER_MATERIALS.contains(type) || DOOR_MATERIALS.contains(type)) {
-            if (handleAction(event.getPlayer(), block.getChunk(), ActionType.SWITCH)) {
+            if (handleAction(event.getPlayer(), block.chunk, ActionType.SWITCH)) {
                 event.setCancelled(true)
-                plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.interact-denied")
+                plugin.messageManager.sendMessage(event.getPlayer(), "protection.interact-denied")
             }
-        } else if (event.getItem() != null && ITEM_USE_MATERIALS.contains(event.getItem()!!.getType())) {
-            if (handleAction(event.getPlayer(), block.getChunk(), ActionType.ITEM)) {
+        } else if (event.item != null && ITEM_USE_MATERIALS.contains(event.item!!.type)) {
+            if (handleAction(event.getPlayer(), block.chunk, ActionType.ITEM)) {
                 event.setCancelled(true)
-                plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.item-denied")
+                plugin.messageManager.sendMessage(event.getPlayer(), "protection.item-denied")
             }
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerInteractEntity(event: PlayerInteractEntityEvent) {
-        if (handleAction(event.getPlayer(), event.getRightClicked().getLocation().getChunk(), ActionType.SWITCH)) {
-            event.setCancelled(true)
-            plugin.messageManager!!.sendMessage(event.getPlayer(), "protection.interact-denied")
+        if (handleAction(event.getPlayer(), event.rightClicked.location.chunk, ActionType.SWITCH)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.getPlayer(), "protection.interact-denied")
         }
     }
 
@@ -115,12 +108,12 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         val defender = event.entity as? Player ?: return
         val damager = event.damager as? Player ?: return
 
-        val chunk: Chunk = defender.getLocation().getChunk()
+        val chunk: Chunk = defender.location.chunk
         if (plotManager.isClaimed(chunk)) return
-        if (TowniaAdminCommand.isBypassing(damager.getUniqueId())) return
+        if (TowniaAdminCommand.isBypassing(damager.uniqueId)) return
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) return
+        if (plotOpt.isEmpty) return
 
         val plot = plotOpt.get()
         val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -129,24 +122,24 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         if (plot.hasPvp()) pvpAllowed = true
 
         if (!pvpAllowed) {
-            event.setCancelled(true)
-            plugin.messageManager!!.sendMessage(damager, "protection.pvp-denied")
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(damager, "protection.pvp-denied")
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityExplode(event: EntityExplodeEvent) {
-        event.blockList().removeIf { block: Block? -> canExplode(block!!.getChunk()) }
+        event.blockList().removeIf { block: Block? -> canExplode(block!!.chunk) }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockExplode(event: BlockExplodeEvent) {
-        event.blockList().removeIf { block: Block? -> canExplode(block!!.getChunk()) }
+        event.blockList().removeIf { block: Block? -> canExplode(block!!.chunk) }
     }
 
     private fun canExplode(chunk: Chunk?): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) return false
+        if (plotOpt.isEmpty) return false
         val plot = plotOpt.get()
         if (plot.hasExplosions()) return false
         val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -155,21 +148,21 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockIgnite(event: BlockIgniteEvent) {
-        if (canFire(event.getBlock().getChunk())) {
-            event.setCancelled(true)
+        if (canFire(event.getBlock().chunk)) {
+            event.isCancelled = true
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onBlockBurn(event: BlockBurnEvent) {
-        if (canFire(event.getBlock().getChunk())) {
-            event.setCancelled(true)
+        if (canFire(event.getBlock().chunk)) {
+            event.isCancelled = true
         }
     }
 
     private fun canFire(chunk: Chunk?): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) return false
+        if (plotOpt.isEmpty) return false
         val plot = plotOpt.get()
         if (plot.hasFire()) return false
         val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -178,18 +171,18 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onCreatureSpawn(event: CreatureSpawnEvent) {
-        if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.NATURAL || event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.SPAWNER) {
+        if (event.spawnReason == CreatureSpawnEvent.SpawnReason.NATURAL || event.spawnReason == CreatureSpawnEvent.SpawnReason.SPAWNER) {
             if (event.getEntity() is Monster) {
-                val chunk = event.getLocation().getChunk()
+                val chunk = event.location.chunk
                 val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-                if (plotOpt.isPresent()) {
+                if (plotOpt.isPresent) {
                     val plot = plotOpt.get()
                     var mobsAllowed = false
                     val town = townManager.getTown(plot.townUuid).orElse(null)
                     if (town != null) mobsAllowed = town.hasMobs()
                     if (plot.hasMobs()) mobsAllowed = true
                     if (!mobsAllowed) {
-                        event.setCancelled(true)
+                        event.isCancelled = true
                     }
                 }
             }
@@ -197,18 +190,17 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     private fun handleAction(player: Player, chunk: Chunk?, type: ActionType): Boolean {
-        if (TowniaAdminCommand.isBypassing(player.getUniqueId())) return false
+        if (TowniaAdminCommand.isBypassing(player.uniqueId)) return false
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty()) return false
+        if (plotOpt.isEmpty) return false
 
         val plot = plotOpt.get()
-        val town = townManager.getTown(plot.townUuid).orElse(null)
-        if (town == null) return false
+        val town = townManager.getTown(plot.townUuid).orElse(null) ?: return false
 
-        if (town.mayorUuid == player.getUniqueId()) return false
+        if (town.mayorUuid == player.uniqueId) return false
 
-        if (player.getUniqueId() == plot.ownerUuid) return false
+        if (player.uniqueId == plot.ownerUuid) return false
 
         val rel = getRelationship(player, plot, town)
 
@@ -239,15 +231,15 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     private fun getRelationship(player: Player, plot: Plot, town: Town): Relationship {
-        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.getUniqueId())
-        if (resOpt.isEmpty()) return Relationship.OUTSIDER
+        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.uniqueId)
+        if (resOpt.isEmpty) return Relationship.OUTSIDER
         val resident = resOpt.get()
 
         if (plot.ownerUuid != null) {
             if (town.id == resident.townUuid) return Relationship.RESIDENT
 
             val owner = residentManager.getResident(plot.ownerUuid).orElse(null)
-            if (owner != null && owner.friends!!.contains(player.getUniqueId().toString())) {
+            if (owner != null && owner.friends!!.contains(player.uniqueId.toString())) {
                 return Relationship.ALLY
             }
 
@@ -274,7 +266,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     companion object {
-        private val CONTAINER_MATERIALS: MutableSet<Material?> = EnumSet.of<Material?>(
+        private val CONTAINER_MATERIALS: MutableSet<Material?> = EnumSet.of(
             Material.CHEST, Material.TRAPPED_CHEST, Material.BARREL,
             Material.FURNACE, Material.BLAST_FURNACE, Material.SMOKER,
             Material.HOPPER, Material.DROPPER, Material.DISPENSER,
@@ -292,7 +284,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             Material.STONECUTTER
         )
 
-        private val DOOR_MATERIALS: MutableSet<Material?> = EnumSet.of<Material?>(
+        private val DOOR_MATERIALS: MutableSet<Material?> = EnumSet.of(
             Material.OAK_DOOR, Material.SPRUCE_DOOR, Material.BIRCH_DOOR,
             Material.JUNGLE_DOOR, Material.ACACIA_DOOR, Material.DARK_OAK_DOOR,
             Material.MANGROVE_DOOR, Material.CHERRY_DOOR, Material.BAMBOO_DOOR,
@@ -314,7 +306,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             Material.POLISHED_BLACKSTONE_BUTTON
         )
 
-        private val ITEM_USE_MATERIALS: MutableSet<Material?> = EnumSet.of<Material?>(
+        private val ITEM_USE_MATERIALS: MutableSet<Material?> = EnumSet.of(
             Material.FLINT_AND_STEEL, Material.FIRE_CHARGE, Material.BONE_MEAL,
             Material.LAVA_BUCKET, Material.WATER_BUCKET, Material.COD_BUCKET,
             Material.SALMON_BUCKET, Material.PUFFERFISH_BUCKET, Material.TROPICAL_FISH_BUCKET,

@@ -33,21 +33,14 @@ import kotlin.text.isEmpty
 import kotlin.toString
 
 class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    private val residentManager: ResidentManager
-    private val townManager: TownManager
-    private val nationManager: NationManager
-
-    init {
-        this.residentManager = plugin.residentManager
-        this.townManager = plugin.townManager
-        this.nationManager = plugin.nationManager
-    }
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val townManager: TownManager = plugin.townManager
+    private val nationManager: NationManager = plugin.nationManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (args.size == 0) {
-            val player = requirePlayer(sender)
-            if (player == null) return true
-            showResidentInfo(sender, player.getUniqueId().toString(), player.name)
+        if (args.isEmpty()) {
+            val player = requirePlayer(sender) ?: return true
+            showResidentInfo(sender, player.uniqueId.toString(), player.name)
             return true
         }
 
@@ -79,7 +72,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             else -> {
                 val targetName = args[0]
                 val targetOpt: Optional<TowniaPlayer> = residentManager.getResidentByName(targetName)
-                if (targetOpt.isEmpty()) {
+                if (targetOpt.isEmpty) {
                     plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", targetName)
                     return true
                 }
@@ -91,8 +84,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     }
 
     private fun handleFriend(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
         if (args.size < 2) {
             plugin.messageManager.sendMessage(sender, "resident.friend.help")
             return
@@ -107,7 +99,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                     return
                 }
                 val targetOpt: Optional<TowniaPlayer> = residentManager.getResidentByName(args[2])
-                if (targetOpt.isEmpty()) {
+                if (targetOpt.isEmpty) {
                     plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
                     return
                 }
@@ -131,7 +123,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                     return
                 }
                 val targetOpt: Optional<TowniaPlayer> = residentManager.getResidentByName(args[2])
-                if (targetOpt.isEmpty()) {
+                if (targetOpt.isEmpty) {
                     plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
                     return
                 }
@@ -150,7 +142,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                     plugin.messageManager.sendMessage(sender, "resident.friend.list-empty")
                     return
                 }
-                val friendNames: MutableList<String?> = ArrayList<String?>()
+                val friendNames: MutableList<String?> = ArrayList()
                 for (friendUuidStr in res.friends!!) {
                     residentManager.getResident(UUID.fromString(friendUuidStr))
                         .ifPresent({ f -> friendNames.add(f.name) })
@@ -160,10 +152,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             }
 
             "clear" -> {
-                val friendsCopy: MutableList<kotlin.String> = ArrayList<String>(res.friends!!.filterNotNull())
+                val friendsCopy: MutableList<String> = ArrayList(res.friends!!.filterNotNull())
                 for (friendUuidStr in friendsCopy) {
                     residentManager.getResident(UUID.fromString(friendUuidStr))
-                        .ifPresent({ f -> residentManager.removeFriend(res, f) })
+                        .ifPresent { f -> residentManager.removeFriend(res, f) }
                 }
                 plugin.messageManager.sendMessage(sender, "resident.friend.cleared")
             }
@@ -172,10 +164,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         }
     }
 
-    private fun showResidentInfo(sender: CommandSender, uuidStr: kotlin.String, name: kotlin.String?) {
+    private fun showResidentInfo(sender: CommandSender, uuidStr: String, name: String?) {
         val uuid = UUID.fromString(uuidStr)
         val resOpt: Optional<TowniaPlayer> = residentManager.getResident(uuid)
-        if (resOpt.isEmpty()) {
+        if (resOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", uuid.toString())
             return
         }
@@ -183,15 +175,15 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         val res: TowniaPlayer = resOpt.get()
 
         var townName = "None"
-        var rankName: kotlin.String? = "None"
+        var rankName: String? = "None"
         var nationName = "None"
 
         if (res.isInTown) {
             val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-            if (townOpt.isPresent()) {
+            if (townOpt.isPresent) {
                 val town: Town = townOpt.get()
                 townName = (town.name ?: "")
-                rankName = if (res.rank != null) res.rank.name else "RESIDENT"
+                rankName = res.rank.name
 
                 if (town.isInNation) {
                     val nationOpt: Optional<Nation> = nationManager.getNation(town.nationUuid)
@@ -202,10 +194,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         }
 
         val lastSeen = DATE_FMT.format(Instant.ofEpochMilli(res.lastSeen))
-        val friends: kotlin.String? =
+        val friends: String? =
             if (res.friends!!.isEmpty()) "None" else res.friends!!.size.toString()
 
-        var balance: kotlin.String? = "0"
+        var balance: String? = "0"
         if (plugin.hasEconomy()) {
             val offlinePlayer = Bukkit.getOfflinePlayer(uuid)
             balance = String.format("%.2f", plugin.economy!!.getBalance(offlinePlayer))
@@ -249,28 +241,34 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         label: String,
         args: Array<out String>
     ): MutableList<String>? {
-        val completions: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
-        if (args.size == 1) {
-            val options: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
-            options.add("list")
-            options.add("friend")
-            for (p in plugin.getServer().getOnlinePlayers()) {
-                options.add(p.name)
+        val completions: MutableList<String?> = ArrayList()
+        when (args.size) {
+            1 -> {
+                val options: MutableList<String?> = ArrayList()
+                options.add("list")
+                options.add("friend")
+                for (p in plugin.server.onlinePlayers) {
+                    options.add(p.name)
+                }
+                StringUtil.copyPartialMatches(args[0], options, completions)
             }
-            StringUtil.copyPartialMatches(args[0], options, completions)
-        } else if (args.size == 2 && args[0].equals("friend", ignoreCase = true)) {
-            val options = mutableListOf<kotlin.String?>("add", "remove", "list", "clear")
-            StringUtil.copyPartialMatches(args[1], options, completions)
-        } else if (args.size == 3 && args[0].equals("friend", ignoreCase = true) && (args[1].equals(
+
+            2 if args[0].equals("friend", ignoreCase = true) -> {
+                val options = mutableListOf<String?>("add", "remove", "list", "clear")
+                StringUtil.copyPartialMatches(args[1], options, completions)
+            }
+
+            3 if args[0].equals("friend", ignoreCase = true) && (args[1].equals(
                 "add",
                 ignoreCase = true
             ) || args[1].equals("remove", ignoreCase = true))
-        ) {
-            val options: MutableList<kotlin.String?> = ArrayList<kotlin.String?>()
-            for (p in plugin.getServer().getOnlinePlayers()) {
-                options.add(p.name)
+                -> {
+                val options: MutableList<String?> = ArrayList()
+                for (p in plugin.server.onlinePlayers) {
+                    options.add(p.name)
+                }
+                StringUtil.copyPartialMatches(args[2], options, completions)
             }
-            StringUtil.copyPartialMatches(args[2], options, completions)
         }
         return completions as MutableList<String>?
     }
@@ -284,19 +282,19 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     }
 
 
-    private fun handleSetPerm(sender: CommandSender, args: Array<kotlin.String>?) {
+    private fun handleSetPerm(sender: CommandSender, args: Array<String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
     }
 
-    private fun handleToggle(sender: CommandSender, args: Array<kotlin.String>?) {
+    private fun handleToggle(sender: CommandSender, args: Array<String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
     }
 
-    private fun handleSpawn(sender: CommandSender, args: Array<kotlin.String>?) {
+    private fun handleSpawn(sender: CommandSender, args: Array<String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
     }
 
-    private fun handleTax(sender: CommandSender, args: Array<kotlin.String>?) {
+    private fun handleTax(sender: CommandSender, args: Array<String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
     }
 

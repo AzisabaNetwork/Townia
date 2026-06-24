@@ -30,7 +30,7 @@ class Nation @JvmOverloads constructor(
 
 
     fun setTitle(uuid: UUID?, title: String?) {
-        this.titles.put(uuid, title)
+        this.titles[uuid] = title
     }
 
     fun removeTitle(uuid: UUID?) {
@@ -38,11 +38,11 @@ class Nation @JvmOverloads constructor(
     }
 
     fun getTitle(uuid: UUID?): String? {
-        return this.titles.get(uuid)
+        return this.titles[uuid]
     }
 
     fun setSurname(uuid: UUID?, surname: String?) {
-        this.surnames.put(uuid, surname)
+        this.surnames[uuid] = surname
     }
 
     fun removeSurname(uuid: UUID?) {
@@ -50,7 +50,7 @@ class Nation @JvmOverloads constructor(
     }
 
     fun getSurname(uuid: UUID?): String? {
-        return this.surnames.get(uuid)
+        return this.surnames[uuid]
     }
 
     fun setSpawn(world: String?, x: Double, y: Double, z: Double, yaw: Float, pitch: Float) {

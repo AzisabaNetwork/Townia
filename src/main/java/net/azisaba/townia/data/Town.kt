@@ -6,7 +6,7 @@ import java.util.*
 class Town(
     val id: UUID?, var name: String?, var mayorUuid: UUID?, var nationUuid: UUID?,
     var balance: Double, var claimLimit: Int, var bonusClaims: Int, var isPublic: Boolean,
-    val createdAt: Long, // Extended features
+    val createdAt: Long,
     var board: String?, var taxes: Double, var plotPrice: Double,
     private var pvp: Boolean, private var mobs: Boolean, private var explosions: Boolean, private var fire: Boolean,
     // Spawn point
@@ -23,7 +23,6 @@ class Town(
     var homeBlockZ: Int = 0
         private set
 
-    // Permissions
     var permsResident: String? = "BDSI"
     var permsAlly: String? = ""
     var permsOutsider: String? = ""
@@ -31,7 +30,6 @@ class Town(
 
     var dailyUpkeep: Double = 0.0
 
-    // Extended economy fields
     var tag: String? = null
     var isTaxPercent: Boolean = false
     var plotTax: Double = 0.0
@@ -40,8 +38,6 @@ class Town(
     var embassyPrice: Double = 0.0
     var embassyTax: Double = 0.0
 
-    // TownConfig getters / setters
-    // TownConfig fields
     var isAllowInvisibility: Boolean = true
     var isAllowSit: Boolean = true
     var isAllowPetPickup: Boolean = true
@@ -124,8 +120,6 @@ class Town(
         this.homeBlockZ = z
     }
 
-
-    // Additional constructor for loading
     constructor(
         id: UUID?, name: String?, mayorUuid: UUID?, nationUuid: UUID?,
         balance: Double, claimLimit: Int, bonusClaims: Int, isPublic: Boolean,

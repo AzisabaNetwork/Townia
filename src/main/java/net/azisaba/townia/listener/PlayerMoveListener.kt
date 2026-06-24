@@ -12,22 +12,16 @@ import org.bukkit.event.player.PlayerMoveEvent
 import java.util.*
 
 class PlayerMoveListener(private val plugin: Townia) : Listener {
-    private val plotManager: PlotManager
-    private val townManager: TownManager
-
-    init {
-        this.plotManager = plugin.plotManager
-        this.townManager = plugin.townManager
-    }
+    private val plotManager: PlotManager = plugin.plotManager
+    private val townManager: TownManager = plugin.townManager
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onPlayerMove(event: PlayerMoveEvent) {
-        if (event.getTo() == null) return
 
-        val fromChunk = event.getFrom().getChunk()
-        val toChunk = event.getTo().getChunk()
+        val fromChunk = event.from.chunk
+        val toChunk = event.to.chunk
 
-        if (fromChunk.getX() == toChunk.getX() && fromChunk.getZ() == toChunk.getZ()) {
+        if (fromChunk.x == toChunk.x && fromChunk.z == toChunk.z) {
             return
         }
 
@@ -37,15 +31,15 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         val fromPlotOpt: Optional<Plot> = plotManager.getPlot(fromChunk)
 
         if (toPlotOpt.isEmpty()) {
-            plugin.messageManager!!.sendActionBar(player, "town.actionbar-wilderness")
+            plugin.messageManager.sendActionBar(player, "town.actionbar-wilderness")
         } else {
             val townOpt: Optional<Town> = townManager.getTown(toPlotOpt.get().townUuid)
-            if (townOpt.isPresent()) {
+            if (townOpt.isPresent) {
                 val town: Town = townOpt.get()
                 val mayorName: String? = plugin.residentManager.getResident(town.mayorUuid)
                     .map({ r -> r.name })
                     .orElse("Unknown")
-                plugin.messageManager!!.sendActionBar(
+                plugin.messageManager.sendActionBar(
                     player, "town.actionbar-town",
                     "town", town.name!!,
                     "mayor", mayorName!!

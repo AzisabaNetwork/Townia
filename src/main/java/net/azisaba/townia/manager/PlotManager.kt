@@ -13,21 +13,17 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 
-class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: TownManager) {
-    private val db: DatabaseManager
-    private val townManager: TownManager
+class PlotManager(private val plugin: Townia, private val db: DatabaseManager, private val townManager: TownManager) {
 
-    private val cache: MutableMap<ChunkKey?, Plot> = ConcurrentHashMap<ChunkKey?, Plot>()
+    private val cache: ConcurrentHashMap<ChunkKey, Plot> = ConcurrentHashMap<ChunkKey, Plot>()
 
     init {
-        this.db = db
-        this.townManager = townManager
         loadAll()
     }
 
     fun cachePlot(plot: Plot) {
         val key = ChunkKey(plot.worldName, plot.chunkX, plot.chunkZ)
-        cache.put(key, plot)
+        cache[key] = plot
     }
 
     private fun loadAll() {
@@ -35,11 +31,11 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
         try {
             for (p in db.allPlots) {
             if (p == null) continue
-                cache.put(ChunkKey(p.worldName, p.chunkX, p.chunkZ), p)
+                cache[ChunkKey(p.worldName, p.chunkX, p.chunkZ)] = p
             }
-            plugin.getLogger().info("Loaded " + cache.size + " plots.")
+            plugin.logger.info("Loaded " + cache.size + " plots.")
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to load plots from database", e)
+            plugin.logger.log(Level.SEVERE, "Failed to load plots from database", e)
         }
     }
 
@@ -78,22 +74,22 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
 
     @Throws(TowniaException::class)
     fun claimChunk(townId: UUID, chunk: Chunk) {
-        val worldName = chunk.getWorld().name
-        if (!plugin.towniaConfig!!.isWorldAllowed(worldName)) {
+        val worldName = chunk.world.name
+        if (!plugin.towniaConfig.isWorldAllowed(worldName)) {
             throw TowniaException("error.wrong-world", "{world}", worldName)
         }
 
-        val key: ChunkKey? = ChunkKey.of(chunk)
+        val key: ChunkKey = ChunkKey.of(chunk)
         if (cache.containsKey(key)) {
             throw TowniaException("town.already-claimed")
         }
 
         val town: Town = townManager.getTown(townId)
-            .orElseThrow({ TowniaException("error.town-not-found") })
+            .orElseThrow { TowniaException("error.town-not-found") }
 
         val currentClaims = countPlotsByTown(townId)
         val limit: Int = (town.totalClaimLimit
-                + (plugin.towniaConfig!!.claimsPerResident
+                + (plugin.towniaConfig.claimsPerResident
                 * plugin.residentManager.getResidentsByTown(townId).size))
         if (currentClaims >= limit) {
             throw TowniaException(
@@ -103,41 +99,41 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
             )
         }
 
-        val plot: Plot = Plot(
-            worldName, chunk.getX(), chunk.getZ(),
+        val plot = Plot(
+            worldName, chunk.x, chunk.z,
             townId, null, PlotType.DEFAULT, false, 0.0,
-            null, false, false, false, false
+            null, pvp = false, mobs = false, explosions = false, fire = false
         )
-        cache.put(key, plot)
+        cache[key] = plot
         try {
             db.savePlot(plot)
         } catch (e: SQLException) {
             cache.remove(key)
-            plugin.getLogger().log(Level.SEVERE, "Failed to save plot", e)
+            plugin.logger.log(Level.SEVERE, "Failed to save plot", e)
             throw TowniaException("error.database")
         }
     }
 
     @Throws(TowniaException::class)
     fun forceClaimChunk(townId: UUID?, chunk: Chunk) {
-        val key: ChunkKey? = ChunkKey.of(chunk)
+        val key: ChunkKey = ChunkKey.of(chunk)
         if (cache.containsKey(key)) {
             try {
-                db.deletePlot(chunk.getWorld().name, chunk.getX(), chunk.getZ())
+                db.deletePlot(chunk.world.name, chunk.x, chunk.z)
             } catch (e: SQLException) {
-                plugin.getLogger().log(Level.WARNING, "Error clearing old plot", e)
+                plugin.logger.log(Level.WARNING, "Error clearing old plot", e)
             }
             cache.remove(key)
         }
-        val plot: Plot = Plot(
-            chunk.getWorld().name, chunk.getX(), chunk.getZ(),
+        val plot = Plot(
+            chunk.world.name, chunk.x, chunk.z,
             townId, null, PlotType.DEFAULT, false, 0.0,
-            null, false, false, false, false
+            null, pvp = false, mobs = false, explosions = false, fire = false
         )
-        cache.put(key, plot)
+        cache[key] = plot
         try {
             db.savePlot(plot)
-        } catch (e: SQLException) {
+        } catch (_: SQLException) {
             cache.remove(key)
             throw TowniaException("error.database")
         }
@@ -145,16 +141,15 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
 
     @Throws(TowniaException::class)
     fun unclaimChunk(townId: UUID, chunk: Chunk) {
-        val key: ChunkKey? = ChunkKey.of(chunk)
-        val plot: Plot? = cache.get(key)
-        if (plot == null) throw TowniaException("town.chunk-not-claimed")
+        val key: ChunkKey = ChunkKey.of(chunk)
+        val plot: Plot = cache[key] ?: throw TowniaException("town.chunk-not-claimed")
         if (townId != plot.townUuid) throw TowniaException("town.chunk-not-owned")
 
         cache.remove(key)
         try {
-            db.deletePlot(chunk.getWorld().name, chunk.getX(), chunk.getZ())
+            db.deletePlot(chunk.world.name, chunk.x, chunk.z)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to delete plot", e)
+            plugin.logger.log(Level.SEVERE, "Failed to delete plot", e)
             throw TowniaException("error.database")
         }
     }
@@ -165,16 +160,16 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
         if (!cache.containsKey(key)) throw TowniaException("town.chunk-not-claimed")
         cache.remove(key)
         try {
-            db.deletePlot(chunk.getWorld().name, chunk.getX(), chunk.getZ())
+            db.deletePlot(chunk.world.name, chunk.x, chunk.z)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to delete plot", e)
+            plugin.logger.log(Level.SEVERE, "Failed to delete plot", e)
             throw TowniaException("error.database")
         }
     }
 
     @Throws(TowniaException::class)
     fun setPlotType(worldName: String?, chunkX: Int, chunkZ: Int, type: PlotType?) {
-        val key: ChunkKey? = ChunkKey.of(worldName, chunkX, chunkZ)
+        val key: ChunkKey = ChunkKey.of(worldName, chunkX, chunkZ)
         val plot: Plot = requirePlot(key)
         plot.plotType = type
         persistPlot(plot)
@@ -182,38 +177,35 @@ class PlotManager(private val plugin: Townia, db: DatabaseManager, townManager: 
 
     @Throws(TowniaException::class)
     fun setForSale(worldName: String?, chunkX: Int, chunkZ: Int, forSale: Boolean, price: Double) {
-        val key: ChunkKey? = ChunkKey.of(worldName, chunkX, chunkZ)
+        val key: ChunkKey = ChunkKey.of(worldName, chunkX, chunkZ)
         val plot: Plot = requirePlot(key)
         plot.isForSale = forSale
         plot.price = price
-.toDouble()
         persistPlot(plot)
     }
 
     @Throws(TowniaException::class)
     fun transferOwnership(worldName: String?, chunkX: Int, chunkZ: Int, newOwnerUuid: UUID?) {
-        val key: ChunkKey? = ChunkKey.of(worldName, chunkX, chunkZ)
+        val key: ChunkKey = ChunkKey.of(worldName, chunkX, chunkZ)
         val plot: Plot = requirePlot(key)
         plot.ownerUuid = newOwnerUuid
         plot.isForSale = false
-        plot.price = 0
-.toDouble()
+        plot.price = 0.toDouble()
         persistPlot(plot)
     }
 
     @Throws(TowniaException::class)
     private fun requirePlot(key: ChunkKey?): Plot {
-        val p: Plot? = cache.get(key)
-        if (p == null) throw TowniaException("plot.no-plot-here")
+        val p: Plot = cache[key] ?: throw TowniaException("plot.no-plot-here")
         return p
     }
 
     fun persistPlot(plot: Plot) {
-        cache.put(ChunkKey(plot.worldName, plot.chunkX, plot.chunkZ), plot)
+        cache[ChunkKey(plot.worldName, plot.chunkX, plot.chunkZ)] = plot
         try {
             db.savePlot(plot)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save plot", e)
+            plugin.logger.log(Level.SEVERE, "Failed to save plot", e)
         }
     }
 }

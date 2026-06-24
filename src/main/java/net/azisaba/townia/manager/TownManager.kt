@@ -12,27 +12,23 @@ import java.sql.SQLException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Consumer
-import java.util.function.Function
 import java.util.logging.Level
-import java.util.stream.Collectors
 import kotlin.math.min
 
-class TownManager(private val plugin: Townia, db: DatabaseManager, residentManager: ResidentManager) {
-    private val db: DatabaseManager
-    private val residentManager: ResidentManager
+class TownManager(private val plugin: Townia, private val db: DatabaseManager,
+                  private val residentManager: ResidentManager
+) {
 
-    private val cache: MutableMap<UUID?, Town> = ConcurrentHashMap<UUID?, Town>()
-    private val nameIndex: MutableMap<String?, UUID?> = ConcurrentHashMap<String?, UUID?>()
+    private val cache: ConcurrentHashMap<UUID, Town> = ConcurrentHashMap<UUID, Town>()
+    private val nameIndex: ConcurrentHashMap<String, UUID> = ConcurrentHashMap<String, UUID>()
 
     init {
-        this.db = db
-        this.residentManager = residentManager
         loadAll()
     }
 
     fun cacheTown(town: Town) {
-        cache.put(town.id, town)
-        nameIndex.put(town.name!!.lowercase(Locale.getDefault()), town.id)
+        town.id?.let { cache.put(it, town) }
+        town.id?.let { nameIndex.put(town.name!!.lowercase(Locale.getDefault()), it) }
     }
 
     private fun loadAll() {
@@ -42,12 +38,12 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
             for (t in db.allTowns) {
                 if (t == null) continue
                 db.loadTownOutposts(t)
-                cache.put(t.id, t)
-                nameIndex.put(t.name!!.lowercase(Locale.getDefault()), t.id)
+                t.id?.let { cache.put(it, t) }
+                t.id?.let { nameIndex.put(t.name!!.lowercase(Locale.getDefault()), it) }
             }
-            plugin.getLogger().info("Loaded " + cache.size + " towns.")
+            plugin.logger.info("Loaded " + cache.size + " towns.")
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to load towns from database", e)
+            plugin.logger.log(Level.SEVERE, "Failed to load towns from database", e)
         }
     }
 
@@ -88,7 +84,7 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         try {
             return db.countPlotsByTown(townId!!)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.WARNING, "Failed to count plots for town " + townId, e)
+            plugin.logger.log(Level.WARNING, "Failed to count plots for town $townId", e)
             return 0
         }
     }
@@ -105,12 +101,12 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
 
         val town: Town = Town(
             UUID.randomUUID(), name, mayorUuid, null,
-            0.0, plugin.towniaConfig!!.defaultClaimLimit, 0,
+            0.0, plugin.towniaConfig.defaultClaimLimit, 0,
             false, System.currentTimeMillis(),
-            null, plugin.towniaConfig!!.defaultTownTax, 0.0, false, false, false, false,
-            null, 0.0, 0.0, 0.0, 0.0f, 0.0f
+            null, plugin.towniaConfig.defaultTownTax, 0.0, pvp = false, mobs = false, explosions = false, fire = false,
+            spawnWorld = null, spawnX = 0.0, spawnY = 0.0, spawnZ = 0.0, spawnYaw = 0.0f, spawnPitch = 0.0f
         )
-        town.dailyUpkeep = plugin.towniaConfig!!.townUpkeep
+        town.dailyUpkeep = plugin.towniaConfig.townUpkeep
         persist(town)
         residentManager.setTown(mayorUuid, town.id, TownRank.MAYOR)
         return town
@@ -125,10 +121,10 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         }
         if (town.isInNation) {
             val nation: Optional<Nation> = plugin.nationManager.getNation(town.nationUuid)
-            nation.ifPresent(Consumer { n: Nation? ->
+            nation.ifPresent(Consumer { _: Nation? ->
                 try {
                     plugin.nationManager.removeTownFromNation(town.nationUuid!!, townId)
-                } catch (ignored: TowniaException) {
+                } catch (_: TowniaException) {
                 }
             })
         }
@@ -138,7 +134,7 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         try {
             db.deleteTown(townId)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to delete town " + town.name, e)
+            plugin.logger.log(Level.SEVERE, "Failed to delete town " + town.name, e)
             throw TowniaException("error.database")
         }
     }
@@ -149,7 +145,7 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         val town: Town = requireTown(townId)
         nameIndex.remove(town.name!!.lowercase(Locale.getDefault()))
         town.name = newName
-        nameIndex.put(newName.lowercase(Locale.getDefault()), townId)
+        townId?.let { nameIndex.put(newName.lowercase(Locale.getDefault()), it) }
         persist(town)
     }
 
@@ -160,7 +156,7 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
     @Throws(TowniaException::class)
     fun setSpawn(townId: UUID?, loc: Location) {
         val town: Town = requireTown(townId)
-        town.setSpawn(loc.getWorld().name, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch())
+        town.setSpawn(loc.getWorld().name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch)
         persist(town)
     }
 
@@ -177,15 +173,16 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         val oldMayor: UUID? = town.mayorUuid
         town.mayorUuid = newMayorUuid
         persist(town)
-        // Demote old mayor to resident
-        residentManager.setRank(oldMayor, TownRank.RESIDENT)
-        residentManager.setRank(newMayorUuid, TownRank.MAYOR)
+        residentManager.setRank(oldMayor, TownRank.RESIDENT
+)
+        residentManager.setRank(newMayorUuid, TownRank.MAYOR
+)
     }
 
     @Throws(TowniaException::class)
     fun addBalance(townId: UUID?, amount: Double) {
         val town: Town = requireTown(townId)
-        town.balance = town.balance + amount
+        town.balance += amount
         persist(town)
     }
 
@@ -193,14 +190,14 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
     fun subtractBalance(townId: UUID?, amount: Double) {
         val town: Town = requireTown(townId)
         if (town.balance < amount) throw TowniaException("town.withdraw-insufficient")
-        town.balance = town.balance - amount
+        town.balance -= amount
         persist(town)
     }
 
     @Throws(TowniaException::class)
     fun setBonusClaims(townId: UUID?, bonusClaims: Int) {
         val town: Town = requireTown(townId)
-        val capped = min(bonusClaims, plugin.towniaConfig!!.maxBonusClaims)
+        val capped = min(bonusClaims, plugin.towniaConfig.maxBonusClaims)
         town.bonusClaims = capped
         persist(town)
     }
@@ -229,9 +226,9 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
         val town: Town = requireTown(townId)
         try {
             db.saveTownOutpost(townId!!, outpost)
-            db.loadTownOutposts(town) // Reload to get ID if auto-incremented
+            db.loadTownOutposts(town)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save outpost", e)
+            plugin.logger.log(Level.SEVERE, "Failed to save outpost", e)
             throw TowniaException("error.database")
         }
     }
@@ -243,18 +240,18 @@ class TownManager(private val plugin: Townia, db: DatabaseManager, residentManag
             db.deleteTownOutpost(outpostId)
             town.outposts.removeIf { it?.id == outpostId }
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to delete outpost", e)
+            plugin.logger.log(Level.SEVERE, "Failed to delete outpost", e)
             throw TowniaException("error.database")
         }
     }
 
     private fun persist(town: Town) {
-        cache.put(town.id, town)
-        nameIndex.put(town.name!!.lowercase(Locale.getDefault()), town.id)
+        town.id?.let { cache.put(it, town) }
+        town.id?.let { nameIndex.put(town.name!!.lowercase(Locale.getDefault()), it) }
         try {
             db.saveTown(town)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save town " + town.name, e)
+            plugin.logger.log(Level.SEVERE, "Failed to save town " + town.name, e)
         }
     }
 }

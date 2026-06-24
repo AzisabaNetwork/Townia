@@ -4,17 +4,14 @@ import java.util.*
 
 class Plot(
     val worldName: String?, val chunkX: Int, val chunkZ: Int,
-    var townUuid: UUID?, // null = town-owned, non-null = individual resident owner
+    var townUuid: UUID?,
     var ownerUuid: UUID?,
-    plotType: PlotType?, forSale: Boolean, price: Double,
-    name: String?, pvp: Boolean, mobs: Boolean, explosions: Boolean, fire: Boolean,
+    var plotType: PlotType?, forSale: Boolean, var price: Double,
+    var name: String?, pvp: Boolean, mobs: Boolean, explosions: Boolean, fire: Boolean,
     isOutpost: Boolean, permsResident: String?, permsAlly: String?, permsOutsider: String?, permsNation: String?
 ) {
-    var plotType: PlotType?
-    var isForSale: Boolean
-    var price: Double
+    var isForSale: Boolean = forSale
 
-    var name: String?
     private var pvp: Boolean
     private var mobs: Boolean
     private var explosions: Boolean
@@ -27,10 +24,6 @@ class Plot(
     var permsNation: String?
 
     init {
-        this.plotType = plotType
-        this.isForSale = forSale
-        this.price = price
-        this.name = name
         this.pvp = pvp
         this.mobs = mobs
         this.explosions = explosions

@@ -21,9 +21,7 @@ import org.bukkit.entity.Player
 import org.bukkit.util.StringUtil
 import java.sql.SQLException
 import java.util.*
-import java.util.function.Function
 import java.util.logging.Level
-import kotlin.Any
 import kotlin.Array
 import kotlin.Boolean
 import kotlin.Double
@@ -33,36 +31,18 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.collections.MutableList
 import kotlin.collections.MutableMap
-import kotlin.collections.map
 import kotlin.collections.mutableListOf
-import kotlin.collections.remove
-import kotlin.collections.toList
-import kotlin.compareTo
-import kotlin.map
-import kotlin.sequences.map
-import kotlin.sequences.toList
 import kotlin.text.equals
 import kotlin.text.format
 import kotlin.text.lowercase
-import kotlin.text.map
-import kotlin.text.toList
-import kotlin.toList
-import kotlin.toString
 
 class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     private val pendingNationInvites: MutableMap<UUID?, UUID?> = HashMap<UUID?, UUID?>()
 
-    private val nationManager: NationManager
-    private val townManager: TownManager
-    private val residentManager: ResidentManager
-    private val plotManager: PlotManager?
-
-    init {
-        this.nationManager = plugin.nationManager
-        this.townManager = plugin.townManager
-        this.residentManager = plugin.residentManager
-        this.plotManager = plugin.plotManager
-    }
+    private val nationManager: NationManager = plugin.nationManager
+    private val townManager: TownManager = plugin.townManager
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val plotManager: PlotManager? = plugin.plotManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.size == 0) {
@@ -70,7 +50,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return true
         }
 
-        when (args[0]!!.lowercase(Locale.getDefault())) {
+        when (args[0].lowercase(Locale.getDefault())) {
             "new" -> handleNew(sender, args)
             "invite", "add" -> handleInvite(sender, args)
             "join" -> handleJoin(sender, args)
@@ -95,16 +75,14 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleNew(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (args.size < 2) {
             plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val townUuid: UUID? = res.townUuid
         val townOpt: Optional<Town> = townManager.getTown(townUuid)
@@ -138,7 +116,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val name = args[1]
         try {
-            nationManager.createNation(name, townUuid, player.getUniqueId())
+            nationManager.createNation(name, townUuid, player.uniqueId)
             plugin.messageManager.sendMessage(sender, "nation.created", "nation", "{nation}", name)
         } catch (e: TowniaException) {
             if (cost > 0 && plugin.hasEconomy()) plugin.economy!!.depositPlayer(player, cost)
@@ -147,19 +125,17 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleInvite(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (args.size < 2) {
             plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
 
-        val res: TowniaPlayer? = requireNationLeader(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireNationLeader(sender, player) ?: return
 
         val leaderTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (leaderTownOpt.isEmpty() || !leaderTownOpt.get().isInNation) {
+        if (leaderTownOpt.isEmpty || !leaderTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -167,7 +143,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val targetTownName = args[1]
         val targetTownOpt: Optional<Town> = townManager.getTownByName(targetTownName)
-        if (targetTownOpt.isEmpty()) {
+        if (targetTownOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
             return
         }
@@ -177,10 +153,10 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        pendingNationInvites.put(targetTown.id, nationUuid)
+        pendingNationInvites[targetTown.id] = nationUuid
 
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-        val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
+        val nationName = nationOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
 
         plugin.messageManager.sendMessage(
             sender, "nation.invite-sent",
@@ -198,16 +174,14 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleJoin(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (args.size < 2) {
             plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val townUuid: UUID? = res.townUuid
         val townOpt: Optional<Town> = townManager.getTown(townUuid)
@@ -250,15 +224,13 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleLeave(sender: CommandSender) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val townUuid: UUID? = res.townUuid
         val townOpt: Optional<Town> = townManager.getTown(townUuid)
-        if (townOpt.isEmpty() || !townOpt.get().isInNation) {
+        if (townOpt.isEmpty || !townOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -266,14 +238,14 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val nationUuid: UUID? = town.nationUuid
 
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-        if (nationOpt.isPresent() && nationOpt.get()!!.capitalTownUuid == townUuid) {
+        if (nationOpt.isPresent && nationOpt.get().capitalTownUuid == townUuid) {
             plugin.messageManager.sendMessage(sender, "nation.not-leader")
             return
         }
 
         try {
             nationManager.removeTownFromNation(nationUuid!!, townUuid!!)
-            val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
+            val nationName = nationOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
             plugin.messageManager.sendMessage(sender, "nation.left", "nation", "{nation}", nationName)
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
@@ -281,19 +253,17 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleKick(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (args.size < 2) {
             plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
 
-        val res: TowniaPlayer? = requireNationLeader(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireNationLeader(sender, player) ?: return
 
         val leaderTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (leaderTownOpt.isEmpty() || !leaderTownOpt.get().isInNation) {
+        if (leaderTownOpt.isEmpty || !leaderTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -301,7 +271,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val targetTownName = args[1]
         val targetOpt: Optional<Town> = townManager.getTownByName(targetTownName)
-        if (targetOpt.isEmpty()) {
+        if (targetOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
             return
         }
@@ -311,14 +281,14 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-        if (nationOpt.isPresent() && nationOpt.get()!!.capitalTownUuid!!.equals(targetTown.id)) {
+        if (nationOpt.isPresent && nationOpt.get().capitalTownUuid!! == targetTown.id) {
             plugin.messageManager.sendMessage(sender, "error.cannot-kick-mayor")
             return
         }
 
         try {
-            nationManager.removeTownFromNation(nationUuid!!, targetTown.id!!)
-            val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
+            nationManager.removeTownFromNation(nationUuid, targetTown.id!!)
+            val nationName = nationOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
             plugin.messageManager.sendMessage(
                 sender, "nation.kicked",
                 "{town}", targetTownName, "{nation}", nationName
@@ -336,8 +306,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleDeposit(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (!plugin.hasEconomy()) {
             plugin.messageManager.sendMessage(sender, "error.no-vault")
@@ -349,11 +318,10 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (townOpt.isEmpty() || !townOpt.get().isInNation) {
+        if (townOpt.isEmpty || !townOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -363,7 +331,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         try {
             amount = args[1]!!.toDouble()
             if (amount <= 0) throw NumberFormatException()
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(sender, "error.invalid-amount")
             return
         }
@@ -399,8 +367,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleWithdraw(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
         if (!plugin.hasEconomy()) {
             plugin.messageManager.sendMessage(sender, "error.no-vault")
@@ -412,11 +379,10 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        val res: TowniaPlayer? = requireNationLeader(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireNationLeader(sender, player) ?: return
 
         val leaderTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (leaderTownOpt.isEmpty() || !leaderTownOpt.get().isInNation) {
+        if (leaderTownOpt.isEmpty || !leaderTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -424,16 +390,16 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val amount: Double
         try {
-            amount = args[1]!!.toDouble()
+            amount = args[1].toDouble()
             if (amount <= 0) throw NumberFormatException()
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(sender, "error.invalid-amount")
             return
         }
 
         try {
             val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-            if (nationOpt.isEmpty()) {
+            if (nationOpt.isEmpty) {
                 plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
                 return
             }
@@ -459,11 +425,9 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleSet(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val town: Town? = townManager.getTown(res.townUuid).orElse(null)
         if (town == null || town.nationUuid == null) {
@@ -471,8 +435,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        val nation: Nation? = nationManager.getNation(town.nationUuid).orElse(null)
-        if (nation == null) return
+        val nation: Nation = nationManager.getNation(town.nationUuid).orElse(null) ?: return
 
         if (nation.leaderUuid!! != player.uniqueId) {
             plugin.messageManager.sendMessage(sender, "nation.not-leader")
@@ -484,19 +447,19 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        when (args[1]!!.lowercase(Locale.getDefault())) {
+        when (args[1].lowercase(Locale.getDefault())) {
             "board" -> {
-                val board = Arrays.copyOfRange(args, 2, args.size).joinToString(" ")
+                val board = args.copyOfRange(2, args.size).joinToString(" ")
                 nation.board = board
                 plugin.messageManager.sendMessage(sender, "nation.board-set", "board", board)
             }
 
             "taxes" -> {
                 try {
-                    val taxes = args[2]!!.toDouble()
+                    val taxes = args[2].toDouble()
                     nation.taxes = taxes
                     plugin.messageManager.sendMessage(sender, "nation.taxes-set", "amount", taxes.toString())
-                } catch (e: NumberFormatException) {
+                } catch (_: NumberFormatException) {
                     plugin.messageManager.sendMessage(sender, "error.invalid-amount")
                 }
             }
@@ -530,11 +493,9 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleRelation(sender: CommandSender, args: Array<out String>, relationType: kotlin.String) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
 
         val town: Town? = townManager.getTown(res.townUuid).orElse(null)
         if (town == null || town.nationUuid == null) {
@@ -542,8 +503,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        val nation: Nation? = nationManager.getNation(town.nationUuid).orElse(null)
-        if (nation == null) return
+        val nation: Nation = nationManager.getNation(town.nationUuid).orElse(null) ?: return
 
         if (nation.leaderUuid!! != player.uniqueId) {
             plugin.messageManager.sendMessage(sender, "nation.not-leader")
@@ -555,7 +515,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
 
-        val action = args[1]!!.lowercase(Locale.getDefault())
+        val action = args[1].lowercase(Locale.getDefault())
         val targetName = args[2]
 
         val targetNation: Nation? = nationManager.getNationByName(targetName).orElse(null)
@@ -570,43 +530,47 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         }
 
         try {
-            if (action == "add") {
-                if (relationType == "ALLY") {
-                    nation.allies.add(targetNation.id)
-                    nation.enemies.remove(targetNation.id)
-                } else {
-                    nation.enemies.add(targetNation.id)
-                    nation.allies.remove(targetNation.id)
+            when (action) {
+                "add" -> {
+                    if (relationType == "ALLY") {
+                        nation.allies.add(targetNation.id)
+                        nation.enemies.remove(targetNation.id)
+                    } else {
+                        nation.enemies.add(targetNation.id)
+                        nation.allies.remove(targetNation.id)
+                    }
+                    plugin.databaseManager.addNationRelation(nation.id!!, targetNation.id!!, relationType)
+                    plugin.messageManager.sendMessage(
+                        sender,
+                        "nation.relation-added",
+                        "nation",
+                        (targetNation.name ?: "Unknown"),
+                        "relation",
+                        relationType.lowercase(Locale.getDefault())
+                    )
                 }
-                plugin.databaseManager.addNationRelation(nation.id!!, targetNation.id!!, relationType)
-                plugin.messageManager.sendMessage(
-                    sender,
-                    "nation.relation-added",
-                    "nation",
-                    (targetNation.name ?: "Unknown"),
-                    "relation",
-                    relationType.lowercase(Locale.getDefault())
-                )
-            } else if (action == "remove") {
-                if (relationType == "ALLY") {
-                    nation.allies.remove(targetNation.id)
-                } else {
-                    nation.enemies.remove(targetNation.id)
+                "remove" -> {
+                    if (relationType == "ALLY") {
+                        nation.allies.remove(targetNation.id)
+                    } else {
+                        nation.enemies.remove(targetNation.id)
+                    }
+                    plugin.databaseManager.removeNationRelation(nation.id!!, targetNation.id!!)
+                    plugin.messageManager.sendMessage(
+                        sender,
+                        "nation.relation-removed",
+                        "nation",
+                        (targetNation.name ?: "Unknown"),
+                        "relation",
+                        relationType.lowercase(Locale.getDefault())
+                    )
                 }
-                plugin.databaseManager.removeNationRelation(nation.id!!, targetNation.id!!)
-                plugin.messageManager.sendMessage(
-                    sender,
-                    "nation.relation-removed",
-                    "nation",
-                    (targetNation.name ?: "Unknown"),
-                    "relation",
-                    relationType.lowercase(Locale.getDefault())
-                )
-            } else {
-                plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                else -> {
+                    plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                }
             }
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to update nation relations", e)
+            plugin.logger.log(Level.SEVERE, "Failed to update nation relations", e)
             plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
@@ -615,25 +579,22 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val nation: Nation?
         if (args.size >= 2) {
             val nationOpt: Optional<Nation> = nationManager.getNationByName(args[1])
-            if (nationOpt.isEmpty()) {
+            if (nationOpt.isEmpty) {
                 plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
                 return
             }
             nation = nationOpt.get()
         } else {
-            // Show own nation
-            val player = requirePlayer(sender)
-            if (player == null) return
-            val res: TowniaPlayer? = requireInTown(sender, player)
-            if (res == null) return
+            val player = requirePlayer(sender) ?: return
+            val res: TowniaPlayer = requireInTown(sender, player) ?: return
 
             val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-            if (townOpt.isEmpty() || !townOpt.get().isInNation) {
+            if (townOpt.isEmpty || !townOpt.get().isInNation) {
                 plugin.messageManager.sendMessage(sender, "town.not-in-nation")
                 return
             }
             val nationOpt: Optional<Nation> = nationManager.getNation(townOpt.get().nationUuid)
-            if (nationOpt.isEmpty()) {
+            if (nationOpt.isEmpty) {
                 plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
                 return
             }
@@ -649,7 +610,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val capitalName = capitalOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
 
         val leaderOpt: Optional<TowniaPlayer> = residentManager.getResident(nation.leaderUuid)
-        val leaderName: kotlin.String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
+        val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
 
         plugin.messageManager.sendMessage(
             sender, "nation.info",
@@ -663,20 +624,17 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleSpawn(sender: CommandSender) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireInTown(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireInTown(sender, player) ?: return
 
         val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (townOpt.isEmpty() || !townOpt.get().isInNation) {
+        if (townOpt.isEmpty || !townOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
 
-        val nation: Nation? = nationManager.getNation(townOpt.get().nationUuid).orElse(null)
-        if (nation == null) return
+        val nation: Nation = nationManager.getNation(townOpt.get().nationUuid).orElse(null) ?: return
 
         if (!nation.hasSpawn()) {
             plugin.messageManager.sendMessage(sender, "nation.spawn-not-set")
@@ -702,24 +660,21 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleSetSpawn(sender: CommandSender) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireNationLeader(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireNationLeader(sender, player) ?: return
 
         val leaderTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (leaderTownOpt.isEmpty() || !leaderTownOpt.get().isInNation) {
+        if (leaderTownOpt.isEmpty || !leaderTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
 
         val nationUuid: UUID? = leaderTownOpt.get().nationUuid
-        val nation: Nation? = nationManager.getNation(nationUuid).orElse(null)
-        if (nation == null) return
+        val nation: Nation = nationManager.getNation(nationUuid).orElse(null) ?: return
 
-        val loc = player.getLocation()
-        nation.setSpawn(loc.getWorld().name, loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch())
+        val loc = player.location
+        nation.setSpawn(loc.getWorld().name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch)
         nationManager.saveNation(nation)
 
         plugin.messageManager.sendMessage(sender, "nation.spawn-set")
@@ -734,7 +689,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         for (nation in nations) {
             val townCount: Int = nationManager.getTownsInNation(nation.id!!).size
             val leaderOpt: Optional<TowniaPlayer> = residentManager.getResident(nation.leaderUuid)
-            val leaderName: kotlin.String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
+            val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
             plugin.messageManager.sendMessage(
                 sender, "nation.list-entry",
                 "nation", (nation.name ?: "Unknown"),
@@ -745,14 +700,12 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val res: TowniaPlayer? = requireNationLeader(sender, player)
-        if (res == null) return
+        val res: TowniaPlayer = requireNationLeader(sender, player) ?: return
 
         val leaderTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (leaderTownOpt.isEmpty() || !leaderTownOpt.get().isInNation) {
+        if (leaderTownOpt.isEmpty || !leaderTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
@@ -765,7 +718,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         try {
             val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-            val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
+            val nationName = nationOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
             nationManager.deleteNation(nationUuid!!)
             plugin.messageManager.sendMessage(sender, "nation.deleted", "nation", nationName)
         } catch (e: TowniaException) {
@@ -786,8 +739,8 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun requireInTown(sender: CommandSender, player: Player): TowniaPlayer? {
-        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.getUniqueId())
-        if (resOpt.isEmpty() || !resOpt.get().isInTown) {
+        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.uniqueId)
+        if (resOpt.isEmpty || !resOpt.get().isInTown) {
             plugin.messageManager.sendMessage(sender, "error.not-in-town")
             return null
         }
@@ -795,8 +748,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun requireMayorInTown(sender: CommandSender, player: Player): TowniaPlayer? {
-        val res: TowniaPlayer? = requireInTown(sender, player)
-        if (res == null) return null
+        val res: TowniaPlayer = requireInTown(sender, player) ?: return null
         if (!res.isMayorOrHigher) {
             plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return null
@@ -805,18 +757,17 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun requireNationLeader(sender: CommandSender, player: Player): TowniaPlayer? {
-        val res: TowniaPlayer? = requireMayorInTown(sender, player)
-        if (res == null) return null
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return null
 
         val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (townOpt.isEmpty() || !townOpt.get().isInNation) {
+        if (townOpt.isEmpty || !townOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return null
         }
         val town: Town = townOpt.get()
         val nationUuid: UUID? = town.nationUuid
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-        if (nationOpt.isEmpty()) {
+        if (nationOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
             return null
         }
@@ -828,45 +779,45 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         return res
     }
 
-    private fun formatMoney(amount: Double): kotlin.String {
+    private fun formatMoney(amount: Double): String {
         if (plugin.hasEconomy()) return plugin.economy!!.format(amount)
-        return kotlin.String.format("%.2f", amount)
+        return String.format("%.2f", amount)
     }
 
     override fun onTabComplete(
         sender: CommandSender,
         command: Command,
-        label: kotlin.String,
+        label: String,
         args: Array<out String>
     ): MutableList<String> {
-        val completions: MutableList<String> = ArrayList<String>()
+        val completions: MutableList<String> = ArrayList()
 
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
-                args[0]!!,
-                mutableListOf<String>(
+                args[0],
+                mutableListOf(
                     "new", "invite", "join", "leave", "kick", "deposit", "withdraw",
                     "info", "list", "delete"
                 ),
                 completions
             )
         } else if (args.size == 2) {
-            when (args[0]!!.lowercase(Locale.getDefault())) {
+            when (args[0].lowercase(Locale.getDefault())) {
                 "invite", "kick" -> {
                     val townNames = townManager.allTowns.stream()
                         .map { it?.name ?: "" }.toList()
-                    StringUtil.copyPartialMatches(args[1]!!, townNames, completions)
+                    StringUtil.copyPartialMatches(args[1], townNames, completions)
                 }
 
                 "join", "info" -> {
                     val nationNames = nationManager.allNations.stream()
                         .map { it?.name ?: "" }.toList()
-                    StringUtil.copyPartialMatches(args[1]!!, nationNames, completions)
+                    StringUtil.copyPartialMatches(args[1], nationNames, completions)
                 }
 
                 "delete" -> StringUtil.copyPartialMatches(
-                    args[1]!!,
-                    mutableListOf<String>("confirm"),
+                    args[1],
+                    mutableListOf("confirm"),
                     completions
                 )
             }

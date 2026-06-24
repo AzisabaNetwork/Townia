@@ -12,10 +12,10 @@ enum class PlotType {
 
     companion object {
         fun fromString(s: String): PlotType {
-            try {
-                return valueOf(s.uppercase(Locale.getDefault()))
-            } catch (e: IllegalArgumentException) {
-                return PlotType.DEFAULT
+            return try {
+                valueOf(s.uppercase(Locale.getDefault()))
+            } catch (_: IllegalArgumentException) {
+                DEFAULT
             }
         }
     }

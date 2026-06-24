@@ -12,11 +12,7 @@ import java.util.*
 
 class DatabaseManager(private val plugin: Townia) {
     private var dataSource: HikariDataSource? = null
-    private val isMySQL: Boolean
-
-    init {
-        this.isMySQL = "mysql".equals(plugin.getConfig().getString("database.type", "sqlite"), ignoreCase = true)
-    }
+    private val isMySQL: Boolean = "mysql".equals(plugin.getConfig().getString("database.type", "sqlite"), ignoreCase = true)
 
     @Throws(SQLException::class)
     fun initialize() {
@@ -25,17 +21,17 @@ class DatabaseManager(private val plugin: Townia) {
             val host: String = plugin.getConfig().getString("database.host", "localhost")!!
             val port = plugin.getConfig().getInt("database.port", 3306)
             val db: String = plugin.getConfig().getString("database.database", "townia")!!
-            config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + db)
-            config.setUsername(plugin.getConfig().getString("database.username", "root"))
-            config.setPassword(plugin.getConfig().getString("database.password", "password"))
+            config.setJdbcUrl("jdbc:mysql://$host:$port/$db")
+            config.username = plugin.getConfig().getString("database.username", "root")
+            config.password = plugin.getConfig().getString("database.password", "password")
             config.addDataSourceProperty("cachePrepStmts", "true")
             config.addDataSourceProperty("prepStmtCacheSize", "250")
             config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
         } else {
-            val dataFolder = plugin.getDataFolder()
+            val dataFolder = plugin.dataFolder
             if (!dataFolder.exists()) dataFolder.mkdirs()
             val dbFile = File(dataFolder, "townia.db")
-            config.setJdbcUrl("jdbc:sqlite:" + dbFile.getAbsolutePath())
+            config.setJdbcUrl("jdbc:sqlite:" + dbFile.absolutePath)
         }
         config.setMaximumPoolSize(plugin.getConfig().getInt("database.pool-size", 10))
         dataSource = HikariDataSource(config)
@@ -49,12 +45,12 @@ class DatabaseManager(private val plugin: Townia) {
             }
         }
         createTables()
-        plugin.getLogger().info("Database initialised (MySQL: " + isMySQL + ")")
+        plugin.logger.info("Database initialised (MySQL: $isMySQL)")
     }
 
     @Synchronized
     fun close() {
-        if (dataSource != null && !dataSource!!.isClosed()) {
+        if (dataSource != null && !dataSource!!.isClosed) {
             dataSource!!.close()
         }
     }
@@ -212,189 +208,188 @@ class DatabaseManager(private val plugin: Townia) {
                             "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
                 )
 
-                // Schema Migrations (Silent failures if columns already exist)
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN board VARCHAR(255)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN taxes DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN plot_price DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN pvp BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN mobs BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN explosions BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN fire BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN homeblock_world VARCHAR(64)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN homeblock_x INT")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN homeblock_z INT")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN perms_resident VARCHAR(16) DEFAULT 'BDSI'")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN perms_ally VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN perms_outsider VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN perms_nation VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN daily_upkeep DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN allow_invisibility BOOLEAN DEFAULT true")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN allow_sit BOOLEAN DEFAULT true")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN allow_pet_pickup BOOLEAN DEFAULT true")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN allow_passenger BOOLEAN DEFAULT true")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
 
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN name VARCHAR(64)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN pvp BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN mobs BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN explosions BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN fire BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN is_outpost BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN perms_resident VARCHAR(16)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN perms_ally VARCHAR(16)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN perms_outsider VARCHAR(16)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN perms_nation VARCHAR(16)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
 
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN board VARCHAR(255)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN taxes DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_world VARCHAR(64)")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_x DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_y DOUBLE DEFAULT 64")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_z DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_yaw DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN spawn_pitch DOUBLE DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE nations ADD COLUMN neutral BOOLEAN DEFAULT false")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
 
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN toggle_map INTEGER DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN toggle_town_claim INTEGER DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN toggle_plot_border INTEGER DEFAULT 0")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_friend VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_ally VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_outsider VARCHAR(16) DEFAULT ''")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
                 try {
                     stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_resident VARCHAR(16) DEFAULT 'BDSI'")
-                } catch (ignored: Exception) {
+                } catch (_: Exception) {
                 }
 
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_plots_town ON plots(town_uuid)")

@@ -23,8 +23,8 @@ class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabComple
             return true
         }
 
-        val resOpt: Optional<TowniaPlayer> = plugin.residentManager.getResident(sender.getUniqueId())
-        if (resOpt.isEmpty() || !resOpt.get().isInTown) {
+        val resOpt: Optional<TowniaPlayer> = plugin.residentManager.getResident(sender.uniqueId)
+        if (resOpt.isEmpty || !resOpt.get().isInTown) {
             plugin.messageManager.sendMessage(sender, "error.not-in-town")
             return true
         }
@@ -36,14 +36,14 @@ class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabComple
         }
 
         val townOpt: Optional<Town> = plugin.townManager.getTown(res.townUuid)
-        if (townOpt.isEmpty()) {
+        if (townOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
             return true
         }
         val town: Town = townOpt.get()
 
-        val key = args[0]!!.lowercase(Locale.getDefault())
-        val valueStr = args[1]!!.lowercase(Locale.getDefault())
+        val key = args[0].lowercase(Locale.getDefault())
+        val valueStr = args[1].lowercase(Locale.getDefault())
 
         when (key) {
             "allowinvisibility" -> {
@@ -110,13 +110,13 @@ class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabComple
         val completions: MutableList<String?> = ArrayList<String?>()
         if (args.size == 1) {
             StringUtil.copyPartialMatches<MutableList<String?>?>(
-                args[0]!!,
+                args[0],
                 mutableListOf<String?>("allowInvisibility", "allowSit", "allowPetPickup", "allowPassenger"),
                 completions
             )
         } else if (args.size == 2) {
             StringUtil.copyPartialMatches<MutableList<String?>?>(
-                args[1]!!,
+                args[1],
                 mutableListOf<String?>("true", "false"),
                 completions
             )

@@ -9,20 +9,16 @@ import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 
 class PlayerJoinListener(private val plugin: Townia) : Listener {
-    private val residentManager: ResidentManager
-
-    init {
-        this.residentManager = plugin.residentManager
-    }
+    private val residentManager: ResidentManager = plugin.residentManager
 
     @EventHandler(priority = EventPriority.NORMAL)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.getPlayer()
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
                 residentManager.getOrCreate(player)
             } catch (e: Exception) {
-                plugin.getLogger().severe("Failed to load/create resident for " + player.name + ": " + e.message)
+                plugin.logger.severe("Failed to load/create resident for " + player.name + ": " + e.message)
             }
         })
     }
@@ -30,11 +26,11 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.getPlayer()
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, Runnable {
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
-                residentManager.updateLastSeen(player.getUniqueId())
+                residentManager.updateLastSeen(player.uniqueId)
             } catch (e: Exception) {
-                plugin.getLogger().severe("Failed to update last-seen for " + player.name + ": " + e.message)
+                plugin.logger.severe("Failed to update last-seen for " + player.name + ": " + e.message)
             }
         })
     }

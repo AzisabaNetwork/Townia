@@ -87,11 +87,9 @@ class MessageManager(private val plugin: Townia) {
 
     fun sendMessage(sender: CommandSender, key: String, vararg replacements: String) {
         val language = getLanguage(sender)
-        val mesageObject = getMessageObject(language, key)
-
-        val lines: List<*> = when (mesageObject) {
-            is List<*> -> mesageObject
-            else -> listOf(mesageObject)
+        val lines: List<*> = when (val messageObject = getMessageObject(language, key)) {
+            is List<*> -> messageObject
+            else -> listOf(messageObject)
         }
 
         val prefix = plugin.towniaConfig.prefix

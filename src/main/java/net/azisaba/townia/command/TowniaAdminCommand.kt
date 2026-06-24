@@ -20,17 +20,10 @@ import java.util.*
 import java.util.logging.Level
 
 class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    private val townManager: TownManager
-    private val nationManager: NationManager
-    private val residentManager: ResidentManager
-    private val plotManager: PlotManager
-
-    init {
-        this.townManager = plugin.townManager
-        this.nationManager = plugin.nationManager
-        this.residentManager = plugin.residentManager
-        this.plotManager = plugin.plotManager
-    }
+    private val townManager: TownManager = plugin.townManager
+    private val nationManager: NationManager = plugin.nationManager
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val plotManager: PlotManager = plugin.plotManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("townia.admin")) {
@@ -38,12 +31,12 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             return true
         }
 
-        if (args.size == 0) {
+        if (args.isEmpty()) {
             sendHelp(sender)
             return true
         }
 
-        when (args[0]!!.lowercase(Locale.getDefault())) {
+        when (args[0].lowercase(Locale.getDefault())) {
             "reload" -> handleReload(sender)
             "bypass" -> handleBypass(sender)
             "forceclaim" -> handleForceClaim(sender, args)
@@ -64,10 +57,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     }
 
     private fun handleBypass(sender: CommandSender) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val uuid = player.getUniqueId()
+        val uuid = player.uniqueId
         if (bypassSet.contains(uuid)) {
             bypassSet.remove(uuid)
             plugin.messageManager.sendMessage(sender, "admin.bypass-off")
@@ -78,22 +70,21 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     }
 
     private fun handleForceClaim(sender: CommandSender, args: Array<out String>) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         val townUuid: UUID
 
         if (args.size >= 2) {
             val townOpt: Optional<Town> = townManager.getTownByName(args[1])
-            if (townOpt.isEmpty()) {
+            if (townOpt.isEmpty) {
                 plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
                 return
             }
             townUuid = townOpt.get().id!!
         } else {
-            val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.getUniqueId())
-            if (resOpt.isEmpty() || !resOpt.get().isInTown) {
+            val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.uniqueId)
+            if (resOpt.isEmpty || !resOpt.get().isInTown) {
                 plugin.messageManager.sendMessage(sender, "error.not-in-town")
                 return
             }
@@ -104,15 +95,16 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             plotManager.forceClaimChunk(townUuid, chunk)
             plugin.messageManager.sendMessage(sender, "admin.force-claimed", "town", "Unknown")
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
     private fun handleForceUnclaim(sender: CommandSender) {
-        val player = requirePlayer(sender)
-        if (player == null) return
+        val player = requirePlayer(sender) ?: return
 
-        val chunk = player.getLocation().getChunk()
+        val chunk = player.location.chunk
         if (plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(sender, "town.chunk-not-claimed")
             return
@@ -122,7 +114,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             plotManager.forceUnclaimChunk(chunk)
             plugin.messageManager.sendMessage(sender, "admin.force-unclaimed")
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
@@ -134,7 +128,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
 
         val townName = args[1]
         val townOpt: Optional<Town> = townManager.getTownByName(townName)
-        if (townOpt.isEmpty()) {
+        if (townOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
             return
         }
@@ -142,20 +136,19 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         val townUuid: UUID = town.id!!
 
         try {
-            // Clear residents
             residentManager.getResidentsByTown(townUuid)
-                .forEach({ res -> residentManager.clearTown(res.uuid) })
+                .forEach { res -> residentManager.clearTown(res.uuid) }
 
-            // Delete invites
             plugin.databaseManager.deleteInvitesByTown(townUuid)
 
-            // Delete town
             townManager.deleteTown(townUuid)
             plugin.messageManager.sendMessage(sender, "admin.town-deleted", "town", townName)
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "DB error deleting town via admin", e)
+            plugin.logger.log(Level.SEVERE, "DB error deleting town via admin", e)
             plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
@@ -177,7 +170,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             nationManager.deleteNation(nationOpt.get().id!!)
             plugin.messageManager.sendMessage(sender, "admin.nation-deleted", "nation", nationName)
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
@@ -188,16 +183,16 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         }
 
         val townOpt: Optional<Town> = townManager.getTownByName(args[1])
-        if (townOpt.isEmpty()) {
+        if (townOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
             return
         }
 
         val amount: Int
         try {
-            amount = args[2]!!.toInt()
+            amount = args[2].toInt()
             if (amount < 0) throw NumberFormatException()
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(sender, "error.invalid-amount")
             return
         }
@@ -209,7 +204,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 "{town}", args[1], "{amount}", amount.toString()
             )
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                .toTypedArray()
+            )
         }
     }
 
@@ -230,31 +227,37 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         command: Command,
         label: String,
         args: Array<out String>
-    ): MutableList<String>? {
+    ): MutableList<String> {
         if (!sender.hasPermission("townia.admin")) return mutableListOf<String>()
 
         val completions = ArrayList<String>()
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
-                args[0]!!,
-                mutableListOf<String>(
-                    "reload", "bypass", "forceclaim", "forceunclaim",
-                    "deletetown", "deletenation", "givebonus", "migrate"
+                args[0],
+                mutableListOf(
+                    "reload",
+                    "bypass",
+                    "forceclaim",
+                    "forceunclaim",
+                    "deletetown",
+                    "deletenation",
+                    "givebonus",
+                    "migrate"
                 ),
                 completions
             )
         } else if (args.size == 2) {
-            when (args[0]!!.lowercase(Locale.getDefault())) {
+            when (args[0].lowercase(Locale.getDefault())) {
                 "forceclaim", "deletetown", "givebonus" -> {
                     val townNames = townManager.allTowns.stream()
                         .map { it.name }.toList()
-                    StringUtil.copyPartialMatches(args[1]!!, townNames, completions)
+                    StringUtil.copyPartialMatches(args[1], townNames, completions)
                 }
 
                 "deletenation" -> {
                     val nationNames = nationManager.allNations.stream()
                         .map { it.name }.toList()
-                    StringUtil.copyPartialMatches(args[1]!!, nationNames, completions)
+                    StringUtil.copyPartialMatches(args[1], nationNames, completions)
                 }
             }
         }
@@ -262,7 +265,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     }
 
     companion object {
-        private val bypassSet: MutableSet<UUID> = Collections.synchronizedSet<UUID>(HashSet<UUID>())
+        private val bypassSet: MutableSet<UUID> = Collections.synchronizedSet(HashSet())
 
         fun isBypassing(uuid: UUID): Boolean {
             return bypassSet.contains(uuid)

@@ -8,25 +8,20 @@ import net.azisaba.townia.database.DatabaseManager
 import java.sql.SQLException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.function.Function
 import java.util.logging.Level
 
-class NationManager(private val plugin: Townia, db: DatabaseManager, townManager: TownManager) {
-    private val db: DatabaseManager
-    private val townManager: TownManager
+class NationManager(private val plugin: Townia, private val db: DatabaseManager, private val townManager: TownManager) {
 
-    private val cache: MutableMap<UUID?, Nation> = ConcurrentHashMap<UUID?, Nation>()
-    private val nameIndex: MutableMap<String?, UUID?> = ConcurrentHashMap<String?, UUID?>()
+    private val cache: ConcurrentHashMap<UUID, Nation> = ConcurrentHashMap<UUID, Nation>()
+    private val nameIndex: ConcurrentHashMap<String, UUID> = ConcurrentHashMap<String, UUID>()
 
     init {
-        this.db = db
-        this.townManager = townManager
         loadAll()
     }
 
     fun cacheNation(nation: Nation) {
-        cache.put(nation!!.id, nation)
-        nameIndex.put(nation!!.name!!.lowercase(Locale.getDefault()), nation!!.id)
+        nation.id?.let { cache.put(it, nation) }
+        nation.id?.let { nameIndex.put(nation.name!!.lowercase(Locale.getDefault()), it) }
     }
 
     private fun loadAll() {
@@ -35,12 +30,12 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
         try {
             for (n in db.allNations) {
                 if (n != null) db.loadNationTitles(n)
-                cache.put(n!!.id, n)
-                nameIndex.put(n!!.name!!.lowercase(Locale.getDefault()), n!!.id)
+                n!!.id?.let { cache.put(it, n) }
+                n.id?.let { nameIndex.put(n.name!!.lowercase(Locale.getDefault()), it) }
             }
             val relations: MutableMap<UUID?, MutableMap<UUID?, String?>?> = db.allNationRelations
             for (entry in relations.entries) {
-                val n: Nation? = cache.get(entry.key)
+                val n: Nation? = cache[entry.key]
                 if (n != null) {
                     for (rel in entry.value!!.entries) {
                         if ("ALLY".equals(rel.value, ignoreCase = true)) {
@@ -51,9 +46,9 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
                     }
                 }
             }
-            plugin.getLogger().info("Loaded " + cache.size + " nations and relations.")
+            plugin.logger.info("Loaded " + cache.size + " nations and relations.")
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to load nations from database", e)
+            plugin.logger.log(Level.SEVERE, "Failed to load nations from database", e)
         }
     }
 
@@ -62,14 +57,13 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
     }
 
     fun getNationByName(name: String): Optional<Nation> {
-        val id = nameIndex.get(name.lowercase(Locale.getDefault()))
-        if (id == null) return Optional.empty<Nation?>()
+        val id = nameIndex[name.lowercase(Locale.getDefault())] ?: return Optional.empty<Nation?>()
         return Optional.ofNullable<Nation?>(cache.get(id))
     }
 
     val allNations: MutableList<Nation>
         get() {
-            val list: MutableList<Nation> = ArrayList(cache.values.filterNotNull())
+            val list: MutableList<Nation> = ArrayList(cache.values.toList())
             list.sortBy { it.name }
             return list
         }
@@ -94,17 +88,17 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
             .orElseThrow({ TowniaException("error.town-not-found") })
         if (capital.isInNation) throw TowniaException("town.already-in-nation")
 
-        val nation: Nation = Nation(
+        val nation = Nation(
             UUID.randomUUID(),
             name,
             capitalTownUuid,
             leaderUuid,
             0.0,
             null,
-            plugin.towniaConfig!!.defaultNationTax
+            plugin.towniaConfig.defaultNationTax
         )
         persist(nation)
-        townManager.setNation(capitalTownUuid, nation!!.id)
+        townManager.setNation(capitalTownUuid, nation.id)
     }
 
     @Throws(TowniaException::class)
@@ -112,16 +106,16 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
         val nation: Nation = requireNation(nationId)
         for (town in getTownsInNation(nationId)) {
             try {
-                townManager.clearNation(town!!.id)
-            } catch (ignored: TowniaException) {
+                townManager.clearNation(town.id)
+            } catch (_: TowniaException) {
             }
         }
         cache.remove(nationId)
-        nameIndex.remove(nation!!.name!!.lowercase(Locale.getDefault()))
+        nameIndex.remove(nation.name!!.lowercase(Locale.getDefault()))
         try {
             db.deleteNation(nationId)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to delete nation " + nation!!.name, e)
+            plugin.logger.log(Level.SEVERE, "Failed to delete nation " + nation.name, e)
             throw TowniaException("error.database")
         }
     }
@@ -129,7 +123,7 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
     @Throws(TowniaException::class)
     fun addTownToNation(nationId: UUID?, townId: UUID?) {
         requireNation(nationId)
-        val town: Town = townManager.getTown(townId).orElseThrow({ TowniaException("error.town-not-found") })
+        val town: Town = townManager.getTown(townId).orElseThrow { TowniaException("error.town-not-found") }
         if (town.isInNation) throw TowniaException("town.already-in-nation")
         townManager.setNation(townId, nationId)
     }
@@ -149,7 +143,7 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
     @Throws(TowniaException::class)
     fun addBalance(nationId: UUID?, amount: Double) {
         val nation: Nation = requireNation(nationId)
-        nation.balance = nation.balance + amount
+        nation.balance += amount
         persist(nation)
     }
 
@@ -157,14 +151,13 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
     fun subtractBalance(nationId: UUID?, amount: Double) {
         val nation: Nation = requireNation(nationId)
         if (nation.balance < amount) throw TowniaException("nation.withdraw-insufficient")
-        nation.balance = nation.balance - amount
+        nation.balance -= amount
         persist(nation)
     }
 
     @Throws(TowniaException::class)
     private fun requireNation(nationId: UUID?): Nation {
-        val n: Nation? = cache.get(nationId)
-        if (n == null) throw TowniaException("error.nation-not-found")
+        val n: Nation = cache[nationId] ?: throw TowniaException("error.nation-not-found")
         return n
     }
 
@@ -173,12 +166,12 @@ class NationManager(private val plugin: Townia, db: DatabaseManager, townManager
     }
 
     private fun persist(nation: Nation) {
-        cache.put(nation!!.id, nation)
-        nameIndex.put(nation!!.name!!.lowercase(Locale.getDefault()), nation!!.id)
+        nation.id?.let { cache.put(it, nation) }
+        nation.id?.let { nameIndex.put(nation.name!!.lowercase(Locale.getDefault()), it) }
         try {
             db.saveNation(nation)
         } catch (e: SQLException) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save nation " + nation!!.name, e)
+            plugin.logger.log(Level.SEVERE, "Failed to save nation " + nation.name, e)
         }
     }
 }

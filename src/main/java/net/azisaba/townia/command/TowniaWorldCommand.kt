@@ -16,19 +16,19 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             return true
         }
 
-        if (args.size == 0) {
+        if (args.isEmpty()) {
             handleList(sender)
             return true
         }
 
-        when (args[0]!!.lowercase(Locale.getDefault())) {
+        when (args[0].lowercase(Locale.getDefault())) {
             "list" -> handleList(sender)
             "add" -> {
                 if (args.size < 2) {
                     plugin.messageManager.sendMessage(sender, "error.invalid-args")
                     return true
                 }
-                handleAdd(sender, args[1]!!)
+                handleAdd(sender, args[1])
             }
 
             "remove" -> {
@@ -36,7 +36,7 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     plugin.messageManager.sendMessage(sender, "error.invalid-args")
                     return true
                 }
-                handleRemove(sender, args[1]!!)
+                handleRemove(sender, args[1])
             }
 
             else -> handleList(sender)
@@ -51,7 +51,7 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "count", worlds.size.toString()
         )
         for (world in worlds) {
-            plugin.messageManager.sendMessage(sender, "world.list-entry", "world", world!!)
+            plugin.messageManager.sendMessage(sender, "world.list-entry", "world", world)
         }
     }
 
@@ -61,7 +61,7 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             return
         }
 
-        val current = java.util.ArrayList(plugin.towniaConfig.allowedWorlds)
+        val current = ArrayList(plugin.towniaConfig.allowedWorlds)
         current.add(worldName)
 
         plugin.getConfig().set("allowed-worlds", current)
@@ -77,7 +77,7 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             return
         }
 
-        val current = java.util.ArrayList(plugin.towniaConfig.allowedWorlds)
+        val current = ArrayList(plugin.towniaConfig.allowedWorlds)
         current.remove(worldName)
 
         plugin.getConfig().set("allowed-worlds", current)
@@ -92,13 +92,13 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         command: Command,
         label: String,
         args: Array<out String>
-    ): MutableList<String?>? {
+    ): MutableList<String?> {
         if (!sender.hasPermission("townia.admin.world")) return ArrayList<String?>()
 
         val completions: MutableList<String?> = ArrayList<String?>()
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
-                args[0]!!,
+                args[0],
                 mutableListOf<String?>("list", "add", "remove"),
                 completions
             )
@@ -106,10 +106,10 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             if (args[0].equals("add", ignoreCase = true)) {
                 val worldNames: MutableList<String?> = ArrayList<String?>()
                 for (w in Bukkit.getWorlds()) worldNames.add(w.name)
-                StringUtil.copyPartialMatches(args[1]!!, worldNames, completions)
+                StringUtil.copyPartialMatches(args[1], worldNames, completions)
             } else if (args[0].equals("remove", ignoreCase = true)) {
                 StringUtil.copyPartialMatches(
-                    args[1]!!,
+                    args[1],
                     plugin.towniaConfig.allowedWorlds, completions
                 )
             }
