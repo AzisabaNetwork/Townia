@@ -78,7 +78,6 @@ town:
   shoptax-set: "<green>Set shop plot tax to <yellow>{amount}"
   embassyprice-set: "<green>Set embassy price to <yellow>{amount}"
   embassytax-set: "<green>Set embassy tax to <yellow>{amount}"
-  joined: "<yellow>{town}</yellow> joined!"
   reslist: "<yellow>Missing translation: reslist"
   teleport-outpost: "<yellow>Missing translation: teleport-outpost"
 
