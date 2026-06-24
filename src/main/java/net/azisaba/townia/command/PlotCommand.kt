@@ -71,7 +71,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                     if (args.size >= 3 && args[2].equals("reset", ignoreCase = true)) {
                         handleSetReset(player)
                     } else {
-                        handleSetPerm(player, Arrays.copyOfRange<kotlin.String?>(args, 2, args.size))
+                        handleSetPerm(player, Arrays.copyOfRange(args, 2, args.size))
                     }
                 } else {
                     sendHelp(player)

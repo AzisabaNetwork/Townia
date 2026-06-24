@@ -196,7 +196,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 if (town.isInNation) {
                     val nationOpt: Optional<Nation> = nationManager.getNation(town.nationUuid)
                     nationName =
-                        nationOpt.map<kotlin.String?>(Function { obj: Nation? -> obj!!.name }).orElse("None")
+                        nationOpt.map({ it.name ?: "None" }).orElse("None")
                 }
             }
         }
@@ -233,7 +233,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             var townName = "None"
             if (res.isInTown) {
                 val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-                townName = townOpt.map<kotlin.String?>(Function { obj: Town? -> obj!!.name }).orElse("None")
+                townName = townOpt.map({ it.name ?: "None" }).orElse("None")
             }
             plugin.messageManager.sendMessage(
                 sender, "resident.list-entry",

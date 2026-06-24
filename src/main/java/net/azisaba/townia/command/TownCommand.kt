@@ -316,8 +316,7 @@ class TownCommand
                     "z",
                     player.getLocation().getChunk().getZ().toString(),
                     "town",
-                    townOpt.map<String?>(
-                        Function { obj: Town? -> obj!!.name }).orElse("Unknown")
+                    townOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
                 )
             }
         } catch (e: TowniaException) {
@@ -543,7 +542,7 @@ class TownCommand
             val invite: Invite = Invite(0, target.uuid, townUuid, player.getUniqueId(), System.currentTimeMillis())
             this.databaseManager.addInvite(invite)
             val townOpt: Optional<Town> = this.townManager.getTown(townUuid)
-            val townName = townOpt.map<kotlin.String?>(Function { obj: Town? -> obj!!.name }).orElse("Unknown")
+            val townName = townOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
             this.plugin.messageManager
                 .sendMessage(sender, "town.invite-sent", "player", (target.name ?: "Unknown"), "town", townName)
             val targetPlayer = Bukkit.getPlayer((target.uuid as java.util.UUID?)!!)
@@ -597,7 +596,7 @@ class TownCommand
             return
         }
         val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
-        val townName = townOpt.map<kotlin.String?>(Function { obj: Town? -> obj!!.name }).orElse("Unknown")
+        val townName = townOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
         this.residentManager.clearTown(target.uuid)
         this.plugin.messageManager.sendMessage(sender, "town.kicked", "player", (target.name ?: "Unknown"), "town", townName)
         val targetPlayer = Bukkit.getPlayer((target.uuid as java.util.UUID?)!!)
@@ -630,7 +629,7 @@ class TownCommand
             return
         }
         val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
-        val townName = townOpt.map<kotlin.String?>(Function { obj: Town? -> obj!!.name }).orElse("Unknown")
+        val townName = townOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
         this.residentManager.clearTown(player.getUniqueId())
         this.plugin.messageManager.sendMessage(sender, "town.left", "town", townName)
         val remaining: MutableList<TowniaPlayer> = this.residentManager.getResidentsByTown(res.townUuid!!)
@@ -1364,7 +1363,7 @@ class TownCommand
         var nationName = "None"
         if (town.isInNation) {
             val nationOpt: Optional<Nation> = this.nationManager.getNation(town.nationUuid)
-            nationName = nationOpt.map<kotlin.String?>(Function { obj: Nation? -> obj!!.name }).orElse("None")
+            nationName = nationOpt.map({ it.name ?: "None" }).orElse("None")
         }
         val created = TownCommand.Companion.DATE_FMT.format(Instant.ofEpochMilli(town.createdAt))
         val balance: kotlin.String = (this.formatMoney(town.balance) ?: "0")
@@ -1502,7 +1501,7 @@ class TownCommand
         val townUuid: UUID? = res.townUuid
         try {
             val townOpt: Optional<Town> = this.townManager.getTown(townUuid)
-            val townName = townOpt.map<kotlin.String?>(Function { obj: Town? -> obj!!.name }).orElse("Unknown")
+            val townName = townOpt.map({ it.name ?: "Unknown" }).orElse("Unknown")
             val members: MutableList<TowniaPlayer> = this.residentManager.getResidentsByTown(townUuid!!)
             for (member in members) {
                 this.residentManager.clearTown(member.uuid)

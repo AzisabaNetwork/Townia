@@ -80,9 +80,9 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                     continue
                 }
                 val townOpt = townManager.getTown(invite.townUuid)
-                val townName = townOpt.map<String?>(Town::name).orElse("Unknown")
+                val townName = townOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
                 val inviterOpt = residentManager.getResident(invite.inviterUuid)
-                val inviterName = inviterOpt.map<String?>(TowniaPlayer::name).orElse("Unknown")
+                val inviterName = inviterOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
                 plugin.messageManager!!.sendMessage(
                     player,
                     "invite.list-entry",

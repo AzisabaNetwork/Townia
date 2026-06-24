@@ -180,7 +180,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         pendingNationInvites.put(targetTown.id, nationUuid)
 
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
-        val nationName = nationOpt.map<String?>({ it?.name ?: "Unknown" }).orElse("Unknown")
+        val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
 
         plugin.messageManager.sendMessage(
             sender, "nation.invite-sent",
@@ -273,7 +273,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         try {
             nationManager.removeTownFromNation(nationUuid!!, townUuid!!)
-            val nationName = nationOpt.map<String?>({ it?.name ?: "Unknown" }).orElse("Unknown")
+            val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
             plugin.messageManager.sendMessage(sender, "nation.left", "nation", "{nation}", nationName)
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
@@ -318,7 +318,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         try {
             nationManager.removeTownFromNation(nationUuid!!, targetTown.id!!)
-            val nationName = nationOpt.map<String?>({ it?.name ?: "Unknown" }).orElse("Unknown")
+            val nationName = nationOpt.map({ it?.name ?: "Unknown" }).orElse("Unknown")
             plugin.messageManager.sendMessage(
                 sender, "nation.kicked",
                 "{town}", targetTownName, "{nation}", nationName
@@ -388,7 +388,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             }
             nationManager.addBalance(nationUuid, amount)
             val nationOpt2: Optional<Nation> = nationManager.getNation(nationUuid)
-            val balance = nationOpt2.map<String?>({ n: Nation? -> formatMoney(n?.balance ?: 0.0) }).orElse("?")
+            val balance = nationOpt2.map({ n: Nation? -> formatMoney(n?.balance ?: 0.0) }).orElse("?")
             plugin.messageManager.sendMessage(
                 sender, "nation.deposit-success",
                 "{amount}", formatMoney(amount), "{balance}", balance
