@@ -90,7 +90,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             return
         }
 
-        val res: TowniaPlayer = residentManager.getOrCreate(player)!!
+        val res: TowniaPlayer = residentManager.getOrCreate(player)
 
         when (args[1].lowercase(Locale.getDefault())) {
             "add" -> {
@@ -177,6 +177,13 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         var townName = "None"
         var rankName: String? = "None"
         var nationName = "None"
+        var title = ""
+        var townInfo = ""
+        var nationInfo = ""
+
+        var townMayor = "None"
+        var townRegistered = "Unknown"
+        var nationLeader = "None"
 
         if (res.isInTown) {
             val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
@@ -184,40 +191,114 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 val town: Town = townOpt.get()
                 townName = (town.name ?: "")
                 rankName = res.rank.name
+                val residentsCount = residentManager.getResidentsByTown(town.id!!).size
+                townInfo = "[$residentsCount]"
+                townRegistered = DATE_FMT.format(Instant.ofEpochMilli(town.createdAt))
+
+                val mayorOpt = residentManager.getResident(town.mayorUuid!!)
+                if (mayorOpt.isPresent) {
+                    val m = mayorOpt.get()
+                    townMayor = m.name ?: "Unknown"
+                    var mayorPrefix = ""
+                    if (town.isInNation) {
+                        val nOpt = nationManager.getNation(town.nationUuid)
+                        if (nOpt.isPresent && nOpt.get().leaderUuid == m.uuid) {
+                            mayorPrefix = "Leader "
+                        } else {
+                            mayorPrefix = "Mayor "
+                        }
+                    } else {
+                        mayorPrefix = "Mayor "
+                    }
+                    townMayor = mayorPrefix + townMayor
+                }
+
+                if (town.mayorUuid == res.uuid) {
+                    title = "Mayor "
+                } else if (res.rank == net.azisaba.townia.data.TownRank.CO_MAYOR) {
+                    title = "Co-Mayor "
+                } else if (res.rank == net.azisaba.townia.data.TownRank.ASSISTANT) {
+                    title = "Assistant "
+                }
 
                 if (town.isInNation) {
                     val nationOpt: Optional<Nation> = nationManager.getNation(town.nationUuid)
-                    nationName =
-                        nationOpt.map({ it.name ?: "None" }).orElse("None")
+                    if (nationOpt.isPresent) {
+                        val nation = nationOpt.get()
+                        nationName = nation.name ?: "None"
+                        val townsCount = nationManager.getTownsInNation(nation.id!!).size
+                        nationInfo = "[$townsCount]"
+                        
+                        val leaderOpt = residentManager.getResident(nation.leaderUuid!!)
+                        if (leaderOpt.isPresent) {
+                            val l = leaderOpt.get()
+                            nationLeader = "Leader " + (l.name ?: "Unknown")
+                        }
+
+                        if (nation.leaderUuid == res.uuid) {
+                            title = "Leader "
+                        }
+                    }
                 }
             }
         }
 
-        val lastSeen = DATE_FMT.format(Instant.ofEpochMilli(res.lastSeen))
+        val offlinePlayer = Bukkit.getOfflinePlayer(uuid)
+        val lastSeen = if (offlinePlayer.isOnline) "Online" else DATE_FMT.format(Instant.ofEpochMilli(res.lastSeen))
         val friends: String? =
             if (res.friends!!.isEmpty()) "None" else res.friends!!.size.toString()
+        val plotsCount = plugin.plotManager.countPlotsByOwner(uuid)
 
         var balance: String? = "0"
+        val registered = DATE_FMT.format(Instant.ofEpochMilli(offlinePlayer.firstPlayed.let { if (it == 0L) System.currentTimeMillis() else it }))
+
         if (plugin.hasEconomy()) {
-            val offlinePlayer = Bukkit.getOfflinePlayer(uuid)
-            balance = String.format("%.2f", plugin.economy!!.getBalance(offlinePlayer))
+            balance = plugin.economy!!.format(plugin.economy!!.getBalance(offlinePlayer)).replace("¥", "").replace("\\", "")
         }
 
-        plugin.messageManager.sendMessage(
+        plugin.messageManager.sendMessageWithoutPrefix(
             sender, "resident.info",
             "player", (res.name ?: "Unknown"),
+            "title", title,
+            "about", "/res set about [msg]",
             "town", townName,
+            "town_info", townInfo,
+            "town_mayor", townMayor,
+            "town_registered", townRegistered,
+            "town_residents", townInfo.replace("[", "").replace("]", ""),
             "rank", (rankName ?: "None"),
             "nation", nationName,
+            "nation_info", nationInfo,
+            "nation_leader", nationLeader,
+            "nation_towns", nationInfo.replace("[", "").replace("]", ""),
             "last_seen", lastSeen,
             "balance", (balance ?: "0"),
-            "friends", (friends ?: "None")
+            "friends", (friends ?: "None"),
+            "registered", registered,
+            "plots", plotsCount.toString(),
+            "perms_build", formatPerm(res, 'B'),
+            "perms_destroy", formatPerm(res, 'D'),
+            "perms_switch", formatPerm(res, 'S'),
+            "perms_item", formatPerm(res, 'I'),
+            "pvp", "N/A",
+            "explosions", "N/A",
+            "fire", "N/A",
+            "mobs", "N/A"
         )
+    }
+
+    private fun formatPerm(res: TowniaPlayer, action: Char): String {
+        val sb = java.lang.StringBuilder()
+        sb.append(if ((res.defaultPermsFriend?.indexOf(action) ?: -1) >= 0) "F" else "-")
+        sb.append(if ((res.defaultPermsResident?.indexOf(action) ?: -1) >= 0) "R" else "-")
+        sb.append(if ((res.defaultPermsAlly?.indexOf(action) ?: -1) >= 0) "A" else "-")
+        sb.append(if ((res.defaultPermsOutsider?.indexOf(action) ?: -1) >= 0) "O" else "-")
+        return sb.toString()
     }
 
     private fun showList(sender: CommandSender) {
         val all: MutableList<TowniaPlayer> = residentManager.allResidents
-        plugin.messageManager.sendMessage(
+        plugin.messageManager.sendMessageWithoutPrefix(
             sender, "resident.list-header",
             "count", all.size.toString()
         )
@@ -227,7 +308,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
                 townName = townOpt.map({ it.name ?: "None" }).orElse("None")
             }
-            plugin.messageManager.sendMessage(
+            plugin.messageManager.sendMessageWithoutPrefix(
                 sender, "resident.list-entry",
                 "player", (res.name ?: "Unknown"),
                 "town", townName

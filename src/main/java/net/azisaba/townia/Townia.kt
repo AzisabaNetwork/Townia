@@ -69,11 +69,12 @@ class  Townia : JavaPlugin() {
             residentManager.getOrCreate(p)
         }
 
-        ActionBarTask(this).runTaskTimer(this, 40L, 40L)
 
         val upkeepTicks = 1728000L
         nextUpkeepTime = System.currentTimeMillis() + upkeepTicks * 50L
         DailyTask(this).runTaskTimer(this, upkeepTicks, upkeepTicks)
+        
+        ActionBarTask(this).runTaskTimer(this, 40L, 40L)
 
         logger.info("Townia " + description.version + " enabled.")
     }

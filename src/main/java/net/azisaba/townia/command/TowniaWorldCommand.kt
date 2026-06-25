@@ -46,12 +46,12 @@ class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompl
 
     private fun handleList(sender: CommandSender) {
         val worlds = plugin.towniaConfig.allowedWorlds
-        plugin.messageManager.sendMessage(
+        plugin.messageManager.sendMessageWithoutPrefix(
             sender, "world.list-header",
             "count", worlds.size.toString()
         )
         for (world in worlds) {
-            plugin.messageManager.sendMessage(sender, "world.list-entry", "world", world)
+            plugin.messageManager.sendMessageWithoutPrefix(sender, "world.list-entry", "world", world)
         }
     }
 

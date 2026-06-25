@@ -5,7 +5,6 @@ import net.azisaba.townia.TowniaException
 import net.azisaba.townia.data.Invite
 import net.azisaba.townia.data.Town
 import net.azisaba.townia.data.TownRank
-import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.database.DatabaseManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
@@ -20,15 +19,9 @@ import java.util.*
 import java.util.logging.Level
 
 class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    private val databaseManager: DatabaseManager?
-    private val residentManager: ResidentManager
-    private val townManager: TownManager
-
-    init {
-        this.databaseManager = plugin.databaseManager
-        this.residentManager = plugin.residentManager
-        this.townManager = plugin.townManager
-    }
+    private val databaseManager: DatabaseManager? = plugin.databaseManager
+    private val residentManager: ResidentManager = plugin.residentManager
+    private val townManager: TownManager = plugin.townManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = requirePlayer(sender) ?: return true
@@ -72,7 +65,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 return
             }
 
-            plugin.messageManager.sendMessage(player, "invite.list-header")
+            plugin.messageManager.sendMessageWithoutPrefix(player, "invite.list-header")
             for (invite in invites) {
                 if (invite.isExpired(timeoutSecs)) {
                     databaseManager.deleteInvite(invite.id)
@@ -82,7 +75,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 val townName = townOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
                 val inviterOpt = residentManager.getResident(invite.inviterUuid)
                 val inviterName = inviterOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
-                plugin.messageManager.sendMessage(
+                plugin.messageManager.sendMessageWithoutPrefix(
                     player,
                     "invite.list-entry",
                     "town",

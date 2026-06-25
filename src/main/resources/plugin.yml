@@ -9,6 +9,7 @@ softdepend:
   - CoreProtect
   - LuckPerms
   - PlaceholderAPI
+  - Towny
   - Vault
 commands:
   townia:

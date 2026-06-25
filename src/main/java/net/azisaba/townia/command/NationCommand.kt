@@ -20,7 +20,12 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.util.StringUtil
 import java.sql.SQLException
-import java.util.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.Optional
+import java.util.UUID
 import java.util.logging.Level
 import kotlin.Array
 import kotlin.Boolean
@@ -33,19 +38,18 @@ import kotlin.collections.MutableList
 import kotlin.collections.MutableMap
 import kotlin.collections.mutableListOf
 import kotlin.text.equals
-import kotlin.text.format
 import kotlin.text.lowercase
 
 class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    private val pendingNationInvites: MutableMap<UUID?, UUID?> = HashMap<UUID?, UUID?>()
+    private val pendingNationInvites: MutableMap<UUID?, UUID?> = HashMap()
 
     private val nationManager: NationManager = plugin.nationManager
     private val townManager: TownManager = plugin.townManager
     private val residentManager: ResidentManager = plugin.residentManager
-    private val plotManager: PlotManager? = plugin.plotManager
+    private val plotManager: PlotManager = plugin.plotManager
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (args.size == 0) {
+        if (args.isEmpty()) {
             sendHelp(sender)
             return true
         }
@@ -204,7 +208,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val nationName = args[1]
         val nationOpt: Optional<Nation> = nationManager.getNationByName(nationName)
-        if (nationOpt.isEmpty()) {
+        if (nationOpt.isEmpty) {
             plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
             return
         }
@@ -612,14 +616,31 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val leaderOpt: Optional<TowniaPlayer> = residentManager.getResident(nation.leaderUuid)
         val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
 
-        plugin.messageManager.sendMessage(
+        var leaderRegistered = "Unknown"
+        var leaderLastSeen = "Unknown"
+        if (leaderOpt.isPresent) {
+            val l = leaderOpt.get()
+            val offlineLeader = Bukkit.getOfflinePlayer(l.uuid!!)
+            leaderRegistered = DATE_FMT.format(Instant.ofEpochMilli(offlineLeader.firstPlayed.let { if (it == 0L) System.currentTimeMillis() else it }))
+            leaderLastSeen = if (offlineLeader.isOnline) "Online" else DATE_FMT.format(Instant.ofEpochMilli(l.lastSeen))
+        }
+
+        val created = "Unknown"
+
+        plugin.messageManager.sendMessageWithoutPrefix(
             sender, "nation.info",
             "nation", (nation.name ?: "Unknown"),
+            "board", (nation.board ?: "None"),
             "leader", leaderName,
+            "leader_registered", leaderRegistered,
+            "leader_last_seen", leaderLastSeen,
+            "founded", created,
             "capital", capitalName,
-            "towns", towns.size.toString(),
+            "town_count", towns.size.toString(),
+            "towns", if (towns.isEmpty()) "None" else towns.joinToString(", ") { it.name ?: "Unknown" },
             "residents", totalResidents.toString(),
-            "balance", formatMoney(nation.balance)
+            "balance", formatMoney(nation.balance),
+            "taxes", formatMoney(nation.taxes)
         )
     }
 
@@ -682,7 +703,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
     private fun handleList(sender: CommandSender) {
         val nations: MutableList<Nation> = nationManager.allNations
-        plugin.messageManager.sendMessage(
+        plugin.messageManager.sendMessageWithoutPrefix(
             sender, "nation.list-header",
             "count", nations.size.toString()
         )
@@ -690,7 +711,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             val townCount: Int = nationManager.getTownsInNation(nation.id!!).size
             val leaderOpt: Optional<TowniaPlayer> = residentManager.getResident(nation.leaderUuid)
             val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
-            plugin.messageManager.sendMessage(
+            plugin.messageManager.sendMessageWithoutPrefix(
                 sender, "nation.list-entry",
                 "nation", (nation.name ?: "Unknown"),
                 "leader", leaderName,
@@ -780,8 +801,11 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun formatMoney(amount: Double): String {
-        if (plugin.hasEconomy()) return plugin.economy!!.format(amount)
-        return String.format("%.2f", amount)
+        return if (plugin.hasEconomy()) {
+            plugin.economy!!.format(amount).replace("¥", "").replace("\\", "")
+        } else {
+            amount.toString()
+        }
     }
 
     override fun onTabComplete(
@@ -832,5 +856,10 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
     private fun handleToggle(sender: CommandSender, args: Array<out String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
+    }
+
+    companion object {
+        private val DATE_FMT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
     }
 }

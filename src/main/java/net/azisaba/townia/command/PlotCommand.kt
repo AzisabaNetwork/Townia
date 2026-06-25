@@ -378,7 +378,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun formatMoney(amount: Double): String {
-        if (plugin.hasEconomy()) return plugin.economy!!.format(amount)
+        if (plugin.hasEconomy()) return plugin.economy!!.format(amount).replace("[^\\d.,-]".toRegex(), "")
         return String.format("%.2f", amount)
     }
 

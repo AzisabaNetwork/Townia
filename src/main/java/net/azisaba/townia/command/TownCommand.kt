@@ -1,4 +1,5 @@
 package net.azisaba.townia.command
+
 import net.azisaba.townia.data.Invite
 import net.azisaba.townia.data.Nation
 import net.azisaba.townia.data.Town
@@ -324,48 +325,158 @@ class TownCommand
     }
 
     private fun handleOutpost(sender: CommandSender, args: Array<out String>) {
-        val targetTown: Town?
-        val outpostIndex: Int
         val player: Player = this.requirePlayer(sender) ?: return
+        val res: TowniaPlayer? = this.plugin.residentManager.getResident(player.uniqueId).orElse(null)
+        
         if (args.size < 2) {
-            this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            // Implicit tp to outpost 1
+            if (res?.townUuid == null) {
+                this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                return
+            }
+            teleportToOutpost(sender, player, res, res.townUuid, 1)
             return
         }
-        val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        try {
-            if (args.size >= 3) {
-                val townName = args[1]
-                outpostIndex = args[2].toInt()
-                targetTown = this.plugin.townManager.getTownByName(townName).orElse(null)
+
+        val subCmd = args[1].lowercase()
+
+        when (subCmd) {
+            "list" -> {
+                val targetTownName = if (args.size >= 3) args[2] else null
+                val targetTown = if (targetTownName != null) {
+                    this.plugin.townManager.getTownByName(targetTownName).orElse(null)
+                } else {
+                    if (res?.townUuid == null) {
+                        this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                        return
+                    }
+                    this.plugin.townManager.getTown(res.townUuid).orElse(null)
+                }
+
                 if (targetTown == null) {
-                    this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", townName)
+                    if (targetTownName != null) {
+                        this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", targetTownName)
+                    }
                     return
                 }
-            } else {
-                outpostIndex = args[1].toInt()
-                targetTown = this.plugin.townManager.getTown(res.townUuid).orElse(null)
-                if (targetTown == null) {
-                    return
+
+                this.plugin.messageManager.sendMessage(sender, "town.outpost-list-header", "town", targetTown.name ?: "")
+                var hasOutposts = false
+                targetTown.outposts.forEachIndexed { i, outpost ->
+                    if (outpost != null) {
+                        hasOutposts = true
+                        val status = if (outpost.isPublic) {
+                            this.plugin.messageManager.getRawMessage(sender, "town.outpost-public")
+                        } else {
+                            this.plugin.messageManager.getRawMessage(sender, "town.outpost-private")
+                        }
+                        this.plugin.messageManager.sendMessage(
+                            sender, "town.outpost-list-entry",
+                            "index", (i + 1).toString(),
+                            "x", outpost.x.toInt().toString(),
+                            "y", outpost.y.toInt().toString(),
+                            "z", outpost.z.toInt().toString(),
+                            "status", status
+                        )
+                    }
+                }
+                if (!hasOutposts) {
+                    this.plugin.messageManager.sendMessage(sender, "town.outpost-list-empty")
                 }
             }
-        } catch (e: NumberFormatException) {
-            this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
-            return
+            "tp" -> {
+                if (args.size >= 4) {
+                    val townName = args[2]
+                    val indexStr = args[3]
+                    val targetTown = this.plugin.townManager.getTownByName(townName).orElse(null)
+                    if (targetTown == null) {
+                        this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", townName)
+                        return
+                    }
+                    try {
+                        teleportToOutpost(sender, player, res, targetTown.id, indexStr.toInt())
+                    } catch (_: NumberFormatException) {
+                        this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    }
+                } else if (args.size >= 3) {
+                    if (res?.townUuid == null) {
+                        this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                        return
+                    }
+                    try {
+                        teleportToOutpost(sender, player, res, res.townUuid, args[2].toInt())
+                    } catch (e: NumberFormatException) {
+                        this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    }
+                } else {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                }
+            }
+            "togglepublic" -> {
+                if (res?.townUuid == null) {
+                    this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                    return
+                }
+                if (!res.isAssistantOrHigher) {
+                    this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
+                    return
+                }
+                if (args.size < 3) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return
+                }
+                val indexStr = args[2]
+                try {
+                    val outpostIndex = indexStr.toInt()
+                    val targetTown = this.plugin.townManager.getTown(res.townUuid).orElse(null) ?: return
+                    if (outpostIndex < 1 || outpostIndex > targetTown.outposts.size) {
+                        this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found", "index", outpostIndex.toString())
+                        return
+                    }
+                    val outpost = targetTown.outposts[outpostIndex - 1]!!
+                    val newOutpost = outpost.copy(isPublic = !outpost.isPublic)
+                    targetTown.outposts[outpostIndex - 1] = newOutpost
+                    this.plugin.databaseManager.saveTownOutpost(targetTown.id!!, newOutpost)
+                    
+                    if (newOutpost.isPublic) {
+                        this.plugin.messageManager.sendMessage(sender, "town.outpost-toggled-public", "index", outpostIndex.toString())
+                    } else {
+                        this.plugin.messageManager.sendMessage(sender, "town.outpost-toggled-private", "index", outpostIndex.toString())
+                    }
+                } catch (e: NumberFormatException) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                }
+            }
+            else -> {
+                // If subCmd is just a number, treat it as /town outpost <number>
+                try {
+                    val index = subCmd.toInt()
+                    if (res?.townUuid == null) {
+                        this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                        return
+                    }
+                    teleportToOutpost(sender, player, res, res.townUuid, index)
+                } catch (e: NumberFormatException) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                }
+            }
         }
+    }
+
+    private fun teleportToOutpost(sender: CommandSender, player: Player, res: TowniaPlayer?, townId: UUID?, outpostIndex: Int) {
+        val targetTown = if (townId != null) this.plugin.townManager.getTown(townId).orElse(null) else null
+        if (targetTown == null) return
+
         if (outpostIndex < 1 || outpostIndex > targetTown.outposts.size) {
-            this.plugin.messageManager
-                .sendMessage(sender, "error.outpost-not-found", "index", outpostIndex.toString())
+            this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found", "index", outpostIndex.toString())
             return
         }
-        val outpost: TowniaOutpost = targetTown.outposts[outpostIndex - 1]!!
-        if (!targetTown.id.toString().equals(res.townUuid) && !outpost.isPublic) {
+        val outpost = targetTown.outposts[outpostIndex - 1]!!
+        if (targetTown.id != res?.townUuid && !outpost.isPublic) {
             this.plugin.messageManager.sendMessage(sender, "error.outpost-not-public")
             return
         }
-        val world: World? = this.plugin.server.getWorld((outpost.world ?: ""))
-        if (world == null) {
-            return
-        }
+        val world = this.plugin.server.getWorld(outpost.world ?: "") ?: return
         val loc = Location(world, outpost.x, outpost.y, outpost.z, outpost.yaw, outpost.pitch)
         player.teleport(loc)
         this.plugin.messageManager.sendMessage(
@@ -374,7 +485,7 @@ class TownCommand
             "index",
             outpostIndex.toString(),
             "town",
-            (targetTown.name ?: "")
+            targetTown.name ?: ""
         )
     }
 
@@ -436,7 +547,7 @@ class TownCommand
             offlineNames.add((("<gray>" + r.name + "</gray>")))
         }
         this.plugin.messageManager
-            .sendMessage(sender, "town.reslist", "town", (targetTown.name ?: ""), "count", residents.size.toString())
+            .sendMessageWithoutPrefix(sender, "town.reslist", "town", (targetTown.name ?: ""), "count", residents.size.toString())
         if (!onlineNames.isEmpty()) {
             player.sendMessage(
                 MiniMessage.miniMessage().deserialize(("Online: " + java.lang.String.join(", " as CharSequence, onlineNames)))
@@ -584,9 +695,22 @@ class TownCommand
                 return
             }
             town = townOpt.get()
-            val isMember: Boolean = this.residentManager.getResident(player.getUniqueId())
-                .map({ r -> r.isInTown && town.id.toString().equals(r.townUuid) }).orElse(false)
-            if (!town.isPublic && !isMember && !player.hasPermission("townia.admin")) {
+            val playerRes = this.residentManager.getResident(player.uniqueId).orElse(null)
+            val isMember = playerRes?.isInTown == true && town.id == playerRes.townUuid
+            var isSameNationOrAlly = false
+            if (playerRes?.isInTown == true && town.nationUuid != null) {
+                val playerTown = this.townManager.getTown(playerRes.townUuid).orElse(null)
+                if (playerTown != null && playerTown.nationUuid == town.nationUuid) {
+                    isSameNationOrAlly = true
+                } else if (playerTown != null && playerTown.nationUuid != null) {
+                    val targetNation = this.plugin.nationManager.getNation(town.nationUuid!!).orElse(null)
+                    if (targetNation != null && targetNation.allies.contains(playerTown.nationUuid)) {
+                        isSameNationOrAlly = true
+                    }
+                }
+            }
+
+            if (!town.isPublic && !isMember && !isSameNationOrAlly && !player.hasPermission("townia.admin")) {
                 this.plugin.messageManager.sendMessage(sender, "error.no-permission")
                 return
             }
@@ -647,7 +771,9 @@ class TownCommand
                     this.plugin.messageManager
                         .sendMessage(sender, "town.spawn-set")
                 } catch (e: TowniaException) {
-                    this.plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *(e.replacements?.filterNotNull()?.toTypedArray() ?: emptyArray()))
+                    this.plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
+                        .toTypedArray()
+                    )
                 }
             }
 
@@ -699,7 +825,7 @@ class TownCommand
                 val state: Boolean
                 val t2: Town = this.townManager.getTown(res.townUuid).orElse(null) ?: return
                 if (args.size < 3) {
-                    this.plugin.messageManager.sendMessage(
+                    this.plugin.messageManager.sendMessageWithoutPrefix(
                         sender,
                         "town.info-perms",
                         "resident",
@@ -856,7 +982,7 @@ class TownCommand
                     if (amount < 0.0) {
                         throw NumberFormatException()
                     }
-                } catch (e: NumberFormatException) {
+                } catch (_: NumberFormatException) {
                     this.plugin.messageManager
                         .sendMessage(sender, "error.invalid-amount")
                     return
@@ -1253,6 +1379,15 @@ class TownCommand
         val bonusClaims: Int = town.bonusClaims
         val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
         val mayorName: String = mayorOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
+        var mayorRegistered = "Unknown"
+        var mayorLastSeen = "Unknown"
+        if (mayorOpt.isPresent) {
+            val m = mayorOpt.get()
+            val offlineMayor = Bukkit.getOfflinePlayer(m.uuid!!)
+            mayorRegistered = DATE_FMT.format(Instant.ofEpochMilli(offlineMayor.firstPlayed.let { if (it == 0L) System.currentTimeMillis() else it }))
+            mayorLastSeen = if (offlineMayor.isOnline) "Online" else DATE_FMT.format(Instant.ofEpochMilli(m.lastSeen))
+        }
+
         var nationName = "None"
         if (town.isInNation) {
             val nationOpt: Optional<Nation> = this.nationManager.getNation(town.nationUuid)
@@ -1274,7 +1409,7 @@ class TownCommand
             if (r.rank !== TownRank.CO_MAYOR) continue
             submayors.add((r.name ?: ""))
         }
-        this.plugin.messageManager.sendMessage(
+        this.plugin.messageManager.sendMessageWithoutPrefix(
             sender,
             "town.info",
             "town",
@@ -1303,6 +1438,8 @@ class TownCommand
             this.formatPerm(town, 'S'),
             "perms_item",
             this.formatPerm(town, 'I'),
+            "pvp",
+            if (town.hasPvp()) "ON" else "OFF",
             "explosions",
             if (town.hasExplosions()) "ON" else "OFF",
             "fire",
@@ -1317,6 +1454,10 @@ class TownCommand
             taxes,
             "mayor",
             mayorName,
+            "mayor_registered",
+            mayorRegistered,
+            "mayor_last_seen",
+            mayorLastSeen,
             "assistant_count",
             assistants.size.toString(),
             "assistants",
@@ -1355,12 +1496,12 @@ class TownCommand
 
     private fun handleList(sender: CommandSender) {
         val towns: MutableList<Town> = this.townManager.allTowns
-        this.plugin.messageManager.sendMessage(sender, "town.list-header", "count", towns.size.toString())
+        this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.list-header", "count", towns.size.toString())
         for (town in towns) {
             val residents: Int = this.residentManager.getResidentsByTown(town.id!!).size
             val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
             val mayorName: String = mayorOpt.map { it.name ?: "Unknown" }.orElse("None")
-            this.plugin.messageManager.sendMessage(
+            this.plugin.messageManager.sendMessageWithoutPrefix(
                 sender,
                 "town.list-entry",
                 "town",
@@ -1462,7 +1603,7 @@ class TownCommand
 
     private fun formatMoney(amount: Double): String? {
         if (this.plugin.hasEconomy()) {
-            return this.plugin.economy!!.format(amount)
+            return this.plugin.economy!!.format(amount).replace("[^\\d.,-]".toRegex(), "")
         }
         return String.format("%.2f", amount)
     }
@@ -1492,7 +1633,8 @@ class TownCommand
                     "info",
                     "list",
                     "delete",
-                    "toggle"
+                    "toggle",
+                    "outpost"
                 ),
                 completions
             )
@@ -1560,6 +1702,14 @@ class TownCommand
                         completions
                     )
                 }
+
+                "outpost" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("list", "tp", "togglepublic"),
+                        completions
+                    )
+                }
             }
         } else if (args.size == 3) {
             if (args[0].toString().equals("rank", ignoreCase = true)) {
@@ -1585,6 +1735,9 @@ class TownCommand
                     ),
                     completions
                 )
+            } else if (args[0].equals("outpost", ignoreCase = true) && (args[1].equals("list", ignoreCase = true) || args[1].equals("tp", ignoreCase = true))) {
+                val townNames: MutableList<String?> = this.townManager.allTowns.stream().map(Town::name).toList()
+                StringUtil.copyPartialMatches<ArrayList<String?>?>(args[2], townNames, completions)
             }
         } else if (args.size == 4) {
             if (args[0].toString().equals("rank", ignoreCase = true) && args[1].toString().equals("add", ignoreCase = true)) {

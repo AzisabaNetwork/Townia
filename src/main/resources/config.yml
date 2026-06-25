@@ -1,5 +1,7 @@
 # Townia Configuration
-config-version: 1
+
+# Config version
+version: 2
 
 # Database Configuration
 database:

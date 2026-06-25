@@ -18,20 +18,33 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onPlayerMove(event: PlayerMoveEvent) {
 
-        val fromChunk = event.from.chunk
-        val toChunk = event.to.chunk
+        val fromX = event.from.blockX shr 4
+        val fromZ = event.from.blockZ shr 4
+        val toX = event.to.blockX shr 4
+        val toZ = event.to.blockZ shr 4
 
-        if (fromChunk.x == toChunk.x && fromChunk.z == toChunk.z) {
+        if (fromX == toX && fromZ == toZ) {
+            return
+        }
+
+        if (!plugin.towniaConfig.isWorldAllowed(event.to.world.name)) {
             return
         }
 
         val player = event.getPlayer()
 
-        val toPlotOpt: Optional<Plot> = plotManager.getPlot(toChunk)
-        val fromPlotOpt: Optional<Plot> = plotManager.getPlot(fromChunk)
+        val toPlotOpt: Optional<Plot> = plotManager.getPlot(event.to.world.name, toX, toZ)
+        val fromPlotOpt: Optional<Plot> = plotManager.getPlot(event.from.world.name, fromX, fromZ)
+
+        val fromTownId = if (fromPlotOpt.isPresent) fromPlotOpt.get().townUuid else null
+        val toTownId = if (toPlotOpt.isPresent) toPlotOpt.get().townUuid else null
+
+        if (fromTownId == toTownId) {
+            return
+        }
 
         if (toPlotOpt.isEmpty()) {
-            plugin.messageManager.sendActionBar(player, "town.actionbar-wilderness")
+            net.azisaba.townia.manager.ActionBarTask.sendActionBar(plugin, player)
         } else {
             val townOpt: Optional<Town> = townManager.getTown(toPlotOpt.get().townUuid)
             if (townOpt.isPresent) {
@@ -39,11 +52,17 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
                 val mayorName: String? = plugin.residentManager.getResident(town.mayorUuid)
                     .map({ r -> r.name })
                     .orElse("Unknown")
-                plugin.messageManager.sendActionBar(
-                    player, "town.actionbar-town",
-                    "town", town.name!!,
-                    "mayor", mayorName!!
-                )
+                
+                var nationPrefix = ""
+                if (town.nationUuid != null) {
+                    val nation = plugin.nationManager.getNation(town.nationUuid!!).orElse(null)
+                    if (nation != null) {
+                        nationPrefix = "[${nation.name}] "
+                    }
+                }
+
+                val boardMsg = town.board ?: ""
+                net.azisaba.townia.manager.ActionBarTask.sendActionBar(plugin, player)
             }
         }
     }

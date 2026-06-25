@@ -17,7 +17,7 @@ class MessageManager(private val plugin: Townia) {
 
     private val allMessages = HashMap<String, Map<String, Any>>()
     private lateinit var defaultLanguage: String
-    private val miniMessage = MiniMessage.miniMessage()
+    val miniMessage: MiniMessage = MiniMessage.miniMessage()
 
     init {
         loadAllMessages()
@@ -69,9 +69,35 @@ class MessageManager(private val plugin: Townia) {
                 plugin.getResource("messages/lang_$langCode.yml")?.use { input ->
                     InputStreamReader(input, StandardCharsets.UTF_8).use { reader ->
                         val internalCfg = YamlConfiguration.loadConfiguration(reader)
-                        for (key in internalCfg.getKeys(true)) {
-                            if (!internalCfg.isConfigurationSection(key) && !messages.containsKey(key)) {
-                                internalCfg.get(key)?.let { messages.put(key, it) }
+                        val internalVersion = internalCfg.getInt("version", 1)
+                        val currentVersion = (messages["version"] as? Int) ?: 0
+
+                        if (currentVersion < internalVersion) {
+                            plugin.logger.info("Outdated lang_$langCode.yml detected (v$currentVersion < v$internalVersion). Updating...")
+                            val bakFile = File(messagesDir, "lang_$langCode.yml.v$currentVersion.bak")
+                            langFile.renameTo(bakFile)
+
+                            // Re-save the default resource
+                            plugin.getResource("messages/lang_$langCode.yml")?.use { inputStream ->
+                                langFile.outputStream().use { outputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                            }
+                            
+                            messages.clear()
+                            InputStreamReader(FileInputStream(langFile), StandardCharsets.UTF_8).use { freshReader ->
+                                val freshCfg = YamlConfiguration.loadConfiguration(freshReader)
+                                for (key in freshCfg.getKeys(true)) {
+                                    if (!freshCfg.isConfigurationSection(key)) {
+                                        freshCfg.get(key)?.let { messages[key] = it }
+                                    }
+                                }
+                            }
+                        } else {
+                            for (key in internalCfg.getKeys(true)) {
+                                if (!internalCfg.isConfigurationSection(key) && !messages.containsKey(key)) {
+                                    internalCfg.get(key)?.let { messages.put(key, it) }
+                                }
                             }
                         }
                     }
@@ -86,13 +112,21 @@ class MessageManager(private val plugin: Townia) {
     }
 
     fun sendMessage(sender: CommandSender, key: String, vararg replacements: String) {
+        sendMessageInternal(sender, key, true, *replacements)
+    }
+
+    fun sendMessageWithoutPrefix(sender: CommandSender, key: String, vararg replacements: String) {
+        sendMessageInternal(sender, key, false, *replacements)
+    }
+
+    private fun sendMessageInternal(sender: CommandSender, key: String, withPrefix: Boolean, vararg replacements: String) {
         val language = getLanguage(sender)
         val lines: List<*> = when (val messageObject = getMessageObject(language, key)) {
             is List<*> -> messageObject
             else -> listOf(messageObject)
         }
 
-        val prefix = plugin.towniaConfig.prefix
+        val prefix = if (withPrefix) plugin.towniaConfig.prefix else ""
         for (line in lines) {
             val raw = replaceLegacyColors(prefix + replacePlaceholders(line.toString(), *replacements))
             sender.sendMessage(miniMessage.deserialize(raw))
@@ -113,6 +147,29 @@ class MessageManager(private val plugin: Townia) {
         player.sendActionBar(miniMessage.deserialize(processedRaw))
     }
 
+    fun sendTitle(player: Player, mainKey: String, subKey: String, vararg replacements: String) {
+        val language = getLanguage(player)
+        val mainObj = getMessageObject(language, mainKey)
+        val subObj = getMessageObject(language, subKey)
+
+        val mainRaw = if (mainObj is List<*> && mainObj.isNotEmpty()) mainObj.first().toString() else mainObj.toString()
+        val subRaw = if (subObj is List<*> && subObj.isNotEmpty()) subObj.first().toString() else subObj.toString()
+
+        val processedMain = replaceLegacyColors(replacePlaceholders(mainRaw, *replacements))
+        val processedSub = replaceLegacyColors(replacePlaceholders(subRaw, *replacements))
+
+        val title = net.kyori.adventure.title.Title.title(
+            miniMessage.deserialize(processedMain),
+            miniMessage.deserialize(processedSub),
+            net.kyori.adventure.title.Title.Times.times(
+                java.time.Duration.ofMillis(500),
+                java.time.Duration.ofMillis(3000),
+                java.time.Duration.ofMillis(1000)
+            )
+        )
+        player.showTitle(title)
+    }
+
     fun getPlainMessage(sender: CommandSender, key: String, vararg replacements: String): String {
         val language = getLanguage(sender)
         val obj = getMessageObject(language, key)
@@ -126,6 +183,19 @@ class MessageManager(private val plugin: Townia) {
         val processedRaw = replaceLegacyColors(replacePlaceholders(raw, *replacements))
         val component = miniMessage.deserialize(processedRaw)
         return PlainTextComponentSerializer.plainText().serialize(component)
+    }
+
+    fun getRawMessage(sender: CommandSender, key: String, vararg replacements: String): String {
+        val language = getLanguage(sender)
+        val obj = getMessageObject(language, key)
+
+        val raw = if (obj is List<*> && obj.isNotEmpty()) {
+            obj.first().toString()
+        } else {
+            obj.toString()
+        }
+
+        return replaceLegacyColors(replacePlaceholders(raw, *replacements))
     }
 
 

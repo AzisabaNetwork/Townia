@@ -392,6 +392,18 @@ class DatabaseManager(private val plugin: Townia) {
                 } catch (_: Exception) {
                 }
 
+                stmt.execute(
+                    "CREATE TABLE IF NOT EXISTS bank_history (" +
+                            "id INTEGER PRIMARY KEY " + autoInc + ", " +
+                            "government_uuid VARCHAR(36) NOT NULL, " +
+                            "type VARCHAR(16) NOT NULL, " +
+                            "amount DOUBLE NOT NULL, " +
+                            "reason VARCHAR(255) NOT NULL, " +
+                            "created_at BIGINT NOT NULL)"
+                )
+
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_bank_history_gov ON bank_history(government_uuid)")
+
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_plots_town ON plots(town_uuid)")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_residents_town ON residents(town_uuid)")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_invites_target ON invites(target_uuid)")
@@ -1357,6 +1369,69 @@ class DatabaseManager(private val plugin: Townia) {
             UUID.fromString(rs.getString("target_uuid")),
             UUID.fromString(rs.getString("town_uuid")),
             UUID.fromString(rs.getString("inviter_uuid")),
+            rs.getLong("created_at")
+        )
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun addBankHistory(transaction: BankTransaction) {
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement(
+                "INSERT INTO bank_history (government_uuid, type, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)"
+            ).use { ps ->
+                ps.setString(1, transaction.governmentUuid.toString())
+                ps.setString(2, transaction.type.name)
+                ps.setDouble(3, transaction.amount)
+                ps.setString(4, transaction.reason)
+                ps.setLong(5, transaction.createdAt)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    @Throws(SQLException::class)
+    fun getBankHistory(govUuid: UUID, limit: Int, offset: Int): MutableList<BankTransaction> {
+        val history = ArrayList<BankTransaction>()
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement(
+                "SELECT * FROM bank_history WHERE government_uuid = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            ).use { ps ->
+                ps.setString(1, govUuid.toString())
+                ps.setInt(2, limit)
+                ps.setInt(3, offset)
+                val rs = ps.executeQuery()
+                while (rs.next()) {
+                    history.add(mapBankHistory(rs))
+                }
+            }
+        }
+        return history
+    }
+
+    @Throws(SQLException::class)
+    fun countBankHistory(govUuid: UUID): Int {
+        var count = 0
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement("SELECT COUNT(*) FROM bank_history WHERE government_uuid = ?").use { ps ->
+                ps.setString(1, govUuid.toString())
+                val rs = ps.executeQuery()
+                if (rs.next()) {
+                    count = rs.getInt(1)
+                }
+            }
+        }
+        return count
+    }
+
+    @Throws(SQLException::class)
+    private fun mapBankHistory(rs: ResultSet): BankTransaction {
+        return BankTransaction(
+            rs.getInt("id"),
+            UUID.fromString(rs.getString("government_uuid")),
+            TransactionType.valueOf(rs.getString("type")),
+            rs.getDouble("amount"),
+            rs.getString("reason"),
             rs.getLong("created_at")
         )
     }

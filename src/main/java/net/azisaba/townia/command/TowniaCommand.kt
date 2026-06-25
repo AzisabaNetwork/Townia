@@ -63,6 +63,7 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "price" -> handlePrice(sender)
             "time" -> handleTime(sender)
             "top" -> handleTop(sender, args)
+            "debug" -> handleDebug(sender)
             "?" -> sendHelp(sender)
             else -> sendHelp(sender)
         }
@@ -104,24 +105,65 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val townCreate: Double = plugin.towniaConfig.townCreationCost
         val claimCost: Double = plugin.towniaConfig.claimCost
         val nationCreate: Double = plugin.towniaConfig.nationCreationCost
+        val townUpkeep: Double = plugin.towniaConfig.townUpkeep
         plugin.messageManager.sendMessage(
             sender, "townia.price",
-            "town_create", (formatMoney(townCreate) ?: ""),
-            "claim", (formatMoney(claimCost) ?: ""),
-            "nation_create", (formatMoney(nationCreate) ?: "")
+            "town_create", formatMoney(townCreate),
+            "claim", formatMoney(claimCost),
+            "nation_create", formatMoney(nationCreate),
+            "town_upkeep", formatMoney(townUpkeep)
         )
     }
 
     private fun handleTime(sender: CommandSender) {
-        val now = System.currentTimeMillis()
-        val nextMs: Long = plugin.nextUpkeepTime
-        val diffMs = max(0, nextMs - now)
-        val hours = diffMs / 3600000
-        val mins = (diffMs % 3600000) / 60000
-        plugin.messageManager.sendMessage(
-            sender, "townia.time",
-            "hours", hours.toString(), "minutes", mins.toString()
-        )
+        val nextTick = plugin.nextUpkeepTime
+        val diff = nextTick - System.currentTimeMillis()
+        if (diff <= 0) {
+            plugin.messageManager.sendMessage(sender, "town.time-upkeep", "time", "Now")
+        } else {
+            val hours = diff / 3600000L
+            val mins = diff % 3600000L / 60000L
+            plugin.messageManager.sendMessage(sender, "town.time-upkeep", "time", String.format("%02d:%02d", hours, mins))
+        }
+    }
+
+    private fun handleDebug(sender: CommandSender) {
+        val player = requirePlayer(sender) ?: return
+        if (!player.hasPermission("townia.admin.debug")) {
+            player.sendMessage("§cYou don't have permission.")
+            return
+        }
+        player.sendMessage("§e--- Townia Debug Info ---")
+        player.sendMessage("§eWorld Name: §a${player.world.name}")
+        player.sendMessage("§eIs World Allowed: §a${plugin.towniaConfig.isWorldAllowed(player.world.name)}")
+        
+        val x = player.location.blockX shr 4
+        val z = player.location.blockZ shr 4
+        val plotOpt = plugin.plotManager.getPlot(player.world.name, x, z)
+        player.sendMessage("§eChunk: §a$x, $z")
+        player.sendMessage("§ePlot Present: §a${plotOpt.isPresent}")
+        if (plotOpt.isPresent) {
+            val townOpt = plugin.townManager.getTown(plotOpt.get().townUuid)
+            player.sendMessage("§eTown: §a${townOpt.map { it.name }.orElse("Unknown")}")
+        } else {
+            player.sendMessage("§eTown: §aWilderness")
+        }
+        
+        try {
+            plugin.messageManager.sendActionBar(player, "town.actionbar-wilderness")
+            player.sendMessage("§eSent ActionBar test successfully.")
+        } catch (e: Exception) {
+            player.sendMessage("§cActionBar error: ${e.message}")
+            e.printStackTrace()
+        }
+        
+        try {
+            plugin.messageManager.sendTitle(player, "town.title-wilderness-main", "town.title-wilderness-sub")
+            player.sendMessage("§eSent Title test successfully.")
+        } catch (e: Exception) {
+            player.sendMessage("§cTitle error: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     private fun handleTop(sender: CommandSender, args: Array<out String>) {
@@ -276,8 +318,10 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         }
     }
 
-    private fun formatMoney(amount: Double): String? {
-        if (plugin.hasEconomy()) return plugin.economy!!.format(amount)
+    protected fun formatMoney(amount: Double): String {
+        if (plugin.hasEconomy()) {
+            return plugin.economy!!.format(amount).replace("[^\\d.,-]".toRegex(), "")
+        }
         return String.format("%.2f", amount)
     }
 

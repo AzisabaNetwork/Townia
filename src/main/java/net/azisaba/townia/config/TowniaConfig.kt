@@ -38,7 +38,28 @@ class TowniaConfig(private val plugin: Townia) {
 
     fun reload() {
         plugin.reloadConfig()
-        val config = plugin.config
+        var config = plugin.config
+
+        val internalConfigStream = plugin.getResource("config.yml")
+        if (internalConfigStream != null) {
+            java.io.InputStreamReader(internalConfigStream, Charsets.UTF_8).use { reader ->
+                val internalConfig = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(reader)
+                val internalVersion = internalConfig.getInt("version", 1)
+                val currentVersion = config.getInt("version", 0)
+
+                if (currentVersion < internalVersion) {
+                    plugin.logger.info("Outdated config.yml detected (v$currentVersion < v$internalVersion). Updating...")
+                    val configFile = java.io.File(plugin.dataFolder, "config.yml")
+                    if (configFile.exists()) {
+                        val bakFile = java.io.File(plugin.dataFolder, "config.yml.v$currentVersion.bak")
+                        configFile.renameTo(bakFile)
+                    }
+                    plugin.saveResource("config.yml", true)
+                    plugin.reloadConfig()
+                    config = plugin.config
+                }
+            }
+        }
 
         prefix             = config.getString("prefix", "<gray>[<green>Townia<gray>]<reset> ") ?: ""
         defaultLanguage    = config.getString("default-language", "ja") ?: "ja"
