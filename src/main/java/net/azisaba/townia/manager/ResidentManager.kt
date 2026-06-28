@@ -60,6 +60,19 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         return list
     }
 
+    fun getResidentsByNation(nationUuid: UUID): MutableList<TowniaPlayer> {
+        val list: MutableList<TowniaPlayer> = ArrayList<TowniaPlayer>()
+        for (p in cache.values) {
+            val townUuid = p.townUuid ?: continue
+            val townOpt = plugin.townManager.getTown(townUuid)
+            if (townOpt.isPresent && townOpt.get().nationUuid == nationUuid) {
+                list.add(p)
+            }
+        }
+        list.sortBy { it.name }
+        return list
+    }
+
     fun isResident(uuid: UUID?): Boolean {
         return cache.containsKey(uuid)
     }

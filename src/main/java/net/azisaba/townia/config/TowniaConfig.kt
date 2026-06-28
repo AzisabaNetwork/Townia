@@ -30,6 +30,10 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var defaultNationTax: Double = 0.0
         private set
+    var townLevels: List<TownLevel> = emptyList()
+        private set
+    var nationLevels: List<NationLevel> = emptyList()
+        private set
 
     val claimCost: Double
         get() = plugin.config.getDouble("claim-cost", 0.0)
@@ -77,6 +81,47 @@ class TowniaConfig(private val plugin: Townia) {
         defaultTownTax     = config.getDouble("default-town-tax", 0.0)
         defaultNationTax   = config.getDouble("default-nation-tax", 0.0)
 
+        // Parse Town Levels
+        val tLevels = mutableListOf<TownLevel>()
+        val townLevelMapList = config.getMapList("town_level")
+        for (map in townLevelMapList) {
+            tLevels.add(
+                TownLevel(
+                    numResidents = (map["numResidents"] as? Number)?.toInt() ?: 0,
+                    namePrefix = map["namePrefix"] as? String ?: "",
+                    namePostfix = map["namePostfix"] as? String ?: "",
+                    mayorPrefix = map["mayorPrefix"] as? String ?: "",
+                    mayorPostfix = map["mayorPostfix"] as? String ?: "",
+                    townBlockLimit = (map["townBlockLimit"] as? Number)?.toInt() ?: 0,
+                    townOutpostLimit = (map["townOutpostLimit"] as? Number)?.toInt() ?: 0
+                )
+            )
+        }
+        // Sort descending so we can just find the first one that matches
+        tLevels.sortByDescending { it.numResidents }
+        townLevels = tLevels
+
+        // Parse Nation Levels
+        val nLevels = mutableListOf<NationLevel>()
+        val nationLevelMapList = config.getMapList("nation_level")
+        for (map in nationLevelMapList) {
+            nLevels.add(
+                NationLevel(
+                    numResidents = (map["numResidents"] as? Number)?.toInt() ?: 0,
+                    namePrefix = map["namePrefix"] as? String ?: "",
+                    namePostfix = map["namePostfix"] as? String ?: "",
+                    kingPrefix = map["kingPrefix"] as? String ?: "",
+                    kingPostfix = map["kingPostfix"] as? String ?: "",
+                    capitalPrefix = map["capitalPrefix"] as? String ?: "",
+                    capitalPostfix = map["capitalPostfix"] as? String ?: "",
+                    townBlockLimitBonus = (map["townBlockLimitBonus"] as? Number)?.toInt() ?: 0,
+                    nationBonusOutpostLimit = (map["nationBonusOutpostLimit"] as? Number)?.toInt() ?: 0
+                )
+            )
+        }
+        nLevels.sortByDescending { it.numResidents }
+        nationLevels = nLevels
+
         if (allowedWorlds.isEmpty()) {
             allowedWorlds = listOf("world")
         }
@@ -88,5 +133,13 @@ class TowniaConfig(private val plugin: Townia) {
 
     fun isWorldAllowed(worldName: String): Boolean {
         return allowedWorlds.contains(worldName)
+    }
+
+    fun getTownLevel(numResidents: Int): TownLevel? {
+        return townLevels.firstOrNull { numResidents >= it.numResidents }
+    }
+
+    fun getNationLevel(numResidents: Int): NationLevel? {
+        return nationLevels.firstOrNull { numResidents >= it.numResidents }
     }
 }

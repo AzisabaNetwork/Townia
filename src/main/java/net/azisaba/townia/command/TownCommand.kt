@@ -1377,7 +1377,13 @@ class TownCommand
         val claims: Int = this.plotManager.countPlotsByTown(town.id)
         val claimLimit: Int = town.claimLimit
         val bonusClaims: Int = town.bonusClaims
-        val nationBonus: Int = if (town.isInNation) Townia.instance.towniaConfig.nationBonusClaims else 0
+        var nationBonus = 0
+        if (town.isInNation) {
+            val nationOpt = Townia.instance.nationManager.getNation(town.nationUuid!!)
+            if (nationOpt.isPresent) {
+                nationBonus = nationOpt.get().getTownBlockLimitBonus()
+            }
+        }
         val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
         val mayorName: String = mayorOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
         var mayorRegistered = "Unknown"
@@ -1414,7 +1420,7 @@ class TownCommand
             sender,
             "town.info",
             "town",
-            (town.name ?: ""),
+            town.getFormattedName(),
             "board",
             if (town.board != null) (town.board ?: "None") else "None",
             "founded",
@@ -1520,7 +1526,7 @@ class TownCommand
                     sender,
                     "town.list-entry",
                     "town",
-                    (town.name ?: ""),
+                    town.getFormattedName(),
                     "mayor",
                     mayorName,
                     "residents",

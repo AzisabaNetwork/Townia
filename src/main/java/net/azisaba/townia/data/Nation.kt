@@ -24,6 +24,32 @@ class Nation @JvmOverloads constructor(
     val titles: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
     val surnames: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
 
+    fun getFormattedName(): String {
+        val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
+        val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
+        val prefix = nationLevel?.namePrefix ?: ""
+        val postfix = nationLevel?.namePostfix ?: ""
+        return "$prefix${name ?: ""}$postfix"
+    }
+
+    fun getKingPrefix(): String {
+        val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
+        val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
+        return nationLevel?.kingPrefix ?: ""
+    }
+
+    fun getKingPostfix(): String {
+        val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
+        val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
+        return nationLevel?.kingPostfix ?: ""
+    }
+
+    fun getTownBlockLimitBonus(): Int {
+        val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
+        val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
+        return nationLevel?.townBlockLimitBonus ?: 0
+    }
+
     fun hasSpawn(): Boolean {
         return spawnWorld != null
     }

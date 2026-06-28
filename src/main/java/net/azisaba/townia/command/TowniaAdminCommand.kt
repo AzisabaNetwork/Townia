@@ -44,7 +44,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "deletetown" -> handleDeleteTown(sender, args)
             "deletenation" -> handleDeleteNation(sender, args)
             "givebonus" -> handleGiveBonus(sender, args)
-            "migrate" -> net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+            "migrate" -> handleMigrate(sender, args)
             else -> sendHelp(sender)
         }
         return true
@@ -210,6 +210,21 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         }
     }
 
+    private fun handleMigrate(sender: CommandSender, args: Array<out String>) {
+        if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "config") {
+            net.azisaba.townia.migration.TownyConfigMigrator.migrate(plugin, sender)
+        } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "data") {
+            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+        } else {
+            if (args.size == 1) {
+                // Default to data migration if no sub-args provided
+                net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+            } else {
+                sender.sendMessage("\u00A7cUsage: /towniaadmin migrate [data | config]")
+            }
+        }
+    }
+
     private fun sendHelp(sender: CommandSender) {
         plugin.messageManager.sendMessage(sender, "admin.help")
     }
@@ -244,6 +259,12 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     "givebonus",
                     "migrate"
                 ),
+                completions
+            )
+        } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "migrate") {
+            StringUtil.copyPartialMatches(
+                args[1],
+                mutableListOf("data", "config"),
                 completions
             )
         } else if (args.size == 2) {

@@ -47,7 +47,41 @@ class Town(
     val outposts: MutableList<TowniaOutpost?> = ArrayList<TowniaOutpost?>()
 
     val totalClaimLimit: Int
-        get() = claimLimit + bonusClaims + (if (isInNation) Townia.instance.towniaConfig.nationBonusClaims else 0)
+        get() {
+            val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+            val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
+            val baseLimit = townLevel?.townBlockLimit ?: claimLimit
+            
+            var nationBonus = 0
+            if (isInNation) {
+                val nationOpt = Townia.instance.nationManager.getNation(nationUuid!!)
+                if (nationOpt.isPresent) {
+                    nationBonus = nationOpt.get().getTownBlockLimitBonus()
+                }
+            }
+            
+            return baseLimit + bonusClaims + nationBonus
+        }
+
+    fun getFormattedName(): String {
+        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
+        val prefix = townLevel?.namePrefix ?: ""
+        val postfix = townLevel?.namePostfix ?: ""
+        return "$prefix${name ?: ""}$postfix"
+    }
+
+    fun getMayorPrefix(): String {
+        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
+        return townLevel?.mayorPrefix ?: ""
+    }
+
+    fun getMayorPostfix(): String {
+        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
+        return townLevel?.mayorPostfix ?: ""
+    }
 
     fun hasPvp(): Boolean {
         return pvp

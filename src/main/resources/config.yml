@@ -53,6 +53,33 @@ default-town-tax: 0.0
 # Default daily tax for newly created nations
 default-nation-tax: 0.0
 
+town_level:
+  - numResidents: 0
+    namePrefix: ''
+    namePostfix: ' Ruins'
+    mayorPrefix: 'Spirit '
+    mayorPostfix: ''
+    townBlockLimit: 1
+    townOutpostLimit: 0
+  - numResidents: 1
+    namePrefix: ''
+    namePostfix: ' (Settlement)'
+    mayorPrefix: 'Hermit '
+    mayorPostfix: ''
+    townBlockLimit: 16
+    townOutpostLimit: 0
+
+nation_level:
+  - numResidents: 0
+    namePrefix: 'Land of '
+    namePostfix: ' (Nation)'
+    kingPrefix: 'Leader '
+    kingPostfix: ''
+    capitalPrefix: ''
+    capitalPostfix: ''
+    townBlockLimitBonus: 10
+    nationBonusOutpostLimit: 0
+
 # PvP settings per plot type (true = PvP allowed)
 pvp:
   default: false
