@@ -140,7 +140,7 @@ class TownCommand
             }
 
             "list" -> {
-                this.handleList(sender)
+                this.handleList(sender, args)
             }
 
             "delete" -> {
@@ -1377,6 +1377,7 @@ class TownCommand
         val claims: Int = this.plotManager.countPlotsByTown(town.id)
         val claimLimit: Int = town.claimLimit
         val bonusClaims: Int = town.bonusClaims
+        val nationBonus: Int = if (town.isInNation) Townia.instance.towniaConfig.nationBonusClaims else 0
         val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
         val mayorName: String = mayorOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
         var mayorRegistered = "Unknown"
@@ -1421,9 +1422,9 @@ class TownCommand
             "claims",
             claims.toString(),
             "max_claims",
-            claimLimit.toString(),
+            (claimLimit + bonusClaims + nationBonus).toString(),
             "nation_bonus",
-            bonusClaims.toString(),
+            nationBonus.toString(),
             "home_x",
             if (town.hasHomeBlock()) town.homeBlockX.toString() else "N/A",
             "home_z",
@@ -1494,23 +1495,39 @@ class TownCommand
         return count
     }
 
-    private fun handleList(sender: CommandSender) {
+    private fun handleList(sender: CommandSender, args: Array<out String>) {
         val towns: MutableList<Town> = this.townManager.allTowns
+        var page = 1
+        if (args.size > 1) {
+            page = args[1].toIntOrNull() ?: 1
+        }
+        val pageSize = 10
+        val maxPage = if (towns.isEmpty()) 1 else (towns.size + pageSize - 1) / pageSize
+        if (page < 1) page = 1
+        if (page > maxPage) page = maxPage
+
         this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.list-header", "count", towns.size.toString())
-        for (town in towns) {
-            val residents: Int = this.residentManager.getResidentsByTown(town.id!!).size
-            val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
-            val mayorName: String = mayorOpt.map { it.name ?: "Unknown" }.orElse("None")
-            this.plugin.messageManager.sendMessageWithoutPrefix(
-                sender,
-                "town.list-entry",
-                "town",
-                (town.name ?: ""),
-                "mayor",
-                mayorName,
-                "residents",
-                residents.toString()
-            )
+        
+        if (towns.isNotEmpty()) {
+            val start = (page - 1) * pageSize
+            val end = (start + pageSize).coerceAtMost(towns.size)
+            for (i in start until end) {
+                val town = towns[i]
+                val residents: Int = this.residentManager.getResidentsByTown(town.id!!).size
+                val mayorOpt: Optional<TowniaPlayer> = this.residentManager.getResident(town.mayorUuid!!)
+                val mayorName: String = mayorOpt.map { it.name ?: "Unknown" }.orElse("None")
+                this.plugin.messageManager.sendMessageWithoutPrefix(
+                    sender,
+                    "town.list-entry",
+                    "town",
+                    (town.name ?: ""),
+                    "mayor",
+                    mayorName,
+                    "residents",
+                    residents.toString()
+                )
+            }
+            sender.sendMessage("\u00A78--- \u00A76Page \u00A7e$page\u00A78/\u00A7e$maxPage \u00A78---")
         }
     }
 

@@ -18,6 +18,8 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var inviteTimeout: Int = 0
         private set
+    var nationBonusClaims: Int = 0
+        private set
     var townCreationCost: Double = 0.0
         private set
     var nationCreationCost: Double = 0.0
@@ -68,6 +70,7 @@ class TowniaConfig(private val plugin: Townia) {
         claimsPerResident  = config.getInt("claims-per-resident", 1)
         maxBonusClaims     = config.getInt("max-bonus-claims", 100)
         inviteTimeout      = config.getInt("invite-timeout", 120)
+        nationBonusClaims  = config.getInt("nation-bonus-claims", 10)
         townCreationCost   = config.getDouble("town-creation-cost", 0.0)
         nationCreationCost = config.getDouble("nation-creation-cost", 0.0)
         townUpkeep         = config.getDouble("town-upkeep", 0.0)

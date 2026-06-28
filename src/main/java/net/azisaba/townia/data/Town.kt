@@ -47,7 +47,7 @@ class Town(
     val outposts: MutableList<TowniaOutpost?> = ArrayList<TowniaOutpost?>()
 
     val totalClaimLimit: Int
-        get() = claimLimit + bonusClaims
+        get() = claimLimit + bonusClaims + (if (isInNation) Townia.instance.towniaConfig.nationBonusClaims else 0)
 
     fun hasPvp(): Boolean {
         return pvp

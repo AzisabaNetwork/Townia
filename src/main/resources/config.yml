@@ -1,7 +1,7 @@
 # Townia Configuration
 
 # Config version
-version: 2
+version: 3
 
 # Database Configuration
 database:
@@ -31,6 +31,9 @@ claims-per-resident: 1
 
 # Maximum bonus claims a town can have from admin bonus
 max-bonus-claims: 100
+
+# Bonus claims granted to a town for being in a nation
+nation-bonus-claims: 10
 
 # Invite expiry time in seconds (120 = 2 minutes)
 invite-timeout: 120
