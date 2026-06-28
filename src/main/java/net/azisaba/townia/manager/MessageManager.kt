@@ -170,7 +170,7 @@ class MessageManager(private val plugin: Townia) {
         player.showTitle(title)
     }
 
-    fun getPlainMessage(sender: CommandSender, key: String, vararg replacements: String): String {
+    fun getPlainMessage(sender: CommandSender?, key: String, vararg replacements: String): String {
         val language = getLanguage(sender)
         val obj = getMessageObject(language, key)
 
@@ -185,7 +185,7 @@ class MessageManager(private val plugin: Townia) {
         return PlainTextComponentSerializer.plainText().serialize(component)
     }
 
-    fun getRawMessage(sender: CommandSender, key: String, vararg replacements: String): String {
+    fun getRawMessage(sender: CommandSender?, key: String, vararg replacements: String): String {
         val language = getLanguage(sender)
         val obj = getMessageObject(language, key)
 
@@ -199,12 +199,26 @@ class MessageManager(private val plugin: Townia) {
     }
 
 
-    private fun getLanguage(sender: CommandSender): String {
+    private fun getLanguage(sender: CommandSender?): String {
         if (sender is Player) {
             val clientLanguage = sender.locale().language.lowercase()
             if (allMessages.containsKey(clientLanguage)) return clientLanguage
         }
         return defaultLanguage
+    }
+
+    fun processTranslationKeys(text: String, sender: CommandSender?): String {
+        var result = text
+        val regex = "\\{([^}]+)\\}".toRegex()
+        val matches = regex.findAll(text)
+        for (match in matches) {
+            val key = match.groupValues[1]
+            val translated = getRawMessage(sender, key)
+            if (!translated.startsWith("<red>Missing message key")) {
+                result = result.replace(match.value, translated)
+            }
+        }
+        return result
     }
 
     private fun getMessageObject(language: String, key: String): Any? {

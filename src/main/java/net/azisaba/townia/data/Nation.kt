@@ -24,24 +24,26 @@ class Nation @JvmOverloads constructor(
     val titles: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
     val surnames: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
 
-    fun getFormattedName(): String {
+    fun getFormattedName(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
         val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
         val prefix = nationLevel?.namePrefix ?: ""
         val postfix = nationLevel?.namePostfix ?: ""
-        return "$prefix${name ?: ""}$postfix"
+        return "${net.azisaba.townia.Townia.instance.messageManager.processTranslationKeys(prefix, sender)}${name ?: ""}${net.azisaba.townia.Townia.instance.messageManager.processTranslationKeys(postfix, sender)}"
     }
 
-    fun getKingPrefix(): String {
+    fun getKingPrefix(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
         val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
-        return nationLevel?.kingPrefix ?: ""
+        val prefix = nationLevel?.kingPrefix ?: ""
+        return net.azisaba.townia.Townia.instance.messageManager.processTranslationKeys(prefix, sender)
     }
 
-    fun getKingPostfix(): String {
+    fun getKingPostfix(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = net.azisaba.townia.Townia.instance.residentManager.getResidentsByNation(id!!).size
         val nationLevel = net.azisaba.townia.Townia.instance.towniaConfig.getNationLevel(resCount)
-        return nationLevel?.kingPostfix ?: ""
+        val postfix = nationLevel?.kingPostfix ?: ""
+        return net.azisaba.townia.Townia.instance.messageManager.processTranslationKeys(postfix, sender)
     }
 
     fun getTownBlockLimitBonus(): Int {

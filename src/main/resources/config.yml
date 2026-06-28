@@ -63,11 +63,60 @@ town_level:
     townOutpostLimit: 0
   - numResidents: 1
     namePrefix: ''
-    namePostfix: ' (Settlement)'
-    mayorPrefix: 'Hermit '
+    namePostfix: ' {town.level.1.name}'
+    mayorPrefix: '{town.level.1.mayor_prefix} '
     mayorPostfix: ''
     townBlockLimit: 16
     townOutpostLimit: 0
+  - numResidents: 2
+    namePrefix: ''
+    namePostfix: ' {town.level.2.name}'
+    mayorPrefix: '{town.level.2.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 32
+    townOutpostLimit: 1
+  - numResidents: 6
+    namePrefix: ''
+    namePostfix: ' {town.level.3.name}'
+    mayorPrefix: '{town.level.3.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 96
+    townOutpostLimit: 1
+  - numResidents: 10
+    namePrefix: ''
+    namePostfix: ' {town.level.4.name}'
+    mayorPrefix: '{town.level.4.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 160
+    townOutpostLimit: 2
+  - numResidents: 14
+    namePrefix: ''
+    namePostfix: ' {town.level.5.name}'
+    mayorPrefix: '{town.level.5.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 224
+    townOutpostLimit: 2
+  - numResidents: 20
+    namePrefix: ''
+    namePostfix: ' {town.level.6.name}'
+    mayorPrefix: '{town.level.6.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 320
+    townOutpostLimit: 3
+  - numResidents: 24
+    namePrefix: ''
+    namePostfix: ' {town.level.7.name}'
+    mayorPrefix: '{town.level.7.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 384
+    townOutpostLimit: 3
+  - numResidents: 28
+    namePrefix: ''
+    namePostfix: ' {town.level.8.name}'
+    mayorPrefix: '{town.level.8.mayor_prefix} '
+    mayorPostfix: ''
+    townBlockLimit: 448
+    townOutpostLimit: 4
 
 nation_level:
   - numResidents: 0

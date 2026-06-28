@@ -63,24 +63,26 @@ class Town(
             return baseLimit + bonusClaims + nationBonus
         }
 
-    fun getFormattedName(): String {
+    fun getFormattedName(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
         val prefix = townLevel?.namePrefix ?: ""
         val postfix = townLevel?.namePostfix ?: ""
-        return "$prefix${name ?: ""}$postfix"
+        return "${Townia.instance.messageManager.processTranslationKeys(prefix, sender)}${name ?: ""}${Townia.instance.messageManager.processTranslationKeys(postfix, sender)}"
     }
 
-    fun getMayorPrefix(): String {
+    fun getMayorPrefix(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
-        return townLevel?.mayorPrefix ?: ""
+        val prefix = townLevel?.mayorPrefix ?: ""
+        return Townia.instance.messageManager.processTranslationKeys(prefix, sender)
     }
 
-    fun getMayorPostfix(): String {
+    fun getMayorPostfix(sender: org.bukkit.command.CommandSender? = null): String {
         val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
-        return townLevel?.mayorPostfix ?: ""
+        val postfix = townLevel?.mayorPostfix ?: ""
+        return Townia.instance.messageManager.processTranslationKeys(postfix, sender)
     }
 
     fun hasPvp(): Boolean {

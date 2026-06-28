@@ -3,7 +3,7 @@ package net.azisaba.townia.data
 import java.util.*
 
 class TowniaPlayer {
-    val uuid: UUID?
+    var uuid: UUID?
     var name: String?
     var townUuid: UUID?
     var rank: TownRank

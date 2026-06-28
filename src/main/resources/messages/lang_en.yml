@@ -30,6 +30,31 @@ error:
 
 # ── Town ──────────────────────────────────────────────────────
 town:
+  level:
+    1:
+      name: " (Settlement)"
+      mayor_prefix: "Hermit "
+    2:
+      name: " (Hamlet)"
+      mayor_prefix: "Chief "
+    3:
+      name: " (Village)"
+      mayor_prefix: "Baron Von "
+    4:
+      name: " (Town)"
+      mayor_prefix: "Viscount "
+    5:
+      name: " (Large Town)"
+      mayor_prefix: "Count Von "
+    6:
+      name: " (City)"
+      mayor_prefix: "Earl "
+    7:
+      name: " (Large City)"
+      mayor_prefix: "Duke "
+    8:
+      name: " (Metropolis)"
+      mayor_prefix: "Lord "
   outpost-list-header: "<green>=== {town} Outposts ==="
   outpost-list-empty: "  <gray>There are no outposts."
   outpost-list-entry: "<click:run_command:'/townia:town outpost tp {town} {index}'><hover:show_text:'<green>Teleport to Outpost {index}'><yellow>{index}.</hover></click> <gray>Location: {x}, {y}, {z} <white>({status})"

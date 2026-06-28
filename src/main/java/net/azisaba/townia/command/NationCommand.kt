@@ -629,9 +629,9 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         plugin.messageManager.sendMessageWithoutPrefix(
             sender, "nation.info",
-            "nation", nation.getFormattedName(),
+            "nation", nation.getFormattedName(sender),
             "board", (nation.board ?: "None"),
-            "leader", nation.getKingPrefix() + leaderName + nation.getKingPostfix(),
+            "leader", nation.getKingPrefix(sender) + leaderName + nation.getKingPostfix(sender),
             "leader_registered", leaderRegistered,
             "leader_last_seen", leaderLastSeen,
             "founded", created,
@@ -713,8 +713,8 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
             plugin.messageManager.sendMessageWithoutPrefix(
                 sender, "nation.list-entry",
-                "nation", nation.getFormattedName(),
-                "leader", nation.getKingPrefix() + leaderName + nation.getKingPostfix(),
+                "nation", nation.getFormattedName(sender),
+                "leader", nation.getKingPrefix(sender) + leaderName + nation.getKingPostfix(sender),
                 "towns", townCount.toString()
             )
         }

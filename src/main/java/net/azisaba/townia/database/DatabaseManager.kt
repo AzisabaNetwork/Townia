@@ -14,6 +14,10 @@ class DatabaseManager(private val plugin: Townia) {
     private var dataSource: HikariDataSource? = null
     private val isMySQL: Boolean = "mysql".equals(plugin.getConfig().getString("database.type", "sqlite"), ignoreCase = true)
 
+    val connection: java.sql.Connection
+        @Throws(SQLException::class)
+        get() = dataSource!!.connection
+
     @Throws(SQLException::class)
     fun initialize() {
         val config = HikariConfig()
