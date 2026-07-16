@@ -13,7 +13,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
-    compileOnly("com.palmergames.bukkit.towny:towny:0.103.0.5")
+    compileOnly("com.palmergames.bukkit.towny:towny:0.103.0.7")
     implementation("org.xerial:sqlite-jdbc:3.53.2.0")
     implementation("com.zaxxer:HikariCP:7.1.0")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
