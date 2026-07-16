@@ -1586,6 +1586,20 @@ class TownCommand
         if (args.size > 1) {
             page = args[1].toIntOrNull() ?: 1
         }
+        var sort = "name"
+        if (args.size >= 3 && args[1].equals("by", ignoreCase = true)) {
+            sort = args[2].lowercase(Locale.getDefault())
+            page = if (args.size >= 4) args[3].toIntOrNull() ?: 1 else 1
+        }
+        when (sort) {
+            "resident", "residents", "population" -> towns.sortByDescending { this.residentManager.getResidentsByTown(it.id!!).size }
+            "balance", "bank" -> towns.sortByDescending { it.balance }
+            "claims", "land", "townblocks" -> towns.sortByDescending { this.plotManager.countPlotsByTown(it.id!!) }
+            "open" -> towns.sortWith(compareByDescending<Town> { it.isOpen }.thenByDescending { this.residentManager.getResidentsByTown(it.id!!).size })
+            "public" -> towns.sortWith(compareByDescending<Town> { it.isPublic }.thenByDescending { this.residentManager.getResidentsByTown(it.id!!).size })
+            "founded", "created" -> towns.sortBy { it.createdAt }
+            else -> towns.sortBy { it.name?.lowercase(Locale.getDefault()) ?: "" }
+        }
         val pageSize = 10
         val maxPage = if (towns.isEmpty()) 1 else (towns.size + pageSize - 1) / pageSize
         if (page < 1) page = 1
@@ -1860,6 +1874,14 @@ class TownCommand
                         completions
                     )
                 }
+
+                "list" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("by"),
+                        completions
+                    )
+                }
             }
         } else if (args.size == 3) {
             if (args[0].toString().equals("rank", ignoreCase = true)) {
@@ -1888,6 +1910,12 @@ class TownCommand
             } else if (args[0].equals("outpost", ignoreCase = true) && (args[1].equals("list", ignoreCase = true) || args[1].equals("tp", ignoreCase = true))) {
                 val townNames: MutableList<String?> = this.townManager.allTowns.stream().map(Town::name).toList()
                 StringUtil.copyPartialMatches<ArrayList<String?>?>(args[2], townNames, completions)
+            } else if (args[0].toString().equals("list", ignoreCase = true) && args[1].toString().equals("by", ignoreCase = true)) {
+                StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    args[2],
+                    mutableListOf<String?>("name", "residents", "balance", "claims", "open", "public", "founded"),
+                    completions
+                )
             }
         } else if (args.size == 4) {
             if (args[0].toString().equals("rank", ignoreCase = true) && args[1].toString().equals("add", ignoreCase = true)) {
