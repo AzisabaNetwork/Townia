@@ -67,7 +67,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "ally" -> handleAlly(sender, args)
             "enemy" -> handleEnemy(sender, args)
             "info" -> handleInfo(sender, args)
-            "list" -> handleList(sender)
+            "list" -> handleList(sender, args)
             "spawn" -> handleSpawn(sender)
             "setspawn" -> handleSetSpawn(sender)
             "delete" -> handleDelete(sender, args)
@@ -750,8 +750,18 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         plugin.messageManager.sendMessage(sender, "nation.spawn-set")
     }
 
-    private fun handleList(sender: CommandSender) {
+    private fun handleList(sender: CommandSender, args: Array<out String>) {
         val nations: MutableList<Nation> = nationManager.allNations
+        val sort = if (args.size >= 3 && args[1].equals("by", ignoreCase = true)) {
+            args[2].lowercase(Locale.getDefault())
+        } else {
+            "name"
+        }
+        when (sort) {
+            "town", "towns" -> nations.sortByDescending { nationManager.getTownsInNation(it.id!!).size }
+            "balance", "bank" -> nations.sortByDescending { it.balance }
+            else -> nations.sortBy { it.name?.lowercase(Locale.getDefault()) ?: "" }
+        }
         plugin.messageManager.sendMessageWithoutPrefix(
             sender, "nation.list-header",
             "count", nations.size.toString()
@@ -908,7 +918,19 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                     mutableListOf("confirm"),
                     completions
                 )
+
+                "list" -> StringUtil.copyPartialMatches(
+                    args[1],
+                    mutableListOf("by"),
+                    completions
+                )
             }
+        } else if (args.size == 3 && args[0].equals("list", ignoreCase = true) && args[1].equals("by", ignoreCase = true)) {
+            StringUtil.copyPartialMatches(
+                args[2],
+                mutableListOf("name", "towns", "balance"),
+                completions
+            )
         }
         return completions
     }
