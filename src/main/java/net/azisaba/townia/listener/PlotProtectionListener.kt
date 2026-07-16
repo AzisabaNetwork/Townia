@@ -109,8 +109,15 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         val damager = event.damager as? Player ?: return
 
         val chunk: Chunk = defender.location.chunk
-        if (!plotManager.isClaimed(chunk)) return
         if (TowniaAdminCommand.isBypassing(damager.uniqueId)) return
+
+        if (!plotManager.isClaimed(chunk)) {
+            if (plugin.towniaConfig.isWorldAllowed(chunk.world.name) && !plugin.towniaConfig.wildernessPvp) {
+                event.isCancelled = true
+                plugin.messageManager.sendMessage(damager, "protection.pvp-denied")
+            }
+            return
+        }
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
         if (plotOpt.isEmpty) return
@@ -139,7 +146,9 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     private fun canExplode(chunk: Chunk?): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty) return false
+        if (plotOpt.isEmpty) return chunk != null &&
+                plugin.towniaConfig.isWorldAllowed(chunk.world.name) &&
+                !plugin.towniaConfig.wildernessExplosions
         val plot = plotOpt.get()
         if (plot.hasExplosions()) return false
         val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -162,7 +171,9 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     private fun canFire(chunk: Chunk?): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty) return false
+        if (plotOpt.isEmpty) return chunk != null &&
+                plugin.towniaConfig.isWorldAllowed(chunk.world.name) &&
+                !plugin.towniaConfig.wildernessFire
         val plot = plotOpt.get()
         if (plot.hasFire()) return false
         val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -175,7 +186,11 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             if (event.getEntity() is Monster) {
                 val chunk = event.location.chunk
                 val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-                if (plotOpt.isPresent) {
+                if (plotOpt.isEmpty) {
+                    if (plugin.towniaConfig.isWorldAllowed(chunk.world.name) && !plugin.towniaConfig.wildernessMobs) {
+                        event.isCancelled = true
+                    }
+                } else {
                     val plot = plotOpt.get()
                     var mobsAllowed = false
                     val town = townManager.getTown(plot.townUuid).orElse(null)
@@ -193,7 +208,17 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         if (TowniaAdminCommand.isBypassing(player.uniqueId)) return false
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
-        if (plotOpt.isEmpty) return false
+        if (plotOpt.isEmpty) {
+            if (chunk == null || !plugin.towniaConfig.isWorldAllowed(chunk.world.name)) return false
+            return !plugin.towniaConfig.isWildernessActionAllowed(
+                when (type) {
+                    ActionType.BUILD -> "build"
+                    ActionType.DESTROY -> "destroy"
+                    ActionType.SWITCH -> "switch"
+                    ActionType.ITEM -> "item"
+                }
+            )
+        }
 
         val plot = plotOpt.get()
         val town = townManager.getTown(plot.townUuid).orElse(null) ?: return false

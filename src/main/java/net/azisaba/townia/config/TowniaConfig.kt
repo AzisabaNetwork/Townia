@@ -34,6 +34,22 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var nationLevels: List<NationLevel> = emptyList()
         private set
+    var wildernessBuild: Boolean = true
+        private set
+    var wildernessDestroy: Boolean = true
+        private set
+    var wildernessSwitch: Boolean = true
+        private set
+    var wildernessItemUse: Boolean = true
+        private set
+    var wildernessPvp: Boolean = true
+        private set
+    var wildernessMobs: Boolean = true
+        private set
+    var wildernessExplosions: Boolean = true
+        private set
+    var wildernessFire: Boolean = true
+        private set
 
     val claimCost: Double
         get() = plugin.config.getDouble("claim-cost", 0.0)
@@ -80,6 +96,14 @@ class TowniaConfig(private val plugin: Townia) {
         townUpkeep         = config.getDouble("town-upkeep", 0.0)
         defaultTownTax     = config.getDouble("default-town-tax", 0.0)
         defaultNationTax   = config.getDouble("default-nation-tax", 0.0)
+        wildernessBuild      = config.getBoolean("wilderness.build", true)
+        wildernessDestroy    = config.getBoolean("wilderness.destroy", true)
+        wildernessSwitch     = config.getBoolean("wilderness.switch", true)
+        wildernessItemUse    = config.getBoolean("wilderness.item-use", true)
+        wildernessPvp        = config.getBoolean("wilderness.pvp", true)
+        wildernessMobs       = config.getBoolean("wilderness.mobs", true)
+        wildernessExplosions = config.getBoolean("wilderness.explosions", true)
+        wildernessFire       = config.getBoolean("wilderness.fire", true)
 
         // Parse Town Levels
         val tLevels = mutableListOf<TownLevel>()
@@ -141,5 +165,15 @@ class TowniaConfig(private val plugin: Townia) {
 
     fun getNationLevel(numResidents: Int): NationLevel? {
         return nationLevels.firstOrNull { numResidents >= it.numResidents }
+    }
+
+    fun isWildernessActionAllowed(action: String): Boolean {
+        return when (action.lowercase()) {
+            "build" -> wildernessBuild
+            "destroy" -> wildernessDestroy
+            "switch" -> wildernessSwitch
+            "item" -> wildernessItemUse
+            else -> true
+        }
     }
 }

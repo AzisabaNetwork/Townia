@@ -137,3 +137,15 @@ pvp:
   embassy: false
   farm: false
   inn: false
+
+# Wilderness rules for unclaimed chunks in allowed worlds.
+# Defaults keep the old Townia behavior. Set values to false to protect wilderness.
+wilderness:
+  build: true
+  destroy: true
+  switch: true
+  item-use: true
+  pvp: true
+  mobs: true
+  explosions: true
+  fire: true
