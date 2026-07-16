@@ -137,7 +137,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         val chunk = player.location.chunk
-        if (plotManager.isClaimed(chunk)) {
+        if (!plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
@@ -200,7 +200,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
     private fun handleNotForSale(player: Player) {
         val chunk = player.location.chunk
-        if (plotManager.isClaimed(chunk)) {
+        if (!plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
@@ -342,6 +342,15 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             }
 
             townManager.addBalance(plot.townUuid, price)
+            val townBalance = townManager.getTown(plot.townUuid).map { it.balance }.orElse(0.0)
+            plugin.databaseManager.recordBankTransaction(
+                "TOWN",
+                plot.townUuid!!,
+                player.uniqueId,
+                price,
+                "plot_purchase",
+                townBalance
+            )
             plotManager.transferOwnership(
                 chunk.world.name,
                 chunk.x,
@@ -361,6 +370,9 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             plugin.messageManager.sendMessage(player, (e.messageKey ?: "Unknown"), *e.replacements.filterNotNull()
                 .toTypedArray()
             )
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to record plot purchase transaction", e)
+            plugin.messageManager.sendMessage(player, "error.database")
         }
     }
 

@@ -62,6 +62,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "kick" -> handleKick(sender, args)
             "deposit" -> handleDeposit(sender, args)
             "withdraw" -> handleWithdraw(sender, args)
+            "bankhistory" -> handleBankHistory(sender, args)
             "set" -> handleSet(sender, args)
             "ally" -> handleAlly(sender, args)
             "enemy" -> handleEnemy(sender, args)
@@ -361,12 +362,24 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             nationManager.addBalance(nationUuid, amount)
             val nationOpt2: Optional<Nation> = nationManager.getNation(nationUuid)
             val balance = nationOpt2.map({ n: Nation? -> formatMoney(n?.balance ?: 0.0) }).orElse("?")
+            val balanceValue = nationOpt2.map({ n: Nation? -> n?.balance ?: 0.0 }).orElse(0.0)
+            plugin.databaseManager.recordBankTransaction(
+                "NATION",
+                nationUuid!!,
+                player.uniqueId,
+                amount,
+                "deposit",
+                balanceValue
+            )
             plugin.messageManager.sendMessage(
                 sender, "nation.deposit-success",
                 "{amount}", formatMoney(amount), "{balance}", balance
             )
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to record nation deposit transaction", e)
+            plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
 
@@ -419,12 +432,48 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             nationManager.subtractBalance(nationUuid, amount)
             plugin.economy!!.depositPlayer(player, amount)
             val updated: Nation = nationManager.getNation(nationUuid).orElse(nation)
+            plugin.databaseManager.recordBankTransaction(
+                "NATION",
+                nationUuid!!,
+                player.uniqueId,
+                -amount,
+                "withdraw",
+                updated.balance
+            )
             plugin.messageManager.sendMessage(
                 sender, "nation.withdraw-success",
                 "{amount}", formatMoney(amount), "{balance}", formatMoney(updated.balance)
             )
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to record nation withdraw transaction", e)
+            plugin.messageManager.sendMessage(sender, "error.database")
+        }
+    }
+
+    private fun handleBankHistory(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res: TowniaPlayer = requireMayorInTown(sender, player) ?: return
+        val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
+        if (townOpt.isEmpty || !townOpt.get().isInNation) {
+            plugin.messageManager.sendMessage(sender, "town.not-in-nation")
+            return
+        }
+        val limit = parseHistoryLimit(args)
+        try {
+            val entries = plugin.databaseManager.getBankTransactions("NATION", townOpt.get().nationUuid!!, limit)
+            sender.sendMessage("Nation bank history (${entries.size}):")
+            for (entry in entries) {
+                val sign = if (entry.type.name == "DEPOSIT") "+" else "-"
+                sender.sendMessage(
+                    "${formatHistoryTime(entry.createdAt)} $sign${formatMoney(entry.amount)} " +
+                            "(${entry.reason})"
+                )
+            }
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to read nation bank history", e)
+            plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
 
@@ -808,6 +857,21 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         }
     }
 
+    private fun parseHistoryLimit(args: Array<out String>): Int {
+        if (args.size < 2) return 10
+        return try {
+            args[1].toInt().coerceIn(1, 50)
+        } catch (_: NumberFormatException) {
+            10
+        }
+    }
+
+    private fun formatHistoryTime(createdAt: Long): String {
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.ofEpochMilli(createdAt))
+    }
+
     override fun onTabComplete(
         sender: CommandSender,
         command: Command,
@@ -821,7 +885,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 args[0],
                 mutableListOf(
                     "new", "invite", "join", "leave", "kick", "deposit", "withdraw",
-                    "info", "list", "delete"
+                    "bankhistory", "info", "list", "delete"
                 ),
                 completions
             )

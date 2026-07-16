@@ -109,7 +109,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         val damager = event.damager as? Player ?: return
 
         val chunk: Chunk = defender.location.chunk
-        if (plotManager.isClaimed(chunk)) return
+        if (!plotManager.isClaimed(chunk)) return
         if (TowniaAdminCommand.isBypassing(damager.uniqueId)) return
 
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)

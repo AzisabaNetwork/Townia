@@ -127,6 +127,10 @@ class TownCommand
                 this.handleWithdraw(sender, args)
             }
 
+            "bankhistory" -> {
+                this.handleBankHistory(sender, args)
+            }
+
             "rank" -> {
                 this.handleRank(sender, args)
             }
@@ -1196,6 +1200,14 @@ class TownCommand
             this.townManager.addBalance(res.townUuid, amount)
             val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
             val newBalance = if (townOpt.isPresent) townOpt.get().balance else 0.0
+            this.plugin.databaseManager.recordBankTransaction(
+                "TOWN",
+                res.townUuid!!,
+                player.uniqueId,
+                amount,
+                "deposit",
+                newBalance
+            )
             this.plugin.messageManager.sendMessage(
                 sender,
                 "town.deposit-success",
@@ -1208,6 +1220,9 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
                 .toTypedArray()
             )
+        } catch (e: SQLException) {
+            this.plugin.logger.log(Level.SEVERE, "Failed to record town deposit transaction", e)
+            this.plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
 
@@ -1258,6 +1273,14 @@ class TownCommand
             this.plugin.economy!!.depositPlayer(player as OfflinePlayer, amount)
             val newTownOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
             val newBalance = if (newTownOpt.isPresent) newTownOpt.get().balance else 0.0
+            this.plugin.databaseManager.recordBankTransaction(
+                "TOWN",
+                res.townUuid!!,
+                player.uniqueId,
+                -amount,
+                "withdraw",
+                newBalance
+            )
             this.plugin.messageManager.sendMessage(
                 sender,
                 "town.withdraw-success",
@@ -1270,6 +1293,29 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
                 .toTypedArray()
             )
+        } catch (e: SQLException) {
+            this.plugin.logger.log(Level.SEVERE, "Failed to record town withdraw transaction", e)
+            this.plugin.messageManager.sendMessage(sender, "error.database")
+        }
+    }
+
+    private fun handleBankHistory(sender: CommandSender, args: Array<out String>) {
+        val player: Player = this.requirePlayer(sender) ?: return
+        val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
+        val limit = parseHistoryLimit(args)
+        try {
+            val entries = this.plugin.databaseManager.getBankTransactions("TOWN", res.townUuid!!, limit)
+            sender.sendMessage("Town bank history (${entries.size}):")
+            for (entry in entries) {
+                val sign = if (entry.type.name == "DEPOSIT") "+" else "-"
+                sender.sendMessage(
+                    "${formatHistoryTime(entry.createdAt)} $sign${formatMoney(entry.amount)} " +
+                            "(${entry.reason})"
+                )
+            }
+        } catch (e: SQLException) {
+            this.plugin.logger.log(Level.SEVERE, "Failed to read town bank history", e)
+            this.plugin.messageManager.sendMessage(sender, "error.database")
         }
     }
 
@@ -1631,6 +1677,21 @@ class TownCommand
         return String.format("%.2f", amount)
     }
 
+    private fun parseHistoryLimit(args: Array<out String>): Int {
+        if (args.size < 2) return 10
+        return try {
+            args[1].toInt().coerceIn(1, 50)
+        } catch (_: NumberFormatException) {
+            10
+        }
+    }
+
+    private fun formatHistoryTime(createdAt: Long): String {
+        return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.ofEpochMilli(createdAt))
+    }
+
     override fun onTabComplete(
         sender: CommandSender,
         command: Command,
@@ -1652,6 +1713,7 @@ class TownCommand
                     "set",
                     "deposit",
                     "withdraw",
+                    "bankhistory",
                     "rank",
                     "info",
                     "list",

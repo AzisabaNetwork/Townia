@@ -1394,6 +1394,28 @@ class DatabaseManager(private val plugin: Townia) {
         }
     }
 
+    @Synchronized
+    @Throws(SQLException::class)
+    fun recordBankTransaction(
+        accountType: String,
+        accountUuid: UUID,
+        actorUuid: UUID?,
+        amount: Double,
+        reason: String,
+        balanceAfter: Double
+    ) {
+        val type = if (amount >= 0) TransactionType.DEPOSIT else TransactionType.WITHDRAW
+        val actorSuffix = if (actorUuid == null) "" else " by $actorUuid"
+        addBankHistory(
+            BankTransaction(
+                governmentUuid = accountUuid,
+                type = type,
+                amount = kotlin.math.abs(amount),
+                reason = "$accountType:$reason$actorSuffix"
+            )
+        )
+    }
+
     @Throws(SQLException::class)
     fun getBankHistory(govUuid: UUID, limit: Int, offset: Int): MutableList<BankTransaction> {
         val history = ArrayList<BankTransaction>()
@@ -1411,6 +1433,12 @@ class DatabaseManager(private val plugin: Townia) {
             }
         }
         return history
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun getBankTransactions(accountType: String, accountUuid: UUID, limit: Int): MutableList<BankTransaction> {
+        return getBankHistory(accountUuid, limit.coerceIn(1, 50), 0)
     }
 
     @Throws(SQLException::class)
