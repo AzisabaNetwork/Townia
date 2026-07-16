@@ -74,10 +74,10 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                     sendHelp(player)
                     return true
                 }
-                handleForSale(player, args[1])
+                handleForSale(player, args)
             }
 
-            "notforsale", "nfs" -> handleNotForSale(player)
+            "notforsale", "nfs" -> handleNotForSale(player, args)
             "buy", "claim" -> {
                 if (args.size > 1 && args[1].equals("auto", ignoreCase = true)) {
                     handleClaimAuto(player)
@@ -162,18 +162,28 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
     }
 
-    private fun handleForSale(player: Player, priceStr: String) {
+    private fun handleForSale(player: Player, args: Array<out String>) {
         val price: Double
         try {
-            price = priceStr.toDouble()
+            price = args[1].toDouble()
             if (price < 0) throw NumberFormatException()
         } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(player, "error.invalid-amount")
             return
         }
 
+        if (args.size >= 4 && isRangeShape(args[2])) {
+            val radius = parseRadius(args[3])
+            if (radius == null) {
+                plugin.messageManager.sendMessage(player, "error.invalid-amount")
+                return
+            }
+            applyForSaleRange(player, args[2], radius, true, price)
+            return
+        }
+
         val chunk = player.location.chunk
-        if (plotManager.isClaimed(chunk)) {
+        if (!plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
             return
         }
@@ -198,7 +208,17 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
     }
 
-    private fun handleNotForSale(player: Player) {
+    private fun handleNotForSale(player: Player, args: Array<out String>) {
+        if (args.size >= 3 && isRangeShape(args[1])) {
+            val radius = parseRadius(args[2])
+            if (radius == null) {
+                plugin.messageManager.sendMessage(player, "error.invalid-amount")
+                return
+            }
+            applyForSaleRange(player, args[1], radius, false, 0.0)
+            return
+        }
+
         val chunk = player.location.chunk
         if (!plotManager.isClaimed(chunk)) {
             plugin.messageManager.sendMessage(player, "plot.no-plot-here")
@@ -230,6 +250,57 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 .toTypedArray()
             )
         }
+    }
+
+    private fun applyForSaleRange(player: Player, shape: String, radius: Int, forSale: Boolean, price: Double) {
+        val chunks = collectRangeChunks(player.location.chunk, shape, radius)
+        var changed = 0
+        var failed = 0
+        for (chunk in chunks) {
+            if (!plotManager.isClaimed(chunk) || isAssistantOrHigherInPlotTown(player, chunk)) {
+                failed++
+                continue
+            }
+            val plot = plotManager.getPlot(chunk).orElse(null)
+            if (plot == null) {
+                failed++
+                continue
+            }
+            try {
+                plotManager.setForSale(plot.worldName, plot.chunkX, plot.chunkZ, forSale, price)
+                changed++
+            } catch (_: TowniaException) {
+                failed++
+            }
+        }
+        if (forSale) {
+            player.sendMessage("Set $changed plots for sale at ${formatMoney(price)}. Failed: $failed.")
+        } else {
+            player.sendMessage("Removed sale status from $changed plots. Failed: $failed.")
+        }
+    }
+
+    private fun collectRangeChunks(center: Chunk, shape: String, radius: Int): List<Chunk> {
+        val chunks: MutableList<Chunk> = ArrayList()
+        val circle = shape.equals("circle", ignoreCase = true)
+        for (x in center.x - radius..center.x + radius) {
+            for (z in center.z - radius..center.z + radius) {
+                val dx = x - center.x
+                val dz = z - center.z
+                if (circle && dx * dx + dz * dz > radius * radius) continue
+                chunks.add(center.world.getChunkAt(x, z))
+            }
+        }
+        return chunks
+    }
+
+    private fun isRangeShape(value: String): Boolean {
+        return value.equals("rect", ignoreCase = true) || value.equals("circle", ignoreCase = true)
+    }
+
+    private fun parseRadius(value: String): Int? {
+        val radius = value.toIntOrNull() ?: return null
+        return radius.coerceIn(0, MAX_RANGE_RADIUS)
     }
 
     private fun handleSetName(player: Player, name: String?) {
@@ -424,6 +495,15 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             val types = ArrayList<String>()
             for (pt in PlotType.entries) types.add(pt.name.lowercase(Locale.getDefault()))
             StringUtil.copyPartialMatches(args[2], types, completions)
+        } else if (args.size == 2 && (args[0].equals("notforsale", ignoreCase = true) || args[0].equals("nfs", ignoreCase = true))) {
+            StringUtil.copyPartialMatches(args[1], mutableListOf("rect", "circle"), completions)
+        } else if (args.size == 3 && (args[0].equals("forsale", ignoreCase = true) || args[0].equals("fs", ignoreCase = true))) {
+            StringUtil.copyPartialMatches(args[2], mutableListOf("rect", "circle"), completions)
+        } else if (
+            (args.size == 3 && (args[0].equals("notforsale", ignoreCase = true) || args[0].equals("nfs", ignoreCase = true)) && isRangeShape(args[1])) ||
+            (args.size == 4 && (args[0].equals("forsale", ignoreCase = true) || args[0].equals("fs", ignoreCase = true)) && isRangeShape(args[2]))
+        ) {
+            StringUtil.copyPartialMatches(args[args.size - 1], mutableListOf("1", "2", "3", "5", "10"), completions)
         } else if (args.size == 3 && args[0].equals("set", ignoreCase = true) && args[1].equals(
                 "perm",
                 ignoreCase = true
@@ -650,5 +730,9 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
     private fun handleEvict(player: Player?) {
         plugin.messageManager.sendMessage(player!!, "error.not-implemented")
+    }
+
+    companion object {
+        private const val MAX_RANGE_RADIUS = 10
     }
 }

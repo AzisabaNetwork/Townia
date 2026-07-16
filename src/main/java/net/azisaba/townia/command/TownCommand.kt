@@ -18,6 +18,7 @@ import net.azisaba.townia.manager.TownManager
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.Bukkit
+import org.bukkit.Chunk
 import org.bukkit.Location
 import org.bukkit.OfflinePlayer
 import org.bukkit.World
@@ -274,6 +275,22 @@ class TownCommand
                     )
                 })
             } else {
+                val radius = parseRadius(args.getOrNull(1))
+                if (radius != null) {
+                    val chunks = collectSquareChunks(player.location.chunk, radius)
+                    var claimed = 0
+                    var failed = 0
+                    for (chunk in chunks) {
+                        try {
+                            this.plotManager.claimChunk(res.townUuid!!, chunk)
+                            claimed++
+                        } catch (_: TowniaException) {
+                            failed++
+                        }
+                    }
+                    sender.sendMessage("Claimed $claimed chunks. Failed: $failed.")
+                    return
+                }
                 this.plotManager.claimChunk(res.townUuid!!, player.location.chunk)
                 val townOpt: Optional<Town> = this.plugin.townManager.getTown(res.townUuid)
                 this.plugin.messageManager.sendMessage(
@@ -315,6 +332,22 @@ class TownCommand
                     ++count
                 }
                 this.plugin.messageManager.sendMessage(sender, "town.unclaimed-all", "count", count.toString())
+                return
+            }
+            val radius = parseRadius(args.getOrNull(1))
+            if (radius != null) {
+                val chunks = collectSquareChunks(player.location.chunk, radius)
+                var unclaimed = 0
+                var failed = 0
+                for (chunk in chunks) {
+                    try {
+                        this.plotManager.unclaimChunk(res.townUuid!!, chunk)
+                        unclaimed++
+                    } catch (_: TowniaException) {
+                        failed++
+                    }
+                }
+                sender.sendMessage("Unclaimed $unclaimed chunks. Failed: $failed.")
                 return
             }
             val chunk = player.location.chunk
@@ -1692,6 +1725,22 @@ class TownCommand
             .format(Instant.ofEpochMilli(createdAt))
     }
 
+    private fun parseRadius(value: String?): Int? {
+        if (value == null) return null
+        val radius = value.toIntOrNull() ?: return null
+        return radius.coerceIn(0, MAX_RANGE_RADIUS)
+    }
+
+    private fun collectSquareChunks(center: Chunk, radius: Int): List<Chunk> {
+        val chunks: MutableList<Chunk> = ArrayList()
+        for (x in center.x - radius..center.x + radius) {
+            for (z in center.z - radius..center.z + radius) {
+                chunks.add(center.world.getChunkAt(x, z))
+            }
+        }
+        return chunks
+    }
+
     override fun onTabComplete(
         sender: CommandSender,
         command: Command,
@@ -1725,6 +1774,22 @@ class TownCommand
             )
         } else if (args.size == 2) {
             when (args[0].lowercase(Locale.getDefault())) {
+                "claim" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("1", "2", "3", "5", "10", "outpost"),
+                        completions
+                    )
+                }
+
+                "unclaim" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("1", "2", "3", "5", "10", "all"),
+                        completions
+                    )
+                }
+
                 "spawn", "info" -> {
                     val townNames: MutableList<String?> =
                         this.townManager.allTowns.stream().map(Town::name).toList()
@@ -1858,6 +1923,7 @@ class TownCommand
     }
 
     companion object {
+        private const val MAX_RANGE_RADIUS = 10
         private val DATE_FMT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
     }
