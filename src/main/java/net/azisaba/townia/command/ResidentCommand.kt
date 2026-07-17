@@ -40,8 +40,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             val player = requirePlayer(sender) ?: return true
-            showResidentInfo(sender, player.uniqueId.toString(), player.name)
-            return true
+            return onCommand(sender, command, label, arrayOf(player.name))
         }
 
         when (args[0].lowercase(Locale.getDefault())) {
