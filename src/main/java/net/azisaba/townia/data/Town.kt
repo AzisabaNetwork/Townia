@@ -43,6 +43,14 @@ class Town(
     var isAllowPetPickup: Boolean = true
     var isAllowPassenger: Boolean = true
 
+    var jailWorld: String? = null
+    var jailX: Double = 0.0
+    var jailY: Double = 64.0
+    var jailZ: Double = 0.0
+    var jailYaw: Float = 0.0f
+    var jailPitch: Float = 0.0f
+    val outlaws: MutableSet<UUID> = HashSet()
+    val jailCells: MutableList<TowniaJailCell> = ArrayList()
 
     val outposts: MutableList<TowniaOutpost?> = ArrayList<TowniaOutpost?>()
 
@@ -106,6 +114,19 @@ class Town(
 
     fun hasSpawn(): Boolean {
         return spawnWorld != null
+    }
+
+    fun hasJail(): Boolean {
+        return jailWorld != null
+    }
+
+    fun setJail(world: String?, x: Double, y: Double, z: Double, yaw: Float, pitch: Float) {
+        jailWorld = world
+        jailX = x
+        jailY = y
+        jailZ = z
+        jailYaw = yaw
+        jailPitch = pitch
     }
 
     fun hasHomeBlock(): Boolean {

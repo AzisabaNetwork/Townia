@@ -20,6 +20,10 @@ class TowniaPlayer {
     var defaultPermsOutsider: String? = ""
     var defaultPermsResident: String? = "BDSI"
 
+    var jailedTownUuid: UUID? = null
+    var jailReleaseAt: Long = 0L
+    var jailBail: Double = 0.0
+
     constructor(uuid: UUID?, name: String?, townUuid: UUID?, rank: TownRank, lastSeen: Long, preferredLang: String?) {
         this.uuid = uuid
         this.name = name
@@ -59,4 +63,6 @@ class TowniaPlayer {
         get() = rank.isAtLeast(TownRank.ASSISTANT)
     val isMayorOrHigher: Boolean
         get() = rank.isAtLeast(TownRank.MAYOR)
+    val isJailed: Boolean
+        get() = jailedTownUuid != null
 }

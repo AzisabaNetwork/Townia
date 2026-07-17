@@ -8,6 +8,7 @@ import net.azisaba.townia.TowniaException
 import net.azisaba.townia.data.PermissionMatrix
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.TownRank
+import net.azisaba.townia.data.TowniaJailCell
 import net.azisaba.townia.data.TowniaOutpost
 import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.database.DatabaseManager
@@ -82,6 +83,26 @@ class TownCommand
 
             "outpost" -> {
                 this.handleOutpost(sender, args)
+            }
+
+            "outlaw", "outlow" -> {
+                this.handleOutlaw(sender, args)
+            }
+
+            "outlawlist", "outlowlist" -> {
+                this.handleOutlawList(sender, args)
+            }
+
+            "jail" -> {
+                this.handleJail(sender, args)
+            }
+
+            "unjail" -> {
+                this.handleUnjail(sender, args)
+            }
+
+            "jailcell" -> {
+                this.handleJailCell(sender, args)
             }
 
             "unclaim" -> {
@@ -812,6 +833,18 @@ class TownCommand
                         .toTypedArray()
                     )
                 }
+            }
+
+            "jail" -> {
+                if (!res.isAssistantOrHigher) {
+                    this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
+                    return
+                }
+                val town = this.townManager.getTown(res.townUuid).orElse(null) ?: return
+                val loc = player.location
+                town.setJail(loc.world.name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch)
+                this.townManager.saveTown(town)
+                sender.sendMessage("Town jail set.")
             }
 
             "homeblock" -> {
@@ -1706,6 +1739,179 @@ class TownCommand
             return null
         }
         return sender
+    }
+
+    private fun handleOutlaw(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res = requireInTown(sender, player) ?: return
+        if (!res.isAssistantOrHigher) {
+            plugin.messageManager.sendMessage(sender, "town.not-assistant")
+            return
+        }
+        val town = townManager.getTown(res.townUuid).orElse(null) ?: return
+        if (args.size < 2 || args[1].equals("list", ignoreCase = true)) {
+            handleOutlawList(sender, arrayOf("outlawlist"))
+            return
+        }
+        if (args.size < 3) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val target = residentManager.getResidentByName(args[2]).orElse(null)
+        if (target == null || target.uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
+            return
+        }
+        if (target.townUuid == town.id) {
+            sender.sendMessage("Town residents cannot be outlawed from their own town.")
+            return
+        }
+        try {
+            when (args[1].lowercase(Locale.getDefault())) {
+                "add" -> {
+                    townManager.addOutlaw(town.id, target.uuid!!)
+                    sender.sendMessage("${target.name} is now outlawed from your town.")
+                }
+                "remove" -> {
+                    townManager.removeOutlaw(town.id, target.uuid!!)
+                    sender.sendMessage("${target.name} is no longer outlawed from your town.")
+                }
+                else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            }
+        } catch (e: TowniaException) {
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *e.replacements.filterNotNull().toTypedArray())
+        }
+    }
+
+    private fun handleOutlawList(sender: CommandSender, args: Array<out String>) {
+        val town = if (args.size >= 2) {
+            townManager.getTownByName(args[1]).orElse(null)
+        } else {
+            val player = requirePlayer(sender) ?: return
+            val res = requireInTown(sender, player) ?: return
+            townManager.getTown(res.townUuid).orElse(null)
+        }
+        if (town == null) {
+            plugin.messageManager.sendMessage(sender, "error.town-not-found")
+            return
+        }
+        val names = town.outlaws.map { uuid ->
+            residentManager.getResident(uuid).map { it.name ?: uuid.toString() }.orElse(uuid.toString())
+        }.sorted()
+        sender.sendMessage("Outlaws of ${town.name}: " + if (names.isEmpty()) "None" else names.joinToString(", "))
+    }
+
+    private fun handleJail(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res = requireInTown(sender, player) ?: return
+        if (!res.isAssistantOrHigher) {
+            plugin.messageManager.sendMessage(sender, "town.not-assistant")
+            return
+        }
+        val town = townManager.getTown(res.townUuid).orElse(null) ?: return
+        if (args.size < 2 || args[1].equals("list", ignoreCase = true)) {
+            sender.sendMessage("Primary jail for ${town.name}: " + if (town.hasJail()) "${town.jailWorld} ${town.jailX.toInt()},${town.jailY.toInt()},${town.jailZ.toInt()}" else "Not set")
+            if (town.jailCells.isNotEmpty()) sender.sendMessage("Cells: " + town.jailCells.joinToString(", ") { "${it.id}:${it.name}" })
+            return
+        }
+        if (!town.hasJail()) {
+            sender.sendMessage("Set a jail first with /town set jail.")
+            return
+        }
+        val target = residentManager.getResidentByName(args[1]).orElse(null)
+        if (target == null || target.uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[1])
+            return
+        }
+        if (target.townUuid != town.id) {
+            plugin.messageManager.sendMessage(sender, "error.not-same-town")
+            return
+        }
+        val cellSelector = args.getOrNull(4)
+        val cell = cellSelector?.let { findJailCell(town, it) }
+        if (cellSelector != null && cell == null) {
+            sender.sendMessage("Jail cell not found.")
+            return
+        }
+        val hours = args.getOrNull(2)?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 1.0
+        target.jailedTownUuid = town.id
+        target.jailReleaseAt = System.currentTimeMillis() + (hours * 3600000.0).toLong()
+        target.jailBail = args.getOrNull(3)?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+        residentManager.saveResident(target)
+        Bukkit.getPlayer(target.uuid!!)?.let { teleportToJail(it, town, cell) }
+        sender.sendMessage("${target.name} has been jailed for $hours hours.")
+    }
+
+    private fun handleUnjail(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res = requireInTown(sender, player) ?: return
+        if (!res.isAssistantOrHigher || args.size < 2) {
+            plugin.messageManager.sendMessage(sender, if (args.size < 2) "error.invalid-args" else "town.not-assistant")
+            return
+        }
+        val town = townManager.getTown(res.townUuid).orElse(null) ?: return
+        val target = residentManager.getResidentByName(args[1]).orElse(null)
+        if (target == null || target.jailedTownUuid != town.id) {
+            sender.sendMessage("That resident is not jailed by your town.")
+            return
+        }
+        releaseJail(target)
+        sender.sendMessage("${target.name} has been released from jail.")
+    }
+
+    private fun handleJailCell(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res = requireInTown(sender, player) ?: return
+        if (!res.isAssistantOrHigher) {
+            plugin.messageManager.sendMessage(sender, "town.not-assistant")
+            return
+        }
+        val town = townManager.getTown(res.townUuid).orElse(null) ?: return
+        if (args.size < 2 || args[1].equals("list", ignoreCase = true)) {
+            if (town.jailCells.isEmpty()) sender.sendMessage("No jail cells are configured.")
+            else town.jailCells.forEach { sender.sendMessage("${it.id}: ${it.name} at ${it.world} (${it.x.toInt()}, ${it.y.toInt()}, ${it.z.toInt()})") }
+            return
+        }
+        try {
+            when (args[1].lowercase(Locale.getDefault())) {
+                "add" -> {
+                    val loc = player.location
+                    val name = args.getOrNull(2) ?: "cell-${town.jailCells.size + 1}"
+                    townManager.addJailCell(town.id, TowniaJailCell(0, name, loc.world.name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch))
+                    sender.sendMessage("Added jail cell $name.")
+                }
+                "remove" -> {
+                    val cell = args.getOrNull(2)?.let { findJailCell(town, it) }
+                    if (cell == null) {
+                        sender.sendMessage("Jail cell not found.")
+                        return
+                    }
+                    townManager.removeJailCell(town.id, cell.id)
+                    sender.sendMessage("Removed jail cell ${cell.name}.")
+                }
+                else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            }
+        } catch (e: TowniaException) {
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *e.replacements.filterNotNull().toTypedArray())
+        }
+    }
+
+    private fun teleportToJail(player: Player, town: Town, cell: TowniaJailCell? = null) {
+        val worldName = cell?.world ?: town.jailWorld ?: return
+        val world = Bukkit.getWorld(worldName) ?: return
+        player.teleport(Location(world, cell?.x ?: town.jailX, cell?.y ?: town.jailY, cell?.z ?: town.jailZ, cell?.yaw ?: town.jailYaw, cell?.pitch ?: town.jailPitch))
+    }
+
+    private fun findJailCell(town: Town, selector: String): TowniaJailCell? {
+        val id = selector.toIntOrNull() ?: -1
+        return town.jailCells.firstOrNull { it.id == id || it.name.equals(selector, ignoreCase = true) }
+    }
+
+    private fun releaseJail(resident: TowniaPlayer) {
+        resident.jailedTownUuid = null
+        resident.jailReleaseAt = 0L
+        resident.jailBail = 0.0
+        residentManager.saveResident(resident)
     }
 
     private fun requireInTown(sender: CommandSender, player: Player): TowniaPlayer? {

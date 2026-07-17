@@ -99,7 +99,13 @@ class DatabaseManager(private val plugin: Townia) {
                             "allow_invisibility BOOLEAN DEFAULT true, " +
                             "allow_sit BOOLEAN DEFAULT true, " +
                             "allow_pet_pickup BOOLEAN DEFAULT true, " +
-                            "allow_passenger BOOLEAN DEFAULT true)"
+                            "allow_passenger BOOLEAN DEFAULT true, " +
+                            "jail_world VARCHAR(64), " +
+                            "jail_x DOUBLE DEFAULT 0, " +
+                            "jail_y DOUBLE DEFAULT 64, " +
+                            "jail_z DOUBLE DEFAULT 0, " +
+                            "jail_yaw FLOAT DEFAULT 0, " +
+                            "jail_pitch FLOAT DEFAULT 0)"
                 )
                 stmt.execute(
                     "CREATE TABLE IF NOT EXISTS plots (" +
@@ -139,7 +145,10 @@ class DatabaseManager(private val plugin: Townia) {
                             "default_perms_friend VARCHAR(16) DEFAULT '', " +
                             "default_perms_ally VARCHAR(16) DEFAULT '', " +
                             "default_perms_outsider VARCHAR(16) DEFAULT '', " +
-                            "default_perms_resident VARCHAR(16) DEFAULT 'BDSI')"
+                            "default_perms_resident VARCHAR(16) DEFAULT 'BDSI', " +
+                            "jailed_town_uuid VARCHAR(36), " +
+                            "jail_release_at BIGINT DEFAULT 0, " +
+                            "jail_bail DOUBLE DEFAULT 0)"
                 )
 
                 stmt.execute(
@@ -209,6 +218,26 @@ class DatabaseManager(private val plugin: Townia) {
                             "yaw FLOAT NOT NULL, " +
                             "pitch FLOAT NOT NULL, " +
                             "is_public BOOLEAN DEFAULT false, " +
+                            "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
+                )
+                stmt.execute(
+                    "CREATE TABLE IF NOT EXISTS town_outlaws (" +
+                            "town_uuid VARCHAR(36) NOT NULL, " +
+                            "resident_uuid VARCHAR(36) NOT NULL, " +
+                            "PRIMARY KEY (town_uuid, resident_uuid), " +
+                            "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
+                )
+                stmt.execute(
+                    "CREATE TABLE IF NOT EXISTS town_jail_cells (" +
+                            "id INTEGER PRIMARY KEY " + autoInc + ", " +
+                            "town_uuid VARCHAR(36) NOT NULL, " +
+                            "name VARCHAR(64) NOT NULL, " +
+                            "world VARCHAR(64) NOT NULL, " +
+                            "x DOUBLE NOT NULL, " +
+                            "y DOUBLE NOT NULL, " +
+                            "z DOUBLE NOT NULL, " +
+                            "yaw FLOAT NOT NULL, " +
+                            "pitch FLOAT NOT NULL, " +
                             "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
                 )
 
@@ -287,6 +316,22 @@ class DatabaseManager(private val plugin: Townia) {
                 try {
                     stmt.execute("ALTER TABLE towns ADD COLUMN allow_passenger BOOLEAN DEFAULT true")
                 } catch (_: Exception) {
+                }
+                for (ddl in listOf(
+                    "ALTER TABLE towns ADD COLUMN jail_world VARCHAR(64)",
+                    "ALTER TABLE towns ADD COLUMN jail_x DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN jail_y DOUBLE DEFAULT 64",
+                    "ALTER TABLE towns ADD COLUMN jail_z DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN jail_yaw FLOAT DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN jail_pitch FLOAT DEFAULT 0",
+                    "ALTER TABLE residents ADD COLUMN jailed_town_uuid VARCHAR(36)",
+                    "ALTER TABLE residents ADD COLUMN jail_release_at BIGINT DEFAULT 0",
+                    "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0"
+                )) {
+                    try {
+                        stmt.execute(ddl)
+                    } catch (_: Exception) {
+                    }
                 }
 
                 try {
@@ -423,8 +468,9 @@ class DatabaseManager(private val plugin: Townia) {
                                is_public, created_at, board, taxes, plot_price, pvp, mobs, explosions, fire,
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
                                homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
-                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger,
+                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), mayor_uuid=VALUES(mayor_uuid), nation_uuid=VALUES(nation_uuid),
                 balance=VALUES(balance), claim_limit=VALUES(claim_limit), bonus_claims=VALUES(bonus_claims),
@@ -437,15 +483,18 @@ class DatabaseManager(private val plugin: Townia) {
                 perms_resident=VALUES(perms_resident), perms_ally=VALUES(perms_ally), perms_outsider=VALUES(perms_outsider),
                 perms_nation=VALUES(perms_nation), daily_upkeep=VALUES(daily_upkeep),
                 allow_invisibility=VALUES(allow_invisibility), allow_sit=VALUES(allow_sit),
-                allow_pet_pickup=VALUES(allow_pet_pickup), allow_passenger=VALUES(allow_passenger)
+                allow_pet_pickup=VALUES(allow_pet_pickup), allow_passenger=VALUES(allow_passenger),
+                jail_world=VALUES(jail_world), jail_x=VALUES(jail_x), jail_y=VALUES(jail_y),
+                jail_z=VALUES(jail_z), jail_yaw=VALUES(jail_yaw), jail_pitch=VALUES(jail_pitch)
         
         """.trimIndent() else """
             INSERT INTO towns (id, name, mayor_uuid, nation_uuid, balance, claim_limit, bonus_claims,
                                is_public, created_at, board, taxes, plot_price, pvp, mobs, explosions, fire,
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
                                homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
-                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger,
+                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, mayor_uuid=excluded.mayor_uuid, nation_uuid=excluded.nation_uuid,
                 balance=excluded.balance, claim_limit=excluded.claim_limit, bonus_claims=excluded.bonus_claims,
@@ -458,7 +507,9 @@ class DatabaseManager(private val plugin: Townia) {
                 perms_resident=excluded.perms_resident, perms_ally=excluded.perms_ally, perms_outsider=excluded.perms_outsider,
                 perms_nation=excluded.perms_nation, daily_upkeep=excluded.daily_upkeep,
                 allow_invisibility=excluded.allow_invisibility, allow_sit=excluded.allow_sit,
-                allow_pet_pickup=excluded.allow_pet_pickup, allow_passenger=excluded.allow_passenger
+                allow_pet_pickup=excluded.allow_pet_pickup, allow_passenger=excluded.allow_passenger,
+                jail_world=excluded.jail_world, jail_x=excluded.jail_x, jail_y=excluded.jail_y,
+                jail_z=excluded.jail_z, jail_yaw=excluded.jail_yaw, jail_pitch=excluded.jail_pitch
         
         """.trimIndent()
         dataSource!!.getConnection().use { connection ->
@@ -502,6 +553,12 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setInt(32, if (town.isAllowSit) 1 else 0)
                 ps.setInt(33, if (town.isAllowPetPickup) 1 else 0)
                 ps.setInt(34, if (town.isAllowPassenger) 1 else 0)
+                ps.setString(35, town.jailWorld)
+                ps.setDouble(36, town.jailX)
+                ps.setDouble(37, town.jailY)
+                ps.setDouble(38, town.jailZ)
+                ps.setFloat(39, town.jailYaw)
+                ps.setFloat(40, town.jailPitch)
                 ps.executeUpdate()
             }
         }
@@ -622,6 +679,20 @@ class DatabaseManager(private val plugin: Townia) {
             if (rs.getObject("allow_passenger") != null) town.isAllowPassenger = rs.getInt("allow_passenger") != 0
         } catch (ignored: Exception) {
         }
+        try {
+            val jailWorld = rs.getString("jail_world")
+            if (jailWorld != null) {
+                town.setJail(
+                    jailWorld,
+                    rs.getDouble("jail_x"),
+                    rs.getDouble("jail_y"),
+                    rs.getDouble("jail_z"),
+                    rs.getFloat("jail_yaw"),
+                    rs.getFloat("jail_pitch")
+                )
+            }
+        } catch (_: Exception) {
+        }
         return town
     }
 
@@ -697,30 +768,141 @@ class DatabaseManager(private val plugin: Townia) {
 
     @Synchronized
     @Throws(SQLException::class)
+    fun loadTownOutlaws(town: Town) {
+        town.outlaws.clear()
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement("SELECT resident_uuid FROM town_outlaws WHERE town_uuid = ?").use { ps ->
+                ps.setString(1, town.id.toString())
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) town.outlaws.add(UUID.fromString(rs.getString("resident_uuid")))
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun addTownOutlaw(townId: UUID, residentId: UUID) {
+        val sql = if (isMySQL) {
+            "INSERT IGNORE INTO town_outlaws (town_uuid, resident_uuid) VALUES (?, ?)"
+        } else {
+            "INSERT OR IGNORE INTO town_outlaws (town_uuid, resident_uuid) VALUES (?, ?)"
+        }
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement(sql).use { ps ->
+                ps.setString(1, townId.toString())
+                ps.setString(2, residentId.toString())
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun removeTownOutlaw(townId: UUID, residentId: UUID) {
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement("DELETE FROM town_outlaws WHERE town_uuid = ? AND resident_uuid = ?").use { ps ->
+                ps.setString(1, townId.toString())
+                ps.setString(2, residentId.toString())
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun loadTownJailCells(town: Town) {
+        town.jailCells.clear()
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement("SELECT * FROM town_jail_cells WHERE town_uuid = ? ORDER BY id").use { ps ->
+                ps.setString(1, town.id.toString())
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        town.jailCells.add(
+                            TowniaJailCell(
+                                rs.getInt("id"),
+                                rs.getString("name"),
+                                rs.getString("world"),
+                                rs.getDouble("x"),
+                                rs.getDouble("y"),
+                                rs.getDouble("z"),
+                                rs.getFloat("yaw"),
+                                rs.getFloat("pitch")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun saveTownJailCell(townId: UUID, cell: TowniaJailCell) {
+        val sql = if (isMySQL) """
+            INSERT INTO town_jail_cells (id, town_uuid, name, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE name=VALUES(name), world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch)
+        """.trimIndent() else """
+            INSERT INTO town_jail_cells (id, town_uuid, name, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name=excluded.name, world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch
+        """.trimIndent()
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement(sql).use { ps ->
+                if (cell.id == 0) ps.setNull(1, Types.INTEGER) else ps.setInt(1, cell.id)
+                ps.setString(2, townId.toString())
+                ps.setString(3, cell.name)
+                ps.setString(4, cell.world)
+                ps.setDouble(5, cell.x)
+                ps.setDouble(6, cell.y)
+                ps.setDouble(7, cell.z)
+                ps.setFloat(8, cell.yaw)
+                ps.setFloat(9, cell.pitch)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
+    fun deleteTownJailCell(id: Int) {
+        dataSource!!.getConnection().use { connection ->
+            connection.prepareStatement("DELETE FROM town_jail_cells WHERE id = ?").use { ps ->
+                ps.setInt(1, id)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
     fun saveResident(player: TowniaPlayer) {
         val sql = if (isMySQL) """
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
-                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
+                                   jailed_town_uuid, jail_release_at, jail_bail)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), town_uuid=VALUES(town_uuid), rank=VALUES(rank),
                 last_seen=VALUES(last_seen), preferred_lang=VALUES(preferred_lang),
                 toggle_map=VALUES(toggle_map), toggle_town_claim=VALUES(toggle_town_claim), toggle_plot_border=VALUES(toggle_plot_border),
                 default_perms_friend=VALUES(default_perms_friend), default_perms_ally=VALUES(default_perms_ally),
-                default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident)
+                default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident),
+                jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail)
         
         """.trimIndent() else """
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
-                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
+                                   jailed_town_uuid, jail_release_at, jail_bail)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uuid) DO UPDATE SET
                 name=excluded.name, town_uuid=excluded.town_uuid, rank=excluded.rank,
                 last_seen=excluded.last_seen, preferred_lang=excluded.preferred_lang,
                 toggle_map=excluded.toggle_map, toggle_town_claim=excluded.toggle_town_claim, toggle_plot_border=excluded.toggle_plot_border,
                 default_perms_friend=excluded.default_perms_friend, default_perms_ally=excluded.default_perms_ally,
-                default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident
+                default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident,
+                jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail
         
         """.trimIndent()
         dataSource!!.getConnection().use { connection ->
@@ -738,6 +920,9 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setString(11, player.defaultPermsAlly)
                 ps.setString(12, player.defaultPermsOutsider)
                 ps.setString(13, player.defaultPermsResident)
+                ps.setString(14, player.jailedTownUuid?.toString())
+                ps.setLong(15, player.jailReleaseAt)
+                ps.setDouble(16, player.jailBail)
                 ps.executeUpdate()
             }
         }
@@ -804,6 +989,11 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     private fun mapResident(rs: ResultSet): TowniaPlayer {
         val townStr = rs.getString("town_uuid")
+        val jailedTownStr = try {
+            rs.getString("jailed_town_uuid")
+        } catch (_: Exception) {
+            null
+        }
         val player = TowniaPlayer(
             UUID.fromString(rs.getString("uuid")),
             rs.getString("name"),
@@ -824,6 +1014,12 @@ class DatabaseManager(private val plugin: Townia) {
         if (dpo != null) player.defaultPermsOutsider = dpo
         val dpr = rs.getString("default_perms_resident")
         if (dpr != null) player.defaultPermsResident = dpr
+        if (jailedTownStr != null) player.jailedTownUuid = UUID.fromString(jailedTownStr)
+        try {
+            player.jailReleaseAt = rs.getLong("jail_release_at")
+            player.jailBail = rs.getDouble("jail_bail")
+        } catch (_: Exception) {
+        }
         return player
     }
 

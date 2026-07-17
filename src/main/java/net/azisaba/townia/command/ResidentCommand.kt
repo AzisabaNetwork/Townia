@@ -40,7 +40,8 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             val player = requirePlayer(sender) ?: return true
-            return onCommand(sender, command, label, arrayOf(player.name))
+            showResidentInfo(sender, residentManager.getOrCreate(player))
+            return true
         }
 
         when (args[0].lowercase(Locale.getDefault())) {
@@ -66,17 +67,22 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             "toggle" -> handleToggle(sender, args.toList().toTypedArray())
             "spawn" -> handleSpawn(sender, args.toList().toTypedArray())
             "tax" -> handleTax(sender, args.toList().toTypedArray())
+            "jail" -> handleJail(sender, args.toList().toTypedArray())
             "friend" -> handleFriend(sender, args)
             "?", "help" -> plugin.messageManager.sendMessage(sender, "townia.help")
             else -> {
                 val targetName = args[0]
-                val targetOpt: Optional<TowniaPlayer> = residentManager.getResidentByName(targetName)
+                val onlineTarget = Bukkit.getPlayerExact(targetName)
+                val targetOpt: Optional<TowniaPlayer> = if (onlineTarget != null) {
+                    Optional.of(residentManager.getOrCreate(onlineTarget))
+                } else {
+                    residentManager.getResidentByName(targetName)
+                }
                 if (targetOpt.isEmpty) {
                     plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", targetName)
                     return true
                 }
-                val target: TowniaPlayer = targetOpt.get()
-                showResidentInfo(sender, target.uuid.toString(), (target.name ?: "Unknown"))
+                showResidentInfo(sender, targetOpt.get())
             }
         }
         return true
@@ -163,15 +169,12 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         }
     }
 
-    private fun showResidentInfo(sender: CommandSender, uuidStr: String, name: String?) {
-        val uuid = UUID.fromString(uuidStr)
-        val resOpt: Optional<TowniaPlayer> = residentManager.getResident(uuid)
-        if (resOpt.isEmpty) {
-            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", uuid.toString())
+    private fun showResidentInfo(sender: CommandSender, res: TowniaPlayer) {
+        val uuid = res.uuid
+        if (uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", res.name ?: "Unknown")
             return
         }
-
-        val res: TowniaPlayer = resOpt.get()
 
         var townName = "None"
         var rankName: String? = "None"
@@ -376,6 +379,33 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
 
     private fun handleTax(sender: CommandSender, args: Array<String>?) {
         plugin.messageManager.sendMessage(sender, "error.not-implemented")
+    }
+
+    private fun handleJail(sender: CommandSender, args: Array<String>?) {
+        val player = requirePlayer(sender) ?: return
+        val res = residentManager.getOrCreate(player)
+        if (args == null || args.size < 2 || !args[1].equals("paybail", ignoreCase = true)) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        if (!res.isJailed || res.jailBail <= 0.0) {
+            sender.sendMessage("You do not have bail to pay.")
+            return
+        }
+        if (!plugin.hasEconomy()) {
+            plugin.messageManager.sendMessage(sender, "error.no-vault")
+            return
+        }
+        if (!plugin.economy!!.has(player, res.jailBail)) {
+            plugin.messageManager.sendMessage(sender, "error.insufficient-funds", "amount", res.jailBail.toString())
+            return
+        }
+        plugin.economy!!.withdrawPlayer(player, res.jailBail)
+        res.jailedTownUuid = null
+        res.jailReleaseAt = 0L
+        res.jailBail = 0.0
+        residentManager.saveResident(res)
+        sender.sendMessage("Bail paid. You have been released from jail.")
     }
 
     companion object {

@@ -124,6 +124,10 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
         val plot = plotOpt.get()
         val town = townManager.getTown(plot.townUuid).orElse(null)
+        if (town != null && town.outlaws.contains(defender.uniqueId)) {
+            val attacker = residentManager.getResident(damager.uniqueId).orElse(null)
+            if (attacker != null && attacker.townUuid == town.id) return
+        }
         var pvpAllowed = false
         if (town != null) pvpAllowed = town.hasPvp()
         if (plot.hasPvp()) pvpAllowed = true

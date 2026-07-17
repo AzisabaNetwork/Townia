@@ -38,6 +38,8 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
             for (t in db.allTowns) {
                 if (t == null) continue
                 db.loadTownOutposts(t)
+                db.loadTownOutlaws(t)
+                db.loadTownJailCells(t)
                 t.id?.let { cache.put(it, t) }
                 t.id?.let { nameIndex.put(t.name!!.lowercase(Locale.getDefault()), it) }
             }
@@ -151,6 +153,54 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
 
     fun saveTown(town: Town) {
         persist(town)
+    }
+
+    @Throws(TowniaException::class)
+    fun addOutlaw(townId: UUID?, residentId: UUID) {
+        val town = requireTown(townId)
+        town.outlaws.add(residentId)
+        try {
+            db.addTownOutlaw(town.id!!, residentId)
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to add outlaw for town " + town.name, e)
+            throw TowniaException("error.database")
+        }
+    }
+
+    @Throws(TowniaException::class)
+    fun removeOutlaw(townId: UUID?, residentId: UUID) {
+        val town = requireTown(townId)
+        town.outlaws.remove(residentId)
+        try {
+            db.removeTownOutlaw(town.id!!, residentId)
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to remove outlaw for town " + town.name, e)
+            throw TowniaException("error.database")
+        }
+    }
+
+    @Throws(TowniaException::class)
+    fun addJailCell(townId: UUID?, cell: net.azisaba.townia.data.TowniaJailCell) {
+        val town = requireTown(townId)
+        try {
+            db.saveTownJailCell(town.id!!, cell)
+            db.loadTownJailCells(town)
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to save jail cell for town " + town.name, e)
+            throw TowniaException("error.database")
+        }
+    }
+
+    @Throws(TowniaException::class)
+    fun removeJailCell(townId: UUID?, cellId: Int) {
+        val town = requireTown(townId)
+        try {
+            db.deleteTownJailCell(cellId)
+            town.jailCells.removeIf { it.id == cellId }
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to delete jail cell for town " + town.name, e)
+            throw TowniaException("error.database")
+        }
     }
 
     @Throws(TowniaException::class)

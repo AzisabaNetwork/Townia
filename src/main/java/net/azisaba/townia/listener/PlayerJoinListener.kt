@@ -2,6 +2,7 @@ package net.azisaba.townia.listener
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.manager.ResidentManager
+import org.bukkit.Location
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
@@ -16,7 +17,24 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
         val player = event.getPlayer()
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
-                residentManager.getOrCreate(player)
+                val resident = residentManager.getOrCreate(player)
+                if (resident.jailedTownUuid != null) {
+                    if (resident.jailReleaseAt > 0L && resident.jailReleaseAt <= System.currentTimeMillis()) {
+                        resident.jailedTownUuid = null
+                        resident.jailReleaseAt = 0L
+                        resident.jailBail = 0.0
+                        residentManager.saveResident(resident)
+                    } else {
+                        plugin.server.scheduler.runTask(plugin, Runnable {
+                            val town = plugin.townManager.getTown(resident.jailedTownUuid).orElse(null)
+                            val world = if (town?.jailWorld != null) plugin.server.getWorld(town.jailWorld!!) else null
+                            if (town != null && world != null) {
+                                player.teleport(Location(world, town.jailX, town.jailY, town.jailZ, town.jailYaw, town.jailPitch))
+                                player.sendMessage("You are still jailed.")
+                            }
+                        })
+                    }
+                }
             } catch (e: Exception) {
                 plugin.logger.severe("Failed to load/create resident for " + player.name + ": " + e.message)
             }
