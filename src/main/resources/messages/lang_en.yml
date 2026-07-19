@@ -181,7 +181,7 @@ nation:
   title-set: "<green>Updated title for <yellow>{player}</yellow>."
   not-in-nation: "<red>Your town is not in a nation."
   info:
-    - "<gold>.oOo._______________.<yellow>[ Land of {nation} ]</yellow><gold>._______________.oOo."
+    - "<gold>.oOo._______________.<yellow>[ {nation} ]</yellow><gold>._______________.oOo."
     - "<dark_green>Board: <green>{board} <dark_green>Founded: <green>{founded}"
     - "<dark_green>Capital: <green>{capital}"
     - "<dark_green>King: <green>{leader}"

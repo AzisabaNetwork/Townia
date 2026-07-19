@@ -181,7 +181,7 @@ nation:
   title-set: "<green><yellow>{player}</yellow> の称号を更新しました。"
   not-in-nation: "<red>あなたの町は国に所属していません。"
   info:
-    - "<gold>.oOo._______________.<yellow>[ Land of {nation} ]</yellow><gold>._______________.oOo."
+    - "<gold>.oOo._______________.<yellow>[ {nation} ]</yellow><gold>._______________.oOo."
     - "<dark_green>掲示板: <green>{board} <dark_green>設立日: <green>{founded}"
     - "<dark_green>首都: <green>{capital}"
     - "<dark_green>国王: <green>{leader}"

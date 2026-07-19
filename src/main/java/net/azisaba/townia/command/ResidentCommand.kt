@@ -195,7 +195,11 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 townName = (town.name ?: "")
                 rankName = res.rank.name
                 val residentsCount = residentManager.getResidentsByTown(town.id!!).size
-                townInfo = "[$residentsCount]"
+                townInfo = clickableCount(
+                    residentsCount,
+                    "town info ${town.id}",
+                    "Click to view town information"
+                )
                 townRegistered = DATE_FMT.format(Instant.ofEpochMilli(town.createdAt))
 
                 val mayorOpt = residentManager.getResident(town.mayorUuid!!)
@@ -230,7 +234,11 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                         val nation = nationOpt.get()
                         nationName = nation.name ?: "None"
                         val townsCount = nationManager.getTownsInNation(nation.id!!).size
-                        nationInfo = "[$townsCount]"
+                        nationInfo = clickableCount(
+                            townsCount,
+                            "nation info ${nation.id}",
+                            "Click to view nation information"
+                        )
                         
                         val leaderOpt = residentManager.getResident(nation.leaderUuid!!)
                         if (leaderOpt.isPresent) {
@@ -302,6 +310,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         sb.append(if ((res.defaultPermsAlly?.indexOf(action) ?: -1) >= 0) "A" else "-")
         sb.append(if ((res.defaultPermsOutsider?.indexOf(action) ?: -1) >= 0) "O" else "-")
         return sb.toString()
+    }
+
+    private fun clickableCount(count: Int, command: String, hover: String): String {
+        return "<click:run_command:'/$command'><hover:show_text:'$hover'>[$count]</hover></click>"
     }
 
     private fun showList(sender: CommandSender) {

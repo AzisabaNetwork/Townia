@@ -749,7 +749,9 @@ class TownCommand
         val town: Town?
         val player: Player = this.requirePlayer(sender) ?: return
         if (args.size >= 2) {
-            val townOpt: Optional<Town> = this.townManager.getTownByName(args[1])
+            val townOpt: Optional<Town> = runCatching { UUID.fromString(args[1]) }
+                .map { this.townManager.getTown(it) }
+                .getOrElse { this.townManager.getTownByName(args[1]) }
             if (townOpt.isEmpty) {
                 this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
                 return
@@ -1483,7 +1485,9 @@ class TownCommand
     private fun handleInfo(sender: CommandSender, args: Array<out String>) {
         val town: Town?
         if (args.size >= 2) {
-            val townOpt: Optional<Town> = this.townManager.getTownByName(args[1])
+            val townOpt: Optional<Town> = runCatching { UUID.fromString(args[1]) }
+                .map { this.townManager.getTown(it) }
+                .getOrElse { this.townManager.getTownByName(args[1]) }
             if (townOpt.isEmpty) {
                 this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
                 return
@@ -1615,6 +1619,10 @@ class TownCommand
         return sb.toString()
     }
 
+    private fun clickableCount(count: Int, command: String, hover: String): String {
+        return "<click:run_command:'/$command'><hover:show_text:'$hover'>$count</hover></click>"
+    }
+
     private fun getOutpostCount(town: Town): Int {
         var count = 0
         try {
@@ -1670,7 +1678,7 @@ class TownCommand
                     "mayor",
                     mayorName,
                     "residents",
-                    residents.toString()
+                    clickableCount(residents, "town info ${town.id}", "Click to view town information")
                 )
             }
             this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.list-page", "page", page.toString(), "max", maxPage.toString())

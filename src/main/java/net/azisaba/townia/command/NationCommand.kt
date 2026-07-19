@@ -672,7 +672,9 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     private fun handleInfo(sender: CommandSender, args: Array<out String>) {
         val nation: Nation?
         if (args.size >= 2) {
-            val nationOpt: Optional<Nation> = nationManager.getNationByName(args[1])
+            val nationOpt: Optional<Nation> = runCatching { UUID.fromString(args[1]) }
+                .map { nationManager.getNation(it) }
+                .getOrElse { nationManager.getNationByName(args[1]) }
             if (nationOpt.isEmpty) {
                 plugin.messageManager.sendMessage(sender, "error.nation-not-found", "nation", "Unknown")
                 return
@@ -727,7 +729,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "founded", created,
             "capital", capitalName,
             "town_count", towns.size.toString(),
-            "towns", if (towns.isEmpty()) "None" else towns.joinToString(", ") { it.name ?: "Unknown" },
+            "towns", if (towns.isEmpty()) "None" else towns.joinToString(", ") { clickableTownName(it) },
             "residents", totalResidents.toString(),
             "balance", formatMoney(nation.balance),
             "taxes", formatMoney(nation.taxes)
@@ -815,9 +817,18 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 sender, "nation.list-entry",
                 "nation", nation.getFormattedName(sender),
                 "leader", nation.getKingPrefix(sender) + leaderName + nation.getKingPostfix(sender),
-                "towns", townCount.toString()
+                "towns", clickableCount(townCount, "nation info ${nation.id}", "Click to view nation information")
             )
         }
+    }
+
+    private fun clickableCount(count: Int, command: String, hover: String): String {
+        return "<click:run_command:'/$command'><hover:show_text:'$hover'>$count</hover></click>"
+    }
+
+    private fun clickableTownName(town: Town): String {
+        val name = town.name ?: "Unknown"
+        return "<click:run_command:'/town info ${town.id}'><hover:show_text:'Click to view town information'>$name</hover></click>"
     }
 
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
