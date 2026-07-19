@@ -550,7 +550,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 )
             }
         }
-        return completions as MutableList<String>?
+        return completions
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {

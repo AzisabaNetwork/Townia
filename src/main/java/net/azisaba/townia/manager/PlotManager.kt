@@ -55,8 +55,8 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         return cache.containsKey(ChunkKey.of(worldName, chunkX, chunkZ))
     }
 
-    fun getPlotsByTown(townId: UUID): MutableList<Plot?> {
-        val list: MutableList<Plot?> = ArrayList<Plot?>()
+    fun getPlotsByTown(townId: UUID): MutableList<Plot> {
+        val list: MutableList<Plot> = ArrayList()
         for (p in cache.values) {
             if (townId == p.townUuid) list.add(p)
         }

@@ -82,6 +82,7 @@ town:
   spawn-set: "<green>町のスポーン地点を現在地に設定しました。"
   spawn-not-set: "<red>この町にはスポーン地点が設定されていません。"
   teleporting: "<green><yellow>{town}</yellow> にテレポートしています..."
+  time-upkeep: "<gold>次の維持費徴収まで: <white>{time}"
   renamed: "<green>町名を <yellow>{old}</yellow> から <yellow>{new}</yellow> に変更しました。"
   info-perms: "<gold>権限: <gray>住民:<white>{resident} <gray>同盟:<white>{ally} <gray>外部:<white>{outsider} <gray>国:<white>{nation}"
   set-public: "<green>町を公開にしました。誰でも参加できます。"

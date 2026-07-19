@@ -325,10 +325,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         label: String,
         args: Array<out String>
     ): MutableList<String>? {
-        val completions: MutableList<String?> = ArrayList()
+        val completions: MutableList<String> = ArrayList()
         when (args.size) {
             1 -> {
-                val options: MutableList<String?> = ArrayList()
+                val options: MutableList<String> = ArrayList()
                 options.add("list")
                 options.add("friend")
                 options.add("set")
@@ -376,14 +376,14 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 ignoreCase = true
             ) || args[1].equals("remove", ignoreCase = true))
                 -> {
-                val options: MutableList<String?> = ArrayList()
+                val options: MutableList<String> = ArrayList()
                 for (p in plugin.server.onlinePlayers) {
                     options.add(p.name)
                 }
                 StringUtil.copyPartialMatches(args[2], options, completions)
             }
         }
-        return completions as MutableList<String>?
+        return completions
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {
@@ -481,7 +481,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
 
     private fun handleSpawn(sender: CommandSender, args: Array<String>?) {
         val player = requirePlayer(sender) ?: return
-        val bed = player.bedSpawnLocation
+        val bed = player.respawnLocation
         if (bed == null) {
             plugin.messageManager.sendMessage(sender, "town.spawn-not-set")
             return

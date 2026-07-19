@@ -1,4 +1,4 @@
-package net.azisaba.townia.command
+﻿package net.azisaba.townia.command
 
 import net.azisaba.townia.data.Invite
 import net.azisaba.townia.data.Nation
@@ -347,7 +347,7 @@ class TownCommand
         }
         try {
             if (args.size > 1 && args[1].toString().equals("all", ignoreCase = true)) {
-                val plots: MutableList<Plot> = this.plotManager.getPlotsByTown(res.townUuid!!) as MutableList<Plot>
+                val plots: MutableList<Plot> = this.plotManager.getPlotsByTown(res.townUuid!!)
                 var count = 0
                 for (plot in plots) {
                     val world: World? = this.plugin.server.getWorld((plot.worldName ?: ""))
@@ -656,7 +656,7 @@ class TownCommand
             val townName = townOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
             this.plugin.messageManager
                 .sendMessage(sender, "town.invite-sent", "player", (target.name ?: "Unknown"), "town", townName)
-            val targetPlayer = Bukkit.getPlayer((target.uuid as UUID?)!!)
+            val targetPlayer = Bukkit.getPlayer(target.uuid!!)
             if (targetPlayer != null) {
                 this.plugin.messageManager.sendMessage(
                     targetPlayer as CommandSender,
@@ -1619,7 +1619,7 @@ class TownCommand
         var count = 0
         try {
             for (plot in this.plotManager.getPlotsByTown(town.id!!)) {
-                if (!plot!!.isOutpost) continue
+                if (!plot.isOutpost) continue
                 ++count
             }
         } catch (_: Exception) {
@@ -2004,9 +2004,9 @@ class TownCommand
         label: String,
         args: Array<out String>
     ): MutableList<String>? {
-        val completions = ArrayList<String?>()
+        val completions = ArrayList<String>()
         if (args.size == 1) {
-            StringUtil.copyPartialMatches<ArrayList<String?>?>(
+            StringUtil.copyPartialMatches(
                 args[0],
                 mutableListOf<String?>(
                     "new",
@@ -2041,7 +2041,7 @@ class TownCommand
         } else if (args.size == 2) {
             when (args[0].lowercase(Locale.getDefault())) {
                 "claim" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("1", "2", "3", "5", "10", "outpost"),
                         completions
@@ -2049,7 +2049,7 @@ class TownCommand
                 }
 
                 "unclaim" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("1", "2", "3", "5", "10", "all"),
                         completions
@@ -2059,7 +2059,7 @@ class TownCommand
                 "spawn", "info" -> {
                     val townNames: MutableList<String?> =
                         this.townManager.allTowns.stream().map(Town::name).toList()
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(args[1], townNames, completions)
+                    StringUtil.copyPartialMatches(args[1], townNames, completions)
                 }
 
                 "invite", "kick" -> {
@@ -2067,11 +2067,11 @@ class TownCommand
                     for (p in this.plugin.server.onlinePlayers) {
                         players.add(p.name)
                     }
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(args[1], players, completions)
+                    StringUtil.copyPartialMatches(args[1], players, completions)
                 }
 
                 "set" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>(
                             "spawn",
@@ -2097,7 +2097,7 @@ class TownCommand
                 }
 
                 "toggle" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>(
                             "pvp",
@@ -2113,7 +2113,7 @@ class TownCommand
                 }
 
                 "rank" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("add", "remove"),
                         completions
@@ -2121,7 +2121,7 @@ class TownCommand
                 }
 
                 "delete" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("confirm"),
                         completions
@@ -2129,7 +2129,7 @@ class TownCommand
                 }
 
                 "outpost" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("list", "tp", "togglepublic"),
                         completions
@@ -2137,7 +2137,7 @@ class TownCommand
                 }
 
                 "outlaw", "outlow" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("add", "remove", "list"),
                         completions
@@ -2148,11 +2148,11 @@ class TownCommand
                     val players = ArrayList<String>()
                     players.add("list")
                     for (p in this.plugin.server.onlinePlayers) players.add(p.name)
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(args[1], players, completions)
+                    StringUtil.copyPartialMatches(args[1], players, completions)
                 }
 
                 "jailcell" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("add", "remove", "list"),
                         completions
@@ -2160,7 +2160,7 @@ class TownCommand
                 }
 
                 "list" -> {
-                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                    StringUtil.copyPartialMatches(
                         args[1],
                         mutableListOf<String?>("by"),
                         completions
@@ -2173,9 +2173,9 @@ class TownCommand
                 for (p in this.plugin.server.onlinePlayers) {
                     players.add(p.name)
                 }
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(args[2], players, completions)
+                StringUtil.copyPartialMatches(args[2], players, completions)
             } else if (args[0].toString().equals("set", ignoreCase = true) && args[1].toString().equals("perm", ignoreCase = true)) {
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                StringUtil.copyPartialMatches(
                     args[2],
                     mutableListOf<String?>(
                         "resident",
@@ -2193,9 +2193,9 @@ class TownCommand
                 )
             } else if (args[0].equals("outpost", ignoreCase = true) && (args[1].equals("list", ignoreCase = true) || args[1].equals("tp", ignoreCase = true))) {
                 val townNames: MutableList<String?> = this.townManager.allTowns.stream().map(Town::name).toList()
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(args[2], townNames, completions)
+                StringUtil.copyPartialMatches(args[2], townNames, completions)
             } else if (args[0].toString().equals("list", ignoreCase = true) && args[1].toString().equals("by", ignoreCase = true)) {
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                StringUtil.copyPartialMatches(
                     args[2],
                     mutableListOf<String?>("name", "residents", "balance", "claims", "open", "public", "founded"),
                     completions
@@ -2208,13 +2208,13 @@ class TownCommand
                     if (rank === TownRank.MAYOR) continue
                     ranks.add(rank.name.lowercase(Locale.getDefault()))
                 }
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(args[3], ranks, completions)
+                StringUtil.copyPartialMatches(args[3], ranks, completions)
             } else if (args[0].toString().equals("set", ignoreCase = true) && args[1].toString().equals(
                     "perm",
                     ignoreCase = true
                 ) && !args[2].toString().equals("on", ignoreCase = true) && !args[2].toString().equals("off", ignoreCase = true)
             ) {
-                StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                StringUtil.copyPartialMatches(
                     args[3],
                     mutableListOf<String?>("build", "destroy", "switch", "itemuse", "on", "off"),
                     completions
@@ -2225,13 +2225,13 @@ class TownCommand
                 ignoreCase = true
             ) && !args[3].toString().equals("on", ignoreCase = true) && !args[3].toString().equals("off", ignoreCase = true)
         ) {
-            StringUtil.copyPartialMatches<ArrayList<String?>?>(
+            StringUtil.copyPartialMatches(
                 args[4],
                 mutableListOf<String?>("on", "off"),
                 completions
             )
         }
-        return completions as MutableList<String>?
+        return completions
     }
 
     companion object {
@@ -2240,3 +2240,4 @@ class TownCommand
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
     }
 }
+

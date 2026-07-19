@@ -82,6 +82,7 @@ town:
   spawn-set: "<green>Town spawn has been set."
   spawn-not-set: "<red>This town does not have a spawn set."
   teleporting: "<green>Teleporting to <yellow>{town}</yellow>..."
+  time-upkeep: "<gold>Time until next upkeep: <white>{time}"
   renamed: "<green>Town renamed from <yellow>{old}</yellow> to <yellow>{new}</yellow>."
   info-perms: "<gold>Permissions: <gray>Resident:<white>{resident} <gray>Ally:<white>{ally} <gray>Outsider:<white>{outsider} <gray>Nation:<white>{nation}"
   set-public: "<green>Town is now public. Anyone can join."
