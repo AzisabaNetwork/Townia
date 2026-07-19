@@ -214,14 +214,22 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "config") {
             net.azisaba.townia.migration.TownyConfigMigrator.migrate(plugin, sender)
         } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "data") {
-            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+            migrateTownyData(sender)
         } else {
             if (args.size == 1) {
                 // Default to data migration if no sub-args provided
-                net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+                migrateTownyData(sender)
             } else {
                 plugin.messageManager.sendMessage(sender, "admin.migrate-usage")
             }
+        }
+    }
+
+    private fun migrateTownyData(sender: CommandSender) {
+        if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
+            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
+        } else {
+            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender)
         }
     }
 

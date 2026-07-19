@@ -315,7 +315,7 @@ admin:
   nation-deleted: "<green>Nation <yellow>{nation}</yellow> has been force-deleted."
   bonus-given: "<green>Gave <yellow>{amount}</yellow> bonus blocks to <yellow>{town}</yellow>."
   migration_start: "<yellow>Starting Towny data migration..."
-  migration_success: "<green>Migration complete: <yellow>{towns}</yellow> towns, <yellow>{nations}</yellow> nations, <yellow>{residents}</yellow> residents."
+  migration_success: "<green>Migration complete: <yellow>{towns}</yellow> towns, <yellow>{nations}</yellow> nations, <yellow>{residents}</yellow> residents, <yellow>{plots}</yellow> plots."
   migration_failed: "<red>Migration failed. Check console for details."
   config-migration-not-found: "<red>Towny config.yml was not found. Check plugins/Towny/settings/config.yml."
   config-migration-success: "<green>Towny config migrated from <yellow>{file}</yellow>. Updated <yellow>{count}</yellow> keys."

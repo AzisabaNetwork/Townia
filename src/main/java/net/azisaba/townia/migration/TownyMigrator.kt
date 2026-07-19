@@ -17,12 +17,7 @@ import kotlin.math.max
 object TownyMigrator {
     fun migrate(plugin: Townia, sender: CommandSender) {
         if (!plugin.server.pluginManager.isPluginEnabled("Towny")) {
-            plugin.messageManager.sendMessage(
-                sender,
-                "admin.migration_failed",
-                "{0}",
-                "Towny is not installed or enabled!"
-            )
+            TownyFlatfileMigrator.migrate(plugin, sender)
             return
         }
 
@@ -191,10 +186,10 @@ object TownyMigrator {
 
                 plugin.messageManager.sendMessage(
                     sender, "admin.migration_success",
-                    "{0}", towns.toString(),
-                    "{1}", nations.toString(),
-                    "{2}", residents.toString(),
-                    "{3}", plots.toString()
+                    "towns", towns.toString(),
+                    "nations", nations.toString(),
+                    "residents", residents.toString(),
+                    "plots", plots.toString()
                 )
                 plugin.logger.info("Towny Migration successful.")
             } catch (e: Exception) {

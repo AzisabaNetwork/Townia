@@ -1,4 +1,4 @@
-package net.azisaba.townia.command
+﻿package net.azisaba.townia.command
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Nation
@@ -252,11 +252,11 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             if (res.friends!!.isEmpty()) "None" else res.friends!!.size.toString()
         val plotsCount = plugin.plotManager.countPlotsByOwner(uuid)
 
-        var balance: String? = "0"
+        var balance = plugin.messageManager.getPlainMessage(sender, "common.not-set")
         val registered = DATE_FMT.format(Instant.ofEpochMilli(offlinePlayer.firstPlayed.let { if (it == 0L) System.currentTimeMillis() else it }))
 
         if (plugin.hasEconomy()) {
-            balance = plugin.economy!!.format(plugin.economy!!.getBalance(offlinePlayer)).replace("¥", "").replace("\\", "")
+            balance = plugin.economy!!.format(plugin.economy!!.getBalance(offlinePlayer)).replace("[^\\d.,-]".toRegex(), "")
         }
 
         plugin.messageManager.sendMessageWithoutPrefix(
@@ -275,7 +275,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             "nation_leader", nationLeader,
             "nation_towns", nationInfo.replace("[", "").replace("]", ""),
             "last_seen", lastSeen,
-            "balance", (balance ?: "0"),
+            "balance", balance,
             "friends", (friends ?: "None"),
             "registered", registered,
             "plots", plotsCount.toString(),

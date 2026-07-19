@@ -315,7 +315,7 @@ admin:
   nation-deleted: "<green>国 <yellow>{nation}</yellow> を強制削除しました。"
   bonus-given: "<green>町 <yellow>{town}</yellow> にボーナス区画 <yellow>{amount}</yellow> を付与しました。"
   migration_start: "<yellow>Townyからのデータ移行を開始します..."
-  migration_success: "<green>移行完了: 町 <yellow>{towns}</yellow>、国 <yellow>{nations}</yellow>、住民 <yellow>{residents}</yellow>"
+  migration_success: "<green>移行完了: 町 <yellow>{towns}</yellow>、国 <yellow>{nations}</yellow>、住民 <yellow>{residents}</yellow>、区画 <yellow>{plots}</yellow>"
   migration_failed: "<red>移行に失敗しました。コンソールを確認してください。"
   config-migration-not-found: "<red>Townyのconfig.ymlが見つかりません。plugins/Towny/settings/config.yml を確認してください。"
   config-migration-success: "<green>Towny設定を移行しました: <yellow>{file}</yellow> / 更新 <yellow>{count}</yellow> 件"
