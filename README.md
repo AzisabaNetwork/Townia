@@ -64,6 +64,21 @@ MySQLデータベースを利用し、非同期でデータを読み書きしま
 - `townia_nations` - 国の情報
 - `townia_residents` - プレイヤー情報
 - `townia_plots` - チャンク情報
+- 
+## Towny 移行と UUID の互換性
+Towny のデータを移すには、Towny を有効にした状態で次を実行します。
+```text
+/towniaadmin migrate data all
+```
+Towny の更新などで保存済み UUID と現在の Minecraft UUID が異なる場合でも、Townia は同じプレイヤー名の旧レコードを検出し、ログイン時に町所属・役職・投獄情報を現在の UUID へ統合します。移行を実行する際に対象プレイヤーがオンラインであれば、現在の UUID が優先されます。
+
+Towny をアンロードする予定がある場合は、**Towny が有効なうちに**上記コマンドを実行してください。サーバーが一度でも確認したプレイヤーは、ログイン中でなくても現在の UUID へ一括変換されます。移行ログの `resident UUID reconciliation` は、この一括変換の件数です。現在UUIDを確認できない未訪問プレイヤーは、誤った UUID を作らないため旧UUIDのまま残り、後日の初回ログイン時に名前照合で統合されます。
+
+所属に問題がある場合は、次の診断コマンドで Minecraft UUID、Towny API、Townia の各解決結果を比較できます。
+```text
+/towniaadmin migrate diagnose [player]
+```
+`player` を省略した場合は、実行したプレイヤー自身を調べます。Towny API を利用するため、Towny が有効な場合に使用できます。
 
 ## 開発環境
 - Java 21
