@@ -138,6 +138,7 @@ class DatabaseManager(private val plugin: Townia) {
                             "town_uuid VARCHAR(36), " +
                             "rank VARCHAR(16) NOT NULL DEFAULT 'RESIDENT', " +
                             "last_seen BIGINT NOT NULL DEFAULT 0, " +
+                            "registered_at BIGINT NOT NULL DEFAULT 0, " +
                             "preferred_lang VARCHAR(8), " +
                             "toggle_map INTEGER DEFAULT 0, " +
                             "toggle_town_claim INTEGER DEFAULT 0, " +
@@ -326,7 +327,8 @@ class DatabaseManager(private val plugin: Townia) {
                     "ALTER TABLE towns ADD COLUMN jail_pitch FLOAT DEFAULT 0",
                     "ALTER TABLE residents ADD COLUMN jailed_town_uuid VARCHAR(36)",
                     "ALTER TABLE residents ADD COLUMN jail_release_at BIGINT DEFAULT 0",
-                    "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0"
+                    "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0",
+                    "ALTER TABLE residents ADD COLUMN registered_at BIGINT NOT NULL DEFAULT 0"
                 )) {
                     try {
                         stmt.execute(ddl)
@@ -877,28 +879,28 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun saveResident(player: TowniaPlayer) {
         val sql = if (isMySQL) """
-            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
+            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
                                    jailed_town_uuid, jail_release_at, jail_bail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), town_uuid=VALUES(town_uuid), rank=VALUES(rank),
-                last_seen=VALUES(last_seen), preferred_lang=VALUES(preferred_lang),
+                last_seen=VALUES(last_seen), registered_at=VALUES(registered_at), preferred_lang=VALUES(preferred_lang),
                 toggle_map=VALUES(toggle_map), toggle_town_claim=VALUES(toggle_town_claim), toggle_plot_border=VALUES(toggle_plot_border),
                 default_perms_friend=VALUES(default_perms_friend), default_perms_ally=VALUES(default_perms_ally),
                 default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident),
                 jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail)
         
         """.trimIndent() else """
-            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, preferred_lang,
+            INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
                                    jailed_town_uuid, jail_release_at, jail_bail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uuid) DO UPDATE SET
                 name=excluded.name, town_uuid=excluded.town_uuid, rank=excluded.rank,
-                last_seen=excluded.last_seen, preferred_lang=excluded.preferred_lang,
+                last_seen=excluded.last_seen, registered_at=excluded.registered_at, preferred_lang=excluded.preferred_lang,
                 toggle_map=excluded.toggle_map, toggle_town_claim=excluded.toggle_town_claim, toggle_plot_border=excluded.toggle_plot_border,
                 default_perms_friend=excluded.default_perms_friend, default_perms_ally=excluded.default_perms_ally,
                 default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident,
@@ -912,17 +914,18 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setString(3, if (player.townUuid != null) player.townUuid.toString() else null)
                 ps.setString(4, player.rank.name)
                 ps.setLong(5, player.lastSeen)
-                ps.setString(6, player.preferredLang)
-                ps.setInt(7, if (player.isToggleMap) 1 else 0)
-                ps.setInt(8, if (player.isToggleTownClaim) 1 else 0)
-                ps.setInt(9, if (player.isTogglePlotBorder) 1 else 0)
-                ps.setString(10, player.defaultPermsFriend)
-                ps.setString(11, player.defaultPermsAlly)
-                ps.setString(12, player.defaultPermsOutsider)
-                ps.setString(13, player.defaultPermsResident)
-                ps.setString(14, player.jailedTownUuid?.toString())
-                ps.setLong(15, player.jailReleaseAt)
-                ps.setDouble(16, player.jailBail)
+                ps.setLong(6, player.registeredAt.takeIf { it > 0 } ?: player.lastSeen)
+                ps.setString(7, player.preferredLang)
+                ps.setInt(8, if (player.isToggleMap) 1 else 0)
+                ps.setInt(9, if (player.isToggleTownClaim) 1 else 0)
+                ps.setInt(10, if (player.isTogglePlotBorder) 1 else 0)
+                ps.setString(11, player.defaultPermsFriend)
+                ps.setString(12, player.defaultPermsAlly)
+                ps.setString(13, player.defaultPermsOutsider)
+                ps.setString(14, player.defaultPermsResident)
+                ps.setString(15, player.jailedTownUuid?.toString())
+                ps.setLong(16, player.jailReleaseAt)
+                ps.setDouble(17, player.jailBail)
                 ps.executeUpdate()
             }
         }
@@ -1003,6 +1006,11 @@ class DatabaseManager(private val plugin: Townia) {
             rs.getString("preferred_lang")
         )
         player.friends = getFriends(player.uuid!!)
+        try {
+            player.registeredAt = rs.getLong("registered_at")
+        } catch (_: Exception) {
+            player.registeredAt = player.lastSeen
+        }
         player.isToggleMap = rs.getInt("toggle_map") == 1
         player.isToggleTownClaim = rs.getInt("toggle_town_claim") == 1
         player.isTogglePlotBorder = rs.getInt("toggle_plot_border") == 1

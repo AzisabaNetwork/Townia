@@ -1,5 +1,6 @@
 package net.azisaba.townia.command
 
+import com.palmergames.bukkit.towny.TownyUniverse
 import net.azisaba.townia.Townia
 import net.azisaba.townia.TowniaException
 import net.azisaba.townia.data.Nation
@@ -213,24 +214,79 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     private fun handleMigrate(sender: CommandSender, args: Array<out String>) {
         if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "config") {
             net.azisaba.townia.migration.TownyConfigMigrator.migrate(plugin, sender)
+        } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
+            diagnoseTownyResident(sender, args.getOrNull(2))
         } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "data") {
-            migrateTownyData(sender)
+            migrateTownyData(sender, parseMigrationParts(args.drop(2)))
         } else {
             if (args.size == 1) {
                 // Default to data migration if no sub-args provided
-                migrateTownyData(sender)
+                migrateTownyData(sender, emptySet())
             } else {
                 plugin.messageManager.sendMessage(sender, "admin.migrate-usage")
             }
         }
     }
 
-    private fun migrateTownyData(sender: CommandSender) {
-        if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
-            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
-        } else {
-            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender)
+    /**
+     * Prints the complete UUID-to-town resolution path for one online player.
+     * This is intentionally separate from migration so a live server can prove
+     * whether the mismatch originates in Towny, Townia's cache, or name lookup.
+     */
+    private fun diagnoseTownyResident(sender: CommandSender, playerName: String?) {
+        if (!plugin.server.pluginManager.isPluginEnabled("Towny")) {
+            sender.sendMessage("§c[Townia] Towny is not enabled; Towny API diagnostics are unavailable.")
+            return
         }
+
+        val target = when {
+            !playerName.isNullOrBlank() -> plugin.server.getPlayerExact(playerName)
+            sender is Player -> sender
+            else -> null
+        }
+        if (target == null) {
+            sender.sendMessage("§c[Townia] Target must be online. Usage: /towniaadmin migrate diagnose <player>")
+            return
+        }
+
+        val minecraftUuid = target.uniqueId
+        sender.sendMessage("§6[Townia] Town membership diagnostic for §e${target.name}")
+        sender.sendMessage("§7Minecraft UUID: §f$minecraftUuid")
+
+        val townyResident = runCatching { TownyUniverse.getInstance().getResident(minecraftUuid) }.getOrNull()
+        if (townyResident == null) {
+            sender.sendMessage("§cTowny API: no Resident for this UUID")
+        } else {
+            val townyTown = runCatching { if (townyResident.hasTown()) townyResident.town else null }.getOrNull()
+            sender.sendMessage("§aTowny API: §f${townyResident.name} §7(uuid=${townyResident.uuid})")
+            sender.sendMessage("§7Towny town: §f${townyTown?.name ?: "<none>"} §7(uuid=${townyTown?.uuid ?: "<none>"})")
+        }
+
+        val towniaResident = residentManager.getResident(minecraftUuid).orElse(null)
+        val towniaTown = towniaResident?.townUuid?.let { townManager.getTown(it).orElse(null) }
+        sender.sendMessage("§bTownia UUID lookup: §f${towniaResident?.name ?: "<none>"} §7(town=${towniaTown?.name ?: "<none>"}, uuid=${towniaResident?.townUuid ?: "<none>"})")
+
+        val nameMatch = residentManager.getResidentByName(target.name).orElse(null)
+        if (nameMatch != null && nameMatch.uuid != minecraftUuid) {
+            val nameMatchTown = nameMatch.townUuid?.let { townManager.getTown(it).orElse(null) }
+            sender.sendMessage("§eTownia name lookup differs: §f${nameMatch.uuid} §7(town=${nameMatchTown?.name ?: "<none>"}, uuid=${nameMatch.townUuid ?: "<none>"})")
+        }
+        sender.sendMessage("§7Copy these lines from console/chat when reporting the result.")
+    }
+
+    private fun migrateTownyData(sender: CommandSender, parts: Set<String>) {
+        if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
+            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender, parts)
+        } else {
+            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, parts)
+        }
+    }
+
+    private fun parseMigrationParts(raw: List<String>): Set<String> {
+        return raw.flatMap { it.split(',', ';') }
+            .map { it.trim().lowercase(Locale.getDefault()) }
+            .filter { it.isNotEmpty() }
+            .toSet()
     }
 
     private fun sendHelp(sender: CommandSender) {
@@ -272,7 +328,15 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "migrate") {
             StringUtil.copyPartialMatches(
                 args[1],
-                mutableListOf("data", "config"),
+                mutableListOf("data", "config", "diagnose"),
+                completions
+            )
+        } else if (args.size == 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
+            StringUtil.copyPartialMatches(args[2], plugin.server.onlinePlayers.map { it.name }, completions)
+        } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) == "data") {
+            StringUtil.copyPartialMatches(
+                args.last(),
+                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations"),
                 completions
             )
         } else if (args.size == 2) {

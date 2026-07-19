@@ -253,7 +253,12 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         val plotsCount = plugin.plotManager.countPlotsByOwner(uuid)
 
         var balance = plugin.messageManager.getPlainMessage(sender, "common.not-set")
-        val registered = DATE_FMT.format(Instant.ofEpochMilli(offlinePlayer.firstPlayed.let { if (it == 0L) System.currentTimeMillis() else it }))
+        val registeredMillis = when {
+            res.registeredAt > 0 -> res.registeredAt
+            offlinePlayer.firstPlayed > 0 -> offlinePlayer.firstPlayed
+            else -> System.currentTimeMillis()
+        }
+        val registered = DATE_FMT.format(Instant.ofEpochMilli(registeredMillis))
 
         if (plugin.hasEconomy()) {
             balance = plugin.economy!!.format(plugin.economy!!.getBalance(offlinePlayer)).replace("[^\\d.,-]".toRegex(), "")

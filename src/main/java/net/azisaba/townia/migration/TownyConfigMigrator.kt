@@ -74,6 +74,7 @@ object TownyConfigMigrator {
             changed.add("allowed-worlds")
         }
 
+        migrateDatabaseConfig(plugin, townyConfig, target, changed)
         alignConfigVersion(plugin, target, changed)
         target.save(targetFile)
         saveCompatFiles(plugin, townyConfig, source, changed)
@@ -249,6 +250,36 @@ object TownyConfigMigrator {
         changed.add(targetPath)
     }
 
+    private fun migrateDatabaseConfig(plugin: Townia, townyConfig: File, target: YamlConfiguration, changed: MutableList<String>) {
+        val townyDir = townyConfig.parentFile ?: return
+        val townyRoot = if (townyDir.name.equals("settings", ignoreCase = true)) townyDir.parentFile ?: townyDir else townyDir
+        val databaseFile = listOf(File(townyDir, "database.yml"), File(townyRoot, "database.yml")).firstOrNull { it.exists() } ?: return
+        val database = YamlConfiguration.loadConfiguration(databaseFile)
+        val load = database.getString("database.database_load", "")
+        val save = database.getString("database.database_save", "")
+        target.set("towny-compat.database.source-file", databaseFile.path)
+        target.set("towny-compat.database.database_load", load)
+        target.set("towny-compat.database.database_save", save)
+        changed.add("towny-compat.database")
+
+        if (!load.equals("mysql", ignoreCase = true) && !save.equals("mysql", ignoreCase = true)) return
+
+        target.set("database.type", "mysql")
+        target.set("database.host", database.getString("database.sql.hostname", target.getString("database.host", "localhost")))
+        target.set("database.port", database.getInt("database.sql.port", target.getInt("database.port", 3306)))
+        target.set("database.database", database.getString("database.sql.dbname", target.getString("database.database", "townia")))
+        target.set("database.username", database.getString("database.sql.username", target.getString("database.username", "root")))
+        target.set("database.password", database.getString("database.sql.password", target.getString("database.password", "")))
+        target.set("database.pool-size", database.getInt("database.sql.pooling.max_pool_size", target.getInt("database.pool-size", 10)))
+        changed.add("database.type")
+        changed.add("database.host")
+        changed.add("database.port")
+        changed.add("database.database")
+        changed.add("database.username")
+        changed.add("database.password")
+        changed.add("database.pool-size")
+    }
+
     private fun saveCompatFiles(plugin: Townia, townyConfig: File, source: YamlConfiguration, changed: MutableList<String>) {
         val townyDir = townyConfig.parentFile ?: return
         val townyRoot = if (townyDir.name.equals("settings", ignoreCase = true)) townyDir.parentFile ?: townyDir else townyDir
@@ -256,13 +287,15 @@ object TownyConfigMigrator {
         if (!compat.exists()) compat.mkdirs()
         townyConfig.copyTo(File(compat, "config.yml"), overwrite = true)
         changed.add("towny-compat/config.yml")
-        listOf("ChatConfig.yml", "Channels.yml", "townyperms.yml", "japanese.yml").forEach { name ->
+        listOf("ChatConfig.yml", "Channels.yml", "townyperms.yml", "japanese.yml", "english.yml", "database.yml").forEach { name ->
             val file = listOf(File(townyDir, name), File(townyRoot, name)).firstOrNull { it.exists() }
             if (file != null) {
                 file.copyTo(File(compat, name), overwrite = true)
                 changed.add("towny-compat/$name")
             }
         }
+        copyCompatDirectory(File(townyDir, "lang/override"), File(compat, "lang/override"), changed, "towny-compat/lang/override")
+        copyCompatDirectory(File(townyRoot, "lang/override"), File(compat, "lang/override"), changed, "towny-compat/lang/override")
         val chat = File(compat, "chat-summary.yml")
         val channels = listOf(File(townyDir, "Channels.yml"), File(townyRoot, "Channels.yml")).firstOrNull { it.exists() }
         if (channels != null) {
@@ -277,6 +310,17 @@ object TownyConfigMigrator {
         }
     }
 
+    private fun copyCompatDirectory(source: File, target: File, changed: MutableList<String>, changedPrefix: String) {
+        if (!source.isDirectory) return
+        source.walkTopDown().filter { it.isFile }.forEach { file ->
+            val relative = source.toPath().relativize(file.toPath()).toString()
+            val out = File(target, relative)
+            out.parentFile?.mkdirs()
+            file.copyTo(out, overwrite = true)
+            changed.add("$changedPrefix/${relative.replace(File.separatorChar, '/')}")
+        }
+    }
+
     private fun saveMigrationReport(plugin: Townia, townyConfig: File, source: YamlConfiguration, changed: List<String>) {
         val compat = File(plugin.dataFolder, "towny-compat")
         if (!compat.exists()) compat.mkdirs()
@@ -285,6 +329,7 @@ object TownyConfigMigrator {
         report.set("source.version", source.getString("version.version") ?: source.getString("version"))
         report.set("active-targets", changed.filterNot { it.startsWith("towny-compat/") }.sorted())
         report.set("preserved.raw-config", "config.yml")
+        report.set("preserved.raw-files", changed.filter { it.startsWith("towny-compat/") }.sorted())
         report.set("preserved.keys", flattenKeys(source).sorted())
         report.set("chat.enabled", false)
         report.set("chat.note", "ChatConfig.yml and Channels.yml are copied when present, but chat behavior is intentionally not enabled.")

@@ -8,6 +8,7 @@ class TowniaPlayer {
     var townUuid: UUID?
     var rank: TownRank
     var lastSeen: Long
+    var registeredAt: Long = 0L
     var preferredLang: String?
     var friends: MutableList<String?>? = ArrayList<String?>()
 
@@ -30,6 +31,7 @@ class TowniaPlayer {
         this.townUuid = townUuid
         this.rank = rank
         this.lastSeen = lastSeen
+        this.registeredAt = lastSeen
         this.preferredLang = preferredLang
     }
 
@@ -47,6 +49,7 @@ class TowniaPlayer {
         this.townUuid = townUuid
         this.rank = rank
         this.lastSeen = lastSeen
+        this.registeredAt = lastSeen
         this.preferredLang = preferredLang
         if (friends != null) this.friends = friends
     }

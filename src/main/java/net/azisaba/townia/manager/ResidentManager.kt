@@ -84,6 +84,17 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     fun getOrCreate(uuid: UUID, name: String): TowniaPlayer {
         val existing: TowniaPlayer? = cache[uuid]
         if (existing != null) {
+            // A Towny upgrade can leave its data on an old UUID while this
+            // server already created a blank record for the player's current
+            // Minecraft UUID. Merge that legacy record instead of returning
+            // the blank one and losing the migrated town membership.
+            val legacyUuid = findLegacyUuid(name, uuid)
+            if (legacyUuid != null && legacyUuid != uuid) {
+                val legacy = cache[legacyUuid]
+                if (legacy != null) {
+                    mergeLegacyResident(legacyUuid, legacy, existing)
+                }
+            }
             if (!existing.name.equals(name)) {
                 nameIndex.remove(existing.name!!.lowercase(Locale.getDefault()))
                 existing.name = name
@@ -93,7 +104,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             return existing
         }
 
-        val oldUuid = nameIndex[name.lowercase(Locale.getDefault())]
+        val oldUuid = findLegacyUuid(name, uuid)
         if (oldUuid != null && oldUuid != uuid) {
             val oldExisting = cache[oldUuid]
             if (oldExisting != null) {
@@ -162,6 +173,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             System.currentTimeMillis(),
             null
         )
+        newPlayer.registeredAt = System.currentTimeMillis()
         newPlayer.defaultPermsFriend = plugin.towniaConfig.defaultResidentPermsFriend
         newPlayer.defaultPermsAlly = plugin.towniaConfig.defaultResidentPermsAlly
         newPlayer.defaultPermsOutsider = plugin.towniaConfig.defaultResidentPermsOutsider
@@ -170,6 +182,77 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         newPlayer.uuid?.let { nameIndex.put(newPlayer.name!!.lowercase(Locale.getDefault()), it) }
         persist(newPlayer)
         return newPlayer
+    }
+
+    private fun mergeLegacyResident(legacyUuid: UUID, legacy: TowniaPlayer, current: TowniaPlayer) {
+        plugin.logger.info("Merging legacy UUID $legacyUuid into current UUID ${current.uuid} for ${current.name}")
+        if (current.townUuid == null && legacy.townUuid != null) {
+            current.townUuid = legacy.townUuid
+            current.rank = legacy.rank
+        }
+        if (current.jailedTownUuid == null && legacy.jailedTownUuid != null) {
+            current.jailedTownUuid = legacy.jailedTownUuid
+            current.jailReleaseAt = legacy.jailReleaseAt
+            current.jailBail = legacy.jailBail
+        }
+        current.registeredAt = listOf(current.registeredAt, legacy.registeredAt)
+            .filter { it > 0L }
+            .minOrNull() ?: current.registeredAt
+        legacy.friends?.filterNotNull()?.forEach { friend ->
+            if (current.friends?.contains(friend) != true) current.friends?.add(friend)
+        }
+
+        cache.remove(legacyUuid)
+        current.uuid?.let { nameIndex[current.name!!.lowercase(Locale.getDefault())] = it }
+        updateGovernmentReferences(legacyUuid, current.uuid!!)
+
+        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+            try {
+                // Save the current UUID first; the old row can then be safely removed.
+                db.saveResident(current)
+                plugin.databaseManager.connection.use { conn ->
+                    conn.prepareStatement("UPDATE towns SET mayor_uuid=? WHERE mayor_uuid=?").use { stmt ->
+                        stmt.setString(1, current.uuid.toString())
+                        stmt.setString(2, legacyUuid.toString())
+                        stmt.executeUpdate()
+                    }
+                    conn.prepareStatement("UPDATE nations SET leader_uuid=? WHERE leader_uuid=?").use { stmt ->
+                        stmt.setString(1, current.uuid.toString())
+                        stmt.setString(2, legacyUuid.toString())
+                        stmt.executeUpdate()
+                    }
+                    conn.prepareStatement("UPDATE plots SET owner_uuid=? WHERE owner_uuid=?").use { stmt ->
+                        stmt.setString(1, current.uuid.toString())
+                        stmt.setString(2, legacyUuid.toString())
+                        stmt.executeUpdate()
+                    }
+                    conn.prepareStatement("DELETE FROM residents WHERE uuid=?").use { stmt ->
+                        stmt.setString(1, legacyUuid.toString())
+                        stmt.executeUpdate()
+                    }
+                }
+            } catch (e: Exception) {
+                plugin.logger.log(Level.SEVERE, "Failed to merge legacy resident UUID for ${current.name}", e)
+            }
+        })
+    }
+
+    private fun findLegacyUuid(name: String, currentUuid: UUID): UUID? {
+        // Do not rely only on nameIndex: after an interrupted migration both
+        // UUID rows can have the same name, and map iteration order decides
+        // which row nameIndex happens to retain.
+        return cache.entries.firstOrNull { (uuid, resident) ->
+            uuid != currentUuid && resident.name.equals(name, ignoreCase = true) && resident.townUuid != null
+        }?.key ?: nameIndex[name.lowercase(Locale.getDefault())]?.takeIf { it != currentUuid }
+    }
+
+    private fun updateGovernmentReferences(oldUuid: UUID, newUuid: UUID) {
+        plugin.townManager.allTowns.forEach { town ->
+            if (town.mayorUuid == oldUuid) town.mayorUuid = newUuid
+        }
+        plugin.nationManager.allNations.forEach { nation ->
+            if (nation.leaderUuid == oldUuid) nation.leaderUuid = newUuid
+        }
     }
 
     fun setTown(playerUuid: UUID?, townUuid: UUID?, rank: TownRank?) {
