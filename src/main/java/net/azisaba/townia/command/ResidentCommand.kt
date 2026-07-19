@@ -2,6 +2,7 @@ package net.azisaba.townia.command
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Nation
+import net.azisaba.townia.data.PermissionMatrix
 import net.azisaba.townia.data.Town
 import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.manager.NationManager
@@ -330,6 +331,11 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 val options: MutableList<String?> = ArrayList()
                 options.add("list")
                 options.add("friend")
+                options.add("set")
+                options.add("toggle")
+                options.add("spawn")
+                options.add("tax")
+                options.add("jail")
                 for (p in plugin.server.onlinePlayers) {
                     options.add(p.name)
                 }
@@ -339,6 +345,30 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             2 if args[0].equals("friend", ignoreCase = true) -> {
                 val options = mutableListOf<String?>("add", "remove", "list", "clear")
                 StringUtil.copyPartialMatches(args[1], options, completions)
+            }
+
+            2 if args[0].equals("set", ignoreCase = true) -> {
+                StringUtil.copyPartialMatches(args[1], mutableListOf<String?>("perm"), completions)
+            }
+
+            2 if args[0].equals("toggle", ignoreCase = true) -> {
+                StringUtil.copyPartialMatches(
+                    args[1],
+                    mutableListOf<String?>("map", "townclaim", "plotborder", "pvp", "fire", "explosions", "mobs", "reset"),
+                    completions
+                )
+            }
+
+            2 if args[0].equals("jail", ignoreCase = true) -> {
+                StringUtil.copyPartialMatches(args[1], mutableListOf<String?>("paybail"), completions)
+            }
+
+            3 if args[0].equals("set", ignoreCase = true) && args[1].equals("perm", ignoreCase = true) -> {
+                StringUtil.copyPartialMatches(
+                    args[2],
+                    mutableListOf<String?>("friend", "ally", "outsider", "resident", "build", "destroy", "switch", "itemuse", "on", "off", "reset"),
+                    completions
+                )
             }
 
             3 if args[0].equals("friend", ignoreCase = true) && (args[1].equals(
@@ -366,19 +396,154 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
 
 
     private fun handleSetPerm(sender: CommandSender, args: Array<String>?) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val res = residentManager.getOrCreate(player)
+        val parts = args?.drop(2) ?: emptyList()
+        if (parts.isEmpty()) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        if (parts[0].equals("reset", ignoreCase = true)) {
+            applyDefaultPermsToOwnedPlots(res)
+            plugin.messageManager.sendMessage(sender, "resident.perm-applied")
+            return
+        }
+
+        val group = parts.getOrNull(0)?.takeIf { it.equals("friend", true) || it.equals("ally", true) || it.equals("outsider", true) || it.equals("resident", true) }
+        val action = if (group == null) parts.getOrNull(0) else parts.getOrNull(1)
+        val stateText = if (group == null) parts.getOrNull(1) ?: parts.getOrNull(0) else parts.getOrNull(2) ?: parts.getOrNull(1)
+        val state = parseState(stateText)
+        if (state == null) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val groups = if (group == null || group.equals("all", true)) listOf("friend", "ally", "outsider", "resident") else listOf(group.lowercase(Locale.getDefault()))
+        val actions = resolvePermActions(if (stateText == action) null else action)
+        if (actions == null) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        for (g in groups) {
+            var current = when (g) {
+                "friend" -> res.defaultPermsFriend ?: ""
+                "ally" -> res.defaultPermsAlly ?: ""
+                "outsider" -> res.defaultPermsOutsider ?: ""
+                else -> res.defaultPermsResident ?: ""
+            }
+            for (a in actions) current = PermissionMatrix.setPerm(current, a, state)
+            when (g) {
+                "friend" -> res.defaultPermsFriend = current
+                "ally" -> res.defaultPermsAlly = current
+                "outsider" -> res.defaultPermsOutsider = current
+                else -> res.defaultPermsResident = current
+            }
+        }
+        residentManager.saveResident(res)
+        plugin.messageManager.sendMessage(sender, "resident.perm-updated")
     }
 
     private fun handleToggle(sender: CommandSender, args: Array<String>?) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val res = residentManager.getOrCreate(player)
+        if (args == null || args.size < 2) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        when (args[1].lowercase(Locale.getDefault())) {
+            "map" -> {
+                res.isToggleMap = !res.isToggleMap
+                residentManager.saveResident(res)
+                plugin.messageManager.sendMessage(sender, "resident.toggle-set", "setting", "map", "state", stateName(res.isToggleMap))
+            }
+            "townclaim" -> {
+                res.isToggleTownClaim = !res.isToggleTownClaim
+                residentManager.saveResident(res)
+                plugin.messageManager.sendMessage(sender, "resident.toggle-set", "setting", "townclaim", "state", stateName(res.isToggleTownClaim))
+            }
+            "plotborder", "townborder", "constantplotborder" -> {
+                res.isTogglePlotBorder = !res.isTogglePlotBorder
+                residentManager.saveResident(res)
+                plugin.messageManager.sendMessage(sender, "resident.toggle-set", "setting", "plotborder", "state", stateName(res.isTogglePlotBorder))
+            }
+            "pvp", "fire", "explosion", "explosions", "mobs", "mob" -> {
+                toggleOwnedPlots(sender, res, args[1].lowercase(Locale.getDefault()))
+            }
+            "reset" -> {
+                res.isToggleMap = false
+                res.isToggleTownClaim = false
+                res.isTogglePlotBorder = false
+                residentManager.saveResident(res)
+                plugin.messageManager.sendMessage(sender, "resident.toggle-reset")
+            }
+            else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+        }
     }
 
     private fun handleSpawn(sender: CommandSender, args: Array<String>?) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val bed = player.bedSpawnLocation
+        if (bed == null) {
+            plugin.messageManager.sendMessage(sender, "town.spawn-not-set")
+            return
+        }
+        player.teleport(bed)
+        plugin.messageManager.sendMessage(sender, "resident.spawn-teleport")
     }
 
     private fun handleTax(sender: CommandSender, args: Array<String>?) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val res = residentManager.getOrCreate(player)
+        val town = if (res.townUuid != null) townManager.getTown(res.townUuid).orElse(null) else null
+        if (town == null) {
+            plugin.messageManager.sendMessage(sender, "error.not-in-town")
+            return
+        }
+        plugin.messageManager.sendMessage(sender, "resident.tax", "town_tax", town.taxes.toString(), "plot_tax", town.plotTax.toString())
+    }
+
+    private fun parseState(value: String?): Boolean? {
+        return when (value?.lowercase(Locale.getDefault())) {
+            "on", "true", "yes", "allow" -> true
+            "off", "false", "no", "deny" -> false
+            else -> null
+        }
+    }
+
+    private fun resolvePermActions(value: String?): List<Char>? {
+        return when (value?.lowercase(Locale.getDefault())) {
+            null, "all" -> listOf('B', 'D', 'S', 'I')
+            "build" -> listOf('B')
+            "destroy" -> listOf('D')
+            "switch" -> listOf('S')
+            "item", "itemuse" -> listOf('I')
+            else -> null
+        }
+    }
+
+    private fun applyDefaultPermsToOwnedPlots(res: TowniaPlayer) {
+        val uuid = res.uuid ?: return
+        for (plot in plugin.plotManager.getPlotsByOwner(uuid)) {
+            plot.permsResident = res.defaultPermsResident
+            plot.permsAlly = res.defaultPermsAlly
+            plot.permsOutsider = res.defaultPermsOutsider
+            plugin.databaseManager.savePlot(plot)
+        }
+    }
+
+    private fun toggleOwnedPlots(sender: CommandSender, res: TowniaPlayer, toggle: String) {
+        val uuid = res.uuid ?: return
+        var count = 0
+        for (plot in plugin.plotManager.getPlotsByOwner(uuid)) {
+            when (toggle) {
+                "pvp" -> plot.setPvp(!plot.hasPvp())
+                "fire" -> plot.setFire(!plot.hasFire())
+                "explosion", "explosions" -> plot.setExplosions(!plot.hasExplosions())
+                "mobs", "mob" -> plot.setMobs(!plot.hasMobs())
+            }
+            plugin.databaseManager.savePlot(plot)
+            count++
+        }
+        plugin.messageManager.sendMessage(sender, "resident.plots-updated", "count", count.toString())
     }
 
     private fun handleJail(sender: CommandSender, args: Array<String>?) {
@@ -389,7 +554,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             return
         }
         if (!res.isJailed || res.jailBail <= 0.0) {
-            sender.sendMessage("You do not have bail to pay.")
+            plugin.messageManager.sendMessage(sender, "jail.no-bail")
             return
         }
         if (!plugin.hasEconomy()) {
@@ -405,8 +570,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         res.jailReleaseAt = 0L
         res.jailBail = 0.0
         residentManager.saveResident(res)
-        sender.sendMessage("Bail paid. You have been released from jail.")
+        plugin.messageManager.sendMessage(sender, "jail.bail-paid")
     }
+
+    private fun stateName(value: Boolean): String = if (value) "ON" else "OFF"
 
     companion object {
         private val DATE_FMT: DateTimeFormatter =

@@ -105,10 +105,18 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
             UUID.randomUUID(), name, mayorUuid, null,
             0.0, plugin.towniaConfig.defaultClaimLimit, 0,
             false, System.currentTimeMillis(),
-            null, plugin.towniaConfig.defaultTownTax, 0.0, pvp = false, mobs = false, explosions = false, fire = false,
+            null, plugin.towniaConfig.defaultTownTax, 0.0,
+            pvp = plugin.towniaConfig.defaultTownPvp,
+            mobs = plugin.towniaConfig.defaultTownMobs,
+            explosions = plugin.towniaConfig.defaultTownExplosions,
+            fire = plugin.towniaConfig.defaultTownFire,
             spawnWorld = null, spawnX = 0.0, spawnY = 0.0, spawnZ = 0.0, spawnYaw = 0.0f, spawnPitch = 0.0f
         )
         town.dailyUpkeep = plugin.towniaConfig.townUpkeep
+        town.permsResident = plugin.towniaConfig.defaultTownPermsResident
+        town.permsNation = plugin.towniaConfig.defaultTownPermsNation
+        town.permsAlly = plugin.towniaConfig.defaultTownPermsAlly
+        town.permsOutsider = plugin.towniaConfig.defaultTownPermsOutsider
         persist(town)
         residentManager.setTown(mayorUuid, town.id, TownRank.MAYOR)
         return town

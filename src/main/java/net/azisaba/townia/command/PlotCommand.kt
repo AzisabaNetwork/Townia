@@ -274,9 +274,9 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             }
         }
         if (forSale) {
-            player.sendMessage("Set $changed plots for sale at ${formatMoney(price)}. Failed: $failed.")
+            plugin.messageManager.sendMessage(player, "plot.range-for-sale", "count", changed.toString(), "price", formatMoney(price), "failed", failed.toString())
         } else {
-            player.sendMessage("Removed sale status from $changed plots. Failed: $failed.")
+            plugin.messageManager.sendMessage(player, "plot.range-not-for-sale", "count", changed.toString(), "failed", failed.toString())
         }
     }
 
@@ -721,15 +721,97 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun handleClaimAuto(player: Player?) {
-        plugin.messageManager.sendMessage(player!!, "error.not-implemented")
+        if (player == null) return
+        if (!plugin.hasEconomy()) {
+            plugin.messageManager.sendMessage(player, "error.no-vault")
+            return
+        }
+        val res = residentManager.getResident(player.uniqueId).orElse(null)
+        if (res == null || res.townUuid == null) {
+            plugin.messageManager.sendMessage(player, "error.not-in-town")
+            return
+        }
+        var bought = 0
+        var skipped = 0
+        for (chunk in collectRangeChunks(player.location.chunk, "circle", 3)) {
+            val plot = plotManager.getPlot(chunk).orElse(null)
+            if (plot == null || !plot.isForSale || plot.ownerUuid != null || plot.townUuid != res.townUuid) {
+                skipped++
+                continue
+            }
+            val price = plot.price
+            if (!plugin.economy!!.has(player, price)) {
+                skipped++
+                continue
+            }
+            val response = plugin.economy!!.withdrawPlayer(player, price)
+            if (!response.transactionSuccess()) {
+                skipped++
+                continue
+            }
+            try {
+                townManager.addBalance(plot.townUuid, price)
+                plotManager.transferOwnership(plot.worldName, plot.chunkX, plot.chunkZ, player.uniqueId)
+                bought++
+            } catch (_: Exception) {
+                plugin.economy!!.depositPlayer(player, price)
+                skipped++
+            }
+        }
+        plugin.messageManager.sendMessage(player, "plot.auto-claimed", "claimed", bought.toString(), "skipped", skipped.toString())
     }
 
     private fun handleClear(player: Player?) {
-        plugin.messageManager.sendMessage(player!!, "error.not-implemented")
+        if (player == null) return
+        val plot = plotManager.getPlot(player.location.chunk).orElse(null)
+        if (plot == null) {
+            plugin.messageManager.sendMessage(player, "plot.no-plot-here")
+            return
+        }
+        requireMayorOrOwner(player, plot) ?: return
+        plot.name = null
+        plot.plotType = net.azisaba.townia.data.PlotType.DEFAULT
+        plot.setPvp(false)
+        plot.setMobs(false)
+        plot.setExplosions(false)
+        plot.setFire(false)
+        plot.permsResident = null
+        plot.permsAlly = null
+        plot.permsOutsider = null
+        plot.permsNation = null
+        try {
+            plugin.databaseManager.savePlot(plot)
+            plugin.messageManager.sendMessage(player, "plot.reset")
+        } catch (_: SQLException) {
+            plugin.messageManager.sendMessage(player, "error.database")
+        }
     }
 
     private fun handleEvict(player: Player?) {
-        plugin.messageManager.sendMessage(player!!, "error.not-implemented")
+        if (player == null) return
+        val plot = plotManager.getPlot(player.location.chunk).orElse(null)
+        if (plot == null) {
+            plugin.messageManager.sendMessage(player, "plot.no-plot-here")
+            return
+        }
+        val res = residentManager.getResident(player.uniqueId).orElse(null)
+        if (res == null || res.townUuid != plot.townUuid || !res.isAssistantOrHigher) {
+            plugin.messageManager.sendMessage(player, "error.no-permission")
+            return
+        }
+        if (plot.ownerUuid == null) {
+            plugin.messageManager.sendMessage(player, "plot.already-town-owned")
+            return
+        }
+        plot.ownerUuid = null
+        plot.isForSale = false
+        plot.price = 0.0
+        try {
+            plugin.databaseManager.savePlot(plot)
+            plugin.messageManager.sendMessage(player, "plot.evicted")
+        } catch (_: SQLException) {
+            plugin.messageManager.sendMessage(player, "error.database")
+        }
     }
 
     companion object {

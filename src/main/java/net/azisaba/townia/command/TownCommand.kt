@@ -16,6 +16,7 @@ import net.azisaba.townia.manager.NationManager
 import net.azisaba.townia.manager.PlotManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
+import net.azisaba.townia.ui.TownMenuUi
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.Bukkit
@@ -177,6 +178,11 @@ class TownCommand
                 this.handleMap(sender)
             }
 
+            "menu", "gui" -> {
+                val player = this.requirePlayer(sender) ?: return true
+                TownMenuUi.open(plugin, player)
+            }
+
             "?", "help" -> {
                 this.handleHelp(sender)
             }
@@ -309,7 +315,7 @@ class TownCommand
                             failed++
                         }
                     }
-                    sender.sendMessage("Claimed $claimed chunks. Failed: $failed.")
+                    plugin.messageManager.sendMessage(sender, "town.claimed-range", "count", claimed.toString(), "failed", failed.toString())
                     return
                 }
                 this.plotManager.claimChunk(res.townUuid!!, player.location.chunk)
@@ -368,7 +374,7 @@ class TownCommand
                         failed++
                     }
                 }
-                sender.sendMessage("Unclaimed $unclaimed chunks. Failed: $failed.")
+                plugin.messageManager.sendMessage(sender, "town.unclaimed-range", "count", unclaimed.toString(), "failed", failed.toString())
                 return
             }
             val chunk = player.location.chunk
@@ -607,14 +613,10 @@ class TownCommand
         this.plugin.messageManager
             .sendMessageWithoutPrefix(sender, "town.reslist", "town", (targetTown.name ?: ""), "count", residents.size.toString())
         if (!onlineNames.isEmpty()) {
-            player.sendMessage(
-                MiniMessage.miniMessage().deserialize(("Online: " + java.lang.String.join(", " as CharSequence, onlineNames)))
-            )
+            this.plugin.messageManager.sendMessageWithoutPrefix(player, "town.reslist-online", "players", java.lang.String.join(", " as CharSequence, onlineNames))
         }
         if (!offlineNames.isEmpty()) {
-            player.sendMessage(
-                MiniMessage.miniMessage().deserialize(("Offline: " + java.lang.String.join(", " as CharSequence, offlineNames)))
-            )
+            this.plugin.messageManager.sendMessageWithoutPrefix(player, "town.reslist-offline", "players", java.lang.String.join(", " as CharSequence, offlineNames))
         }
     }
 
@@ -772,6 +774,10 @@ class TownCommand
                 this.plugin.messageManager.sendMessage(sender, "error.no-permission")
                 return
             }
+            if (town.outlaws.contains(player.uniqueId) && !isMember && !player.hasPermission("townia.admin")) {
+                this.plugin.messageManager.sendMessage(sender, "outlaw.entry-denied", "town", town.name ?: "Unknown")
+                return
+            }
         } else {
             val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
             val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
@@ -844,7 +850,7 @@ class TownCommand
                 val loc = player.location
                 town.setJail(loc.world.name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch)
                 this.townManager.saveTown(town)
-                sender.sendMessage("Town jail set.")
+                this.plugin.messageManager.sendMessage(sender, "jail.set")
             }
 
             "homeblock" -> {
@@ -1371,12 +1377,20 @@ class TownCommand
         val limit = parseHistoryLimit(args)
         try {
             val entries = this.plugin.databaseManager.getBankTransactions("TOWN", res.townUuid!!, limit)
-            sender.sendMessage("Town bank history (${entries.size}):")
+            plugin.messageManager.sendMessage(sender, "bank.town-history-header", "count", entries.size.toString())
             for (entry in entries) {
                 val sign = if (entry.type.name == "DEPOSIT") "+" else "-"
-                sender.sendMessage(
-                    "${formatHistoryTime(entry.createdAt)} $sign${formatMoney(entry.amount)} " +
-                            "(${entry.reason})"
+                plugin.messageManager.sendMessageWithoutPrefix(
+                    sender,
+                    "bank.history-entry",
+                    "time",
+                    formatHistoryTime(entry.createdAt),
+                    "sign",
+                    sign,
+                    "amount",
+                    formatMoney(entry.amount) ?: "0",
+                    "reason",
+                    entry.reason
                 )
             }
         } catch (e: SQLException) {
@@ -1659,7 +1673,7 @@ class TownCommand
                     residents.toString()
                 )
             }
-            sender.sendMessage("\u00A78--- \u00A76Page \u00A7e$page\u00A78/\u00A7e$maxPage \u00A78---")
+            this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.list-page", "page", page.toString(), "max", maxPage.toString())
         }
     }
 
@@ -1707,29 +1721,28 @@ class TownCommand
         val worldName = center.world.name
         val resOpt: TowniaPlayer = this.residentManager.getResident(player.getUniqueId()).orElse(null)
         val playerTownUuid: UUID? = resOpt.townUuid
-        player.sendMessage("\u00a78================ \u00a76Townia Map \u00a78================")
+        this.plugin.messageManager.sendMessageWithoutPrefix(player, "townia.map-header")
         for (z in cz - 5..cz + 5) {
             val row = StringBuilder()
             for (x in cx - 15..cx + 15) {
                 val symbol: String
                 val plot: Plot? = this.plugin.plotManager.getPlot(worldName, x, z).orElse(null)
                 symbol = if (plot == null) "-" else "+"
-                val string = symbol
                 if (x == cx && z == cz) {
-                    row.append("\u00a7e").append(symbol)
+                    row.append("<yellow>").append(symbol)
                     continue
                 }
                 if (plot == null) {
-                    row.append("\u00a77").append(symbol)
+                    row.append("<gray>").append(symbol)
                     continue
                 }
-                if (playerTownUuid != null && plot.townUuid.toString().equals(playerTownUuid)) {
-                    row.append("\u00a7a").append(symbol)
+                if (playerTownUuid != null && plot.townUuid == playerTownUuid) {
+                    row.append("<green>").append(symbol)
                     continue
                 }
-                row.append("\u00a7c").append(symbol)
+                row.append("<red>").append(symbol)
             }
-            player.sendMessage(row.toString())
+            player.sendMessage(MiniMessage.miniMessage().deserialize(row.toString()))
         }
     }
 
@@ -1763,18 +1776,18 @@ class TownCommand
             return
         }
         if (target.townUuid == town.id) {
-            sender.sendMessage("Town residents cannot be outlawed from their own town.")
+            plugin.messageManager.sendMessage(sender, "outlaw.cannot-outlaw-resident")
             return
         }
         try {
             when (args[1].lowercase(Locale.getDefault())) {
                 "add" -> {
                     townManager.addOutlaw(town.id, target.uuid!!)
-                    sender.sendMessage("${target.name} is now outlawed from your town.")
+                    plugin.messageManager.sendMessage(sender, "outlaw.added", "player", target.name ?: "Unknown")
                 }
                 "remove" -> {
                     townManager.removeOutlaw(town.id, target.uuid!!)
-                    sender.sendMessage("${target.name} is no longer outlawed from your town.")
+                    plugin.messageManager.sendMessage(sender, "outlaw.removed", "player", target.name ?: "Unknown")
                 }
                 else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
             }
@@ -1798,7 +1811,7 @@ class TownCommand
         val names = town.outlaws.map { uuid ->
             residentManager.getResident(uuid).map { it.name ?: uuid.toString() }.orElse(uuid.toString())
         }.sorted()
-        sender.sendMessage("Outlaws of ${town.name}: " + if (names.isEmpty()) "None" else names.joinToString(", "))
+        plugin.messageManager.sendMessage(sender, "outlaw.list", "town", town.name ?: "Unknown", "outlaws", if (names.isEmpty()) plugin.messageManager.getPlainMessage(sender, "common.none") else names.joinToString(", "))
     }
 
     private fun handleJail(sender: CommandSender, args: Array<out String>) {
@@ -1810,12 +1823,19 @@ class TownCommand
         }
         val town = townManager.getTown(res.townUuid).orElse(null) ?: return
         if (args.size < 2 || args[1].equals("list", ignoreCase = true)) {
-            sender.sendMessage("Primary jail for ${town.name}: " + if (town.hasJail()) "${town.jailWorld} ${town.jailX.toInt()},${town.jailY.toInt()},${town.jailZ.toInt()}" else "Not set")
-            if (town.jailCells.isNotEmpty()) sender.sendMessage("Cells: " + town.jailCells.joinToString(", ") { "${it.id}:${it.name}" })
+            plugin.messageManager.sendMessage(
+                sender,
+                "jail.primary",
+                "town",
+                town.name ?: "Unknown",
+                "location",
+                if (town.hasJail()) "${town.jailWorld} ${town.jailX.toInt()},${town.jailY.toInt()},${town.jailZ.toInt()}" else plugin.messageManager.getPlainMessage(sender, "common.not-set")
+            )
+            if (town.jailCells.isNotEmpty()) plugin.messageManager.sendMessage(sender, "jail.cells", "cells", town.jailCells.joinToString(", ") { "${it.id}:${it.name}" })
             return
         }
         if (!town.hasJail()) {
-            sender.sendMessage("Set a jail first with /town set jail.")
+            plugin.messageManager.sendMessage(sender, "jail.set-first")
             return
         }
         val target = residentManager.getResidentByName(args[1]).orElse(null)
@@ -1830,7 +1850,7 @@ class TownCommand
         val cellSelector = args.getOrNull(4)
         val cell = cellSelector?.let { findJailCell(town, it) }
         if (cellSelector != null && cell == null) {
-            sender.sendMessage("Jail cell not found.")
+            plugin.messageManager.sendMessage(sender, "jail.cell-not-found")
             return
         }
         val hours = args.getOrNull(2)?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 1.0
@@ -1839,7 +1859,7 @@ class TownCommand
         target.jailBail = args.getOrNull(3)?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
         residentManager.saveResident(target)
         Bukkit.getPlayer(target.uuid!!)?.let { teleportToJail(it, town, cell) }
-        sender.sendMessage("${target.name} has been jailed for $hours hours.")
+        plugin.messageManager.sendMessage(sender, "jail.jailed", "player", target.name ?: "Unknown", "hours", hours.toString())
     }
 
     private fun handleUnjail(sender: CommandSender, args: Array<out String>) {
@@ -1852,11 +1872,11 @@ class TownCommand
         val town = townManager.getTown(res.townUuid).orElse(null) ?: return
         val target = residentManager.getResidentByName(args[1]).orElse(null)
         if (target == null || target.jailedTownUuid != town.id) {
-            sender.sendMessage("That resident is not jailed by your town.")
+            plugin.messageManager.sendMessage(sender, "jail.not-jailed-by-town")
             return
         }
         releaseJail(target)
-        sender.sendMessage("${target.name} has been released from jail.")
+        plugin.messageManager.sendMessage(sender, "jail.released-other", "player", target.name ?: "Unknown")
     }
 
     private fun handleJailCell(sender: CommandSender, args: Array<out String>) {
@@ -1868,8 +1888,25 @@ class TownCommand
         }
         val town = townManager.getTown(res.townUuid).orElse(null) ?: return
         if (args.size < 2 || args[1].equals("list", ignoreCase = true)) {
-            if (town.jailCells.isEmpty()) sender.sendMessage("No jail cells are configured.")
-            else town.jailCells.forEach { sender.sendMessage("${it.id}: ${it.name} at ${it.world} (${it.x.toInt()}, ${it.y.toInt()}, ${it.z.toInt()})") }
+            if (town.jailCells.isEmpty()) plugin.messageManager.sendMessage(sender, "jail.no-cells")
+            else town.jailCells.forEach {
+                plugin.messageManager.sendMessage(
+                    sender,
+                    "jail.cell-entry",
+                    "id",
+                    it.id.toString(),
+                    "name",
+                    it.name,
+                    "world",
+                    it.world,
+                    "x",
+                    it.x.toInt().toString(),
+                    "y",
+                    it.y.toInt().toString(),
+                    "z",
+                    it.z.toInt().toString()
+                )
+            }
             return
         }
         try {
@@ -1878,16 +1915,16 @@ class TownCommand
                     val loc = player.location
                     val name = args.getOrNull(2) ?: "cell-${town.jailCells.size + 1}"
                     townManager.addJailCell(town.id, TowniaJailCell(0, name, loc.world.name, loc.x, loc.y, loc.z, loc.yaw, loc.pitch))
-                    sender.sendMessage("Added jail cell $name.")
+                    plugin.messageManager.sendMessage(sender, "jail.cell-added", "cell", name)
                 }
                 "remove" -> {
                     val cell = args.getOrNull(2)?.let { findJailCell(town, it) }
                     if (cell == null) {
-                        sender.sendMessage("Jail cell not found.")
+                        plugin.messageManager.sendMessage(sender, "jail.cell-not-found")
                         return
                     }
                     townManager.removeJailCell(town.id, cell.id)
-                    sender.sendMessage("Removed jail cell ${cell.name}.")
+                    plugin.messageManager.sendMessage(sender, "jail.cell-removed", "cell", cell.name)
                 }
                 else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
             }
@@ -1988,7 +2025,16 @@ class TownCommand
                     "list",
                     "delete",
                     "toggle",
-                    "outpost"
+                    "outpost",
+                    "menu",
+                    "gui",
+                    "outlaw",
+                    "outlow",
+                    "outlawlist",
+                    "outlowlist",
+                    "jail",
+                    "unjail",
+                    "jailcell"
                 ),
                 completions
             )
@@ -2035,6 +2081,15 @@ class TownCommand
                             "board",
                             "taxes",
                             "plotprice",
+                            "plottax",
+                            "shopprice",
+                            "shoptax",
+                            "embassyprice",
+                            "embassytax",
+                            "tag",
+                            "mayor",
+                            "jail",
+                            "homeblock",
                             "perm"
                         ),
                         completions
@@ -2077,6 +2132,29 @@ class TownCommand
                     StringUtil.copyPartialMatches<ArrayList<String?>?>(
                         args[1],
                         mutableListOf<String?>("list", "tp", "togglepublic"),
+                        completions
+                    )
+                }
+
+                "outlaw", "outlow" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("add", "remove", "list"),
+                        completions
+                    )
+                }
+
+                "jail" -> {
+                    val players = ArrayList<String>()
+                    players.add("list")
+                    for (p in this.plugin.server.onlinePlayers) players.add(p.name)
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(args[1], players, completions)
+                }
+
+                "jailcell" -> {
+                    StringUtil.copyPartialMatches<ArrayList<String?>?>(
+                        args[1],
+                        mutableListOf<String?>("add", "remove", "list"),
                         completions
                     )
                 }

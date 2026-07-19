@@ -2,7 +2,7 @@ package net.azisaba.townia.listener
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Plot
-import net.azisaba.townia.data.Town
+import net.azisaba.townia.manager.ActionBarTask
 import net.azisaba.townia.manager.PlotManager
 import net.azisaba.townia.manager.TownManager
 import org.bukkit.Location
@@ -24,7 +24,7 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         val toX = event.to.blockX shr 4
         val toZ = event.to.blockZ shr 4
 
-        if (fromX == toX && fromZ == toZ) {
+        if (event.from.world.name == event.to.world.name && fromX == toX && fromZ == toZ) {
             return
         }
 
@@ -44,7 +44,7 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
                 resident.jailReleaseAt = 0L
                 resident.jailBail = 0.0
                 plugin.residentManager.saveResident(resident)
-                player.sendMessage("You have been released from jail.")
+                plugin.messageManager.sendMessage(player, "jail.released")
             } else {
                 val toTownIdForJail = if (toPlotOpt.isPresent) toPlotOpt.get().townUuid else null
                 if (toTownIdForJail != resident.jailedTownUuid) {
@@ -54,7 +54,7 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
                     if (jailTown != null && world != null) {
                         player.teleport(Location(world, jailTown.jailX, jailTown.jailY, jailTown.jailZ, jailTown.jailYaw, jailTown.jailPitch))
                     }
-                    player.sendMessage("You cannot leave jail yet.")
+                    plugin.messageManager.sendMessage(player, "jail.cannot-leave")
                     return
                 }
             }
@@ -65,7 +65,7 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
             if (toTown != null && toTown.outlaws.contains(player.uniqueId) && resident.townUuid != toTown.id) {
                 event.isCancelled = true
                 player.teleport(event.from)
-                player.sendMessage("You are outlawed from ${toTown.name}.")
+                plugin.messageManager.sendMessage(player, "outlaw.entry-denied", "town", toTown.name ?: "Unknown")
                 return
             }
         }
@@ -73,31 +73,8 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         val fromTownId = if (fromPlotOpt.isPresent) fromPlotOpt.get().townUuid else null
         val toTownId = if (toPlotOpt.isPresent) toPlotOpt.get().townUuid else null
 
-        if (fromTownId == toTownId) {
-            return
-        }
-
-        if (toPlotOpt.isEmpty()) {
-            net.azisaba.townia.manager.ActionBarTask.sendActionBar(plugin, player)
-        } else {
-            val townOpt: Optional<Town> = townManager.getTown(toPlotOpt.get().townUuid)
-            if (townOpt.isPresent) {
-                val town: Town = townOpt.get()
-                val mayorName: String? = plugin.residentManager.getResident(town.mayorUuid)
-                    .map({ r -> r.name })
-                    .orElse("Unknown")
-                
-                var nationPrefix = ""
-                if (town.nationUuid != null) {
-                    val nation = plugin.nationManager.getNation(town.nationUuid!!).orElse(null)
-                    if (nation != null) {
-                        nationPrefix = "[${nation.name}] "
-                    }
-                }
-
-                val boardMsg = town.board ?: ""
-                net.azisaba.townia.manager.ActionBarTask.sendActionBar(plugin, player)
-            }
+        if (fromTownId != toTownId || fromPlotOpt.orElse(null) != toPlotOpt.orElse(null)) {
+            ActionBarTask.sendActionBar(plugin, player, event.to)
         }
     }
 }

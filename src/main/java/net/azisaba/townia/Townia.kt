@@ -6,6 +6,8 @@ import net.azisaba.townia.database.DatabaseManager
 import net.azisaba.townia.listener.PlayerJoinListener
 import net.azisaba.townia.listener.PlayerMoveListener
 import net.azisaba.townia.listener.PlotProtectionListener
+import net.azisaba.townia.listener.JailCommandListener
+import net.azisaba.townia.listener.TownMenuListener
 import net.azisaba.townia.manager.*
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.command.CommandExecutor
@@ -64,6 +66,8 @@ class  Townia : JavaPlugin() {
         server.pluginManager.registerEvents(PlayerJoinListener(this), this)
         server.pluginManager.registerEvents(PlayerMoveListener(this), this)
         server.pluginManager.registerEvents(PlotProtectionListener(this), this)
+        server.pluginManager.registerEvents(JailCommandListener(this), this)
+        server.pluginManager.registerEvents(TownMenuListener(this), this)
 
         for (p in server.onlinePlayers) {
             residentManager.getOrCreate(p)

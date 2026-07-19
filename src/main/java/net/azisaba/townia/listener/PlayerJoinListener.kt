@@ -8,6 +8,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
+import java.util.UUID
 
 class PlayerJoinListener(private val plugin: Townia) : Listener {
     private val residentManager: ResidentManager = plugin.residentManager
@@ -15,9 +16,11 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.getPlayer()
+        val uuid = player.uniqueId
+        val name = player.name
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
-                val resident = residentManager.getOrCreate(player)
+                val resident = residentManager.getOrCreate(uuid, name)
                 if (resident.jailedTownUuid != null) {
                     if (resident.jailReleaseAt > 0L && resident.jailReleaseAt <= System.currentTimeMillis()) {
                         resident.jailedTownUuid = null
@@ -29,14 +32,17 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
                             val town = plugin.townManager.getTown(resident.jailedTownUuid).orElse(null)
                             val world = if (town?.jailWorld != null) plugin.server.getWorld(town.jailWorld!!) else null
                             if (town != null && world != null) {
-                                player.teleport(Location(world, town.jailX, town.jailY, town.jailZ, town.jailYaw, town.jailPitch))
-                                player.sendMessage("You are still jailed.")
+                                val online = plugin.server.getPlayer(uuid)
+                                if (online != null && online.isOnline) {
+                                    online.teleport(Location(world, town.jailX, town.jailY, town.jailZ, town.jailYaw, town.jailPitch))
+                                    plugin.messageManager.sendMessage(online, "jail.still-jailed")
+                                }
                             }
                         })
                     }
                 }
             } catch (e: Exception) {
-                plugin.logger.severe("Failed to load/create resident for " + player.name + ": " + e.message)
+                plugin.logger.severe("Failed to load/create resident for $name: ${e.message}")
             }
         })
     }
@@ -44,11 +50,13 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
     @EventHandler(priority = EventPriority.NORMAL)
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.getPlayer()
+        val uuid: UUID = player.uniqueId
+        val name = player.name
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
-                residentManager.updateLastSeen(player.uniqueId)
+                residentManager.updateLastSeen(uuid)
             } catch (e: Exception) {
-                plugin.logger.severe("Failed to update last-seen for " + player.name + ": " + e.message)
+                plugin.logger.severe("Failed to update last-seen for $name: ${e.message}")
             }
         })
     }

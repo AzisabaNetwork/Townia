@@ -1,7 +1,7 @@
 # Townia Configuration
 
 # Config version
-version: 3
+version: 4
 
 # Database Configuration
 database:
@@ -149,3 +149,23 @@ wilderness:
   mobs: true
   explosions: true
   fire: true
+
+# Defaults applied to newly created towns.
+town-defaults:
+  pvp: false
+  mobs: false
+  explosions: false
+  fire: false
+  perms:
+    resident: "BDSI"
+    nation: ""
+    ally: ""
+    outsider: ""
+
+# Defaults applied to newly created residents for personally owned plots.
+resident-defaults:
+  perms:
+    friend: ""
+    resident: "BDSI"
+    ally: ""
+    outsider: ""

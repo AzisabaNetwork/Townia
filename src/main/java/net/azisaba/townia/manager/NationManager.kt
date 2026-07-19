@@ -165,6 +165,33 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
         persist(nation)
     }
 
+    @Throws(TowniaException::class)
+    fun renameNation(nationId: UUID?, newName: String) {
+        if (nationExists(newName)) throw TowniaException("nation.already-exists", "{nation}", newName)
+        val nation = requireNation(nationId)
+        nameIndex.remove(nation.name!!.lowercase(Locale.getDefault()))
+        nation.name = newName
+        nation.id?.let { nameIndex[newName.lowercase(Locale.getDefault())] = it }
+        persist(nation)
+    }
+
+    @Throws(TowniaException::class)
+    fun setLeader(nationId: UUID?, leaderUuid: UUID?) {
+        val nation = requireNation(nationId)
+        nation.leaderUuid = leaderUuid
+        persist(nation)
+    }
+
+    @Throws(TowniaException::class)
+    fun setCapital(nationId: UUID?, townId: UUID?) {
+        val nation = requireNation(nationId)
+        val town = townManager.getTown(townId).orElseThrow { TowniaException("error.town-not-found") }
+        if (town.nationUuid != nationId) throw TowniaException("town.not-in-nation")
+        nation.capitalTownUuid = townId
+        nation.leaderUuid = town.mayorUuid
+        persist(nation)
+    }
+
     private fun persist(nation: Nation) {
         nation.id?.let { cache.put(it, nation) }
         nation.id?.let { nameIndex.put(nation.name!!.lowercase(Locale.getDefault()), it) }

@@ -71,6 +71,14 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         return cache.values.stream().filter { p: Plot -> ownerUuid == p.ownerUuid }.count().toInt()
     }
 
+    fun getPlotsByOwner(ownerUuid: UUID): MutableList<Plot> {
+        val list = ArrayList<Plot>()
+        for (plot in cache.values) {
+            if (ownerUuid == plot.ownerUuid) list.add(plot)
+        }
+        return list
+    }
+
 
     @Throws(TowniaException::class)
     fun claimChunk(townId: UUID, chunk: Chunk) {

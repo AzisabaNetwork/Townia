@@ -220,7 +220,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 // Default to data migration if no sub-args provided
                 net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender)
             } else {
-                sender.sendMessage("\u00A7cUsage: /towniaadmin migrate [data | config]")
+                plugin.messageManager.sendMessage(sender, "admin.migrate-usage")
             }
         }
     }

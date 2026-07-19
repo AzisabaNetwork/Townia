@@ -4,19 +4,32 @@ import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.Town
 import org.bukkit.Bukkit
+import org.bukkit.Location
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
 
 class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
     companion object {
         fun sendActionBar(plugin: Townia, player: org.bukkit.entity.Player) {
-            if (!plugin.towniaConfig.isWorldAllowed(player.world.name)) {
+            sendActionBar(plugin, player, player.location)
+        }
+
+        fun sendActionBar(plugin: Townia, player: org.bukkit.entity.Player, location: Location) {
+            if (!plugin.towniaConfig.isWorldAllowed(location.world.name)) {
                 return
             }
 
-            val x = player.location.blockX shr 4
-            val z = player.location.blockZ shr 4
-            val plotOpt: Optional<Plot> = plugin.plotManager.getPlot(player.world.name, x, z)
+            val x = location.blockX shr 4
+            val z = location.blockZ shr 4
+            val plotOpt: Optional<Plot> = plugin.plotManager.getPlot(location.world.name, x, z)
+            val resident = plugin.residentManager.getResident(player.uniqueId).orElse(null)
+            if (resident?.isJailed == true) {
+                val remaining = if (resident.jailReleaseAt > 0L) ((resident.jailReleaseAt - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L) else 0L
+                val minutes = remaining / 60L
+                val seconds = remaining % 60L
+                player.sendActionBar(plugin.messageManager.miniMessage.deserialize(plugin.messageManager.getRawMessage(player, "jail.actionbar", "minutes", minutes.toString(), "seconds", seconds.toString())))
+                return
+            }
 
             if (plotOpt.isEmpty) {
                 // Wilderness
@@ -67,6 +80,14 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                         addedHyphen = true
                     }
 
+                    if (town.outlaws.contains(player.uniqueId)) {
+                        if (!addedHyphen) {
+                            suffix += "<gray>- "
+                            addedHyphen = true
+                        }
+                        suffix += plugin.messageManager.getRawMessage(player, "town.actionbar-outlaw") + " "
+                    }
+
                     if (town.hasHomeBlock() && plot.chunkX == town.homeBlockX && plot.chunkZ == town.homeBlockZ) {
                         if (!addedHyphen) {
                             suffix += "<gray>- "
@@ -87,7 +108,7 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                         addedHyphen = true
                     }
                     
-                    if (plot.hasPvp()) {
+                    if (plot.hasPvp() || town.hasPvp()) {
                         suffix += plugin.messageManager.getRawMessage(player, "town.actionbar-pvp")
                     } else {
                         suffix += plugin.messageManager.getRawMessage(player, "town.actionbar-nopvp")

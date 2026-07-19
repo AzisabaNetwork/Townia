@@ -50,6 +50,30 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var wildernessFire: Boolean = true
         private set
+    var defaultTownPvp: Boolean = false
+        private set
+    var defaultTownMobs: Boolean = false
+        private set
+    var defaultTownExplosions: Boolean = false
+        private set
+    var defaultTownFire: Boolean = false
+        private set
+    var defaultTownPermsResident: String = "BDSI"
+        private set
+    var defaultTownPermsNation: String = ""
+        private set
+    var defaultTownPermsAlly: String = ""
+        private set
+    var defaultTownPermsOutsider: String = ""
+        private set
+    var defaultResidentPermsFriend: String = ""
+        private set
+    var defaultResidentPermsAlly: String = ""
+        private set
+    var defaultResidentPermsOutsider: String = ""
+        private set
+    var defaultResidentPermsResident: String = "BDSI"
+        private set
 
     val claimCost: Double
         get() = plugin.config.getDouble("claim-cost", 0.0)
@@ -104,6 +128,18 @@ class TowniaConfig(private val plugin: Townia) {
         wildernessMobs       = config.getBoolean("wilderness.mobs", true)
         wildernessExplosions = config.getBoolean("wilderness.explosions", true)
         wildernessFire       = config.getBoolean("wilderness.fire", true)
+        defaultTownPvp        = config.getBoolean("town-defaults.pvp", false)
+        defaultTownMobs       = config.getBoolean("town-defaults.mobs", false)
+        defaultTownExplosions = config.getBoolean("town-defaults.explosions", false)
+        defaultTownFire       = config.getBoolean("town-defaults.fire", false)
+        defaultTownPermsResident = config.getString("town-defaults.perms.resident", "BDSI") ?: "BDSI"
+        defaultTownPermsNation = config.getString("town-defaults.perms.nation", "") ?: ""
+        defaultTownPermsAlly = config.getString("town-defaults.perms.ally", "") ?: ""
+        defaultTownPermsOutsider = config.getString("town-defaults.perms.outsider", "") ?: ""
+        defaultResidentPermsFriend = config.getString("resident-defaults.perms.friend", "") ?: ""
+        defaultResidentPermsAlly = config.getString("resident-defaults.perms.ally", "") ?: ""
+        defaultResidentPermsOutsider = config.getString("resident-defaults.perms.outsider", "") ?: ""
+        defaultResidentPermsResident = config.getString("resident-defaults.perms.resident", "BDSI") ?: "BDSI"
 
         // Parse Town Levels
         val tLevels = mutableListOf<TownLevel>()

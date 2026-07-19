@@ -463,12 +463,20 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val limit = parseHistoryLimit(args)
         try {
             val entries = plugin.databaseManager.getBankTransactions("NATION", townOpt.get().nationUuid!!, limit)
-            sender.sendMessage("Nation bank history (${entries.size}):")
+            plugin.messageManager.sendMessage(sender, "bank.nation-history-header", "count", entries.size.toString())
             for (entry in entries) {
                 val sign = if (entry.type.name == "DEPOSIT") "+" else "-"
-                sender.sendMessage(
-                    "${formatHistoryTime(entry.createdAt)} $sign${formatMoney(entry.amount)} " +
-                            "(${entry.reason})"
+                plugin.messageManager.sendMessageWithoutPrefix(
+                    sender,
+                    "bank.history-entry",
+                    "time",
+                    formatHistoryTime(entry.createdAt),
+                    "sign",
+                    sign,
+                    "amount",
+                    formatMoney(entry.amount),
+                    "reason",
+                    entry.reason
                 )
             }
         } catch (e: SQLException) {
@@ -504,13 +512,25 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "board" -> {
                 val board = args.copyOfRange(2, args.size).joinToString(" ")
                 nation.board = board
+                nationManager.saveNation(nation)
                 plugin.messageManager.sendMessage(sender, "nation.board-set", "board", board)
+            }
+
+            "name" -> {
+                val newName = args[2]
+                try {
+                    nationManager.renameNation(nation.id, newName)
+                    plugin.messageManager.sendMessage(sender, "nation.renamed", "nation", newName)
+                } catch (e: TowniaException) {
+                    plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *e.replacements.filterNotNull().toTypedArray())
+                }
             }
 
             "taxes" -> {
                 try {
                     val taxes = args[2].toDouble()
                     nation.taxes = taxes
+                    nationManager.saveNation(nation)
                     plugin.messageManager.sendMessage(sender, "nation.taxes-set", "amount", taxes.toString())
                 } catch (_: NumberFormatException) {
                     plugin.messageManager.sendMessage(sender, "error.invalid-amount")
@@ -518,19 +538,40 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             }
 
             "king" -> {
-                plugin.messageManager.sendMessage(sender, "error.not-implemented")
+                val target = residentManager.getResidentByName(args[2]).orElse(null)
+                if (target == null || target.uuid == null) {
+                    plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
+                    return
+                }
+                val targetTown = if (target.townUuid != null) townManager.getTown(target.townUuid).orElse(null) else null
+                if (targetTown == null || targetTown.nationUuid != nation.id) {
+                    plugin.messageManager.sendMessage(sender, "town.not-in-nation")
+                    return
+                }
+                nationManager.setLeader(nation.id, target.uuid)
+                plugin.messageManager.sendMessage(sender, "nation.leader-set", "player", target.name ?: "Unknown")
             }
 
             "capital" -> {
-                plugin.messageManager.sendMessage(sender, "error.not-implemented")
+                val targetTown = townManager.getTownByName(args[2]).orElse(null)
+                if (targetTown == null) {
+                    plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[2])
+                    return
+                }
+                try {
+                    nationManager.setCapital(nation.id, targetTown.id)
+                    plugin.messageManager.sendMessage(sender, "nation.capital-set", "town", targetTown.name ?: "Unknown")
+                } catch (e: TowniaException) {
+                    plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *e.replacements.filterNotNull().toTypedArray())
+                }
             }
 
             "title" -> {
-                plugin.messageManager.sendMessage(sender, "error.not-implemented")
+                setNationTitle(sender, nation, args, true)
             }
 
             "surname" -> {
-                plugin.messageManager.sendMessage(sender, "error.not-implemented")
+                setNationTitle(sender, nation, args, false)
             }
 
             else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
@@ -895,7 +936,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 args[0],
                 mutableListOf(
                     "new", "invite", "join", "leave", "kick", "deposit", "withdraw",
-                    "bankhistory", "info", "list", "delete"
+                    "bankhistory", "info", "list", "delete", "set", "online", "toggle", "spawn", "setspawn"
                 ),
                 completions
             )
@@ -919,29 +960,103 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                     completions
                 )
 
+                "set" -> StringUtil.copyPartialMatches(
+                    args[1],
+                    mutableListOf("name", "board", "taxes", "king", "capital", "title", "surname"),
+                    completions
+                )
+
+                "toggle" -> StringUtil.copyPartialMatches(
+                    args[1],
+                    mutableListOf("neutral"),
+                    completions
+                )
+
                 "list" -> StringUtil.copyPartialMatches(
                     args[1],
                     mutableListOf("by"),
                     completions
                 )
             }
-        } else if (args.size == 3 && args[0].equals("list", ignoreCase = true) && args[1].equals("by", ignoreCase = true)) {
-            StringUtil.copyPartialMatches(
-                args[2],
-                mutableListOf("name", "towns", "balance"),
-                completions
-            )
+        } else if (args.size == 3) {
+            if (args[0].equals("list", ignoreCase = true) && args[1].equals("by", ignoreCase = true)) {
+                StringUtil.copyPartialMatches(
+                    args[2],
+                    mutableListOf("name", "towns", "balance"),
+                    completions
+                )
+            } else if (args[0].equals("set", ignoreCase = true) && (args[1].equals("king", ignoreCase = true) || args[1].equals("title", ignoreCase = true) || args[1].equals("surname", ignoreCase = true))) {
+                val names = residentManager.allResidents.mapNotNull { it.name }
+                StringUtil.copyPartialMatches(args[2], names, completions)
+            } else if (args[0].equals("set", ignoreCase = true) && args[1].equals("capital", ignoreCase = true)) {
+                val names = townManager.allTowns.mapNotNull { it.name }
+                StringUtil.copyPartialMatches(args[2], names, completions)
+            }
         }
         return completions
     }
 
 
     private fun handleOnline(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val res = requireInTown(sender, player) ?: return
+        val town = townManager.getTown(res.townUuid).orElse(null)
+        if (town == null || town.nationUuid == null) {
+            plugin.messageManager.sendMessage(sender, "nation.not-in-nation")
+            return
+        }
+        val names = ArrayList<String>()
+        for (resident in residentManager.getResidentsByNation(town.nationUuid!!)) {
+            val online = Bukkit.getPlayer(resident.uuid!!)
+            if (online != null && online.isOnline) names.add(online.name)
+        }
+        plugin.messageManager.sendMessage(
+            sender,
+            "nation.online",
+            "count",
+            names.size.toString(),
+            "players",
+            if (names.isEmpty()) plugin.messageManager.getPlainMessage(sender, "common.none") else names.joinToString(", ")
+        )
     }
 
     private fun handleToggle(sender: CommandSender, args: Array<out String>?) {
-        plugin.messageManager.sendMessage(sender, "error.not-implemented")
+        val player = requirePlayer(sender) ?: return
+        val res = requireMayorInTown(sender, player) ?: return
+        if (args == null || args.size < 2) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val town = townManager.getTown(res.townUuid).orElse(null) ?: return
+        val nation = nationManager.getNation(town.nationUuid).orElse(null) ?: return
+        when (args[1].lowercase(Locale.getDefault())) {
+            "neutral" -> {
+                nation.isNeutral = !nation.isNeutral
+                nationManager.saveNation(nation)
+                plugin.messageManager.sendMessage(sender, "nation.neutral-set", "state", if (nation.isNeutral) "ON" else "OFF")
+            }
+            else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+        }
+    }
+
+    private fun setNationTitle(sender: CommandSender, nation: Nation, args: Array<out String>, title: Boolean) {
+        if (args.size < 3) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val target = residentManager.getResidentByName(args[2]).orElse(null)
+        if (target == null || target.uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
+            return
+        }
+        val value = if (args.size >= 4) args.copyOfRange(3, args.size).joinToString(" ") else null
+        if (title) {
+            if (value.isNullOrBlank()) nation.removeTitle(target.uuid) else nation.setTitle(target.uuid, value)
+        } else {
+            if (value.isNullOrBlank()) nation.removeSurname(target.uuid) else nation.setSurname(target.uuid, value)
+        }
+        nationManager.saveNation(nation)
+        plugin.messageManager.sendMessage(sender, "nation.title-set", "player", target.name ?: "Unknown", "kind", if (title) "title" else "surname")
     }
 
     companion object {

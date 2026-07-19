@@ -10,20 +10,7 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.util.StringUtil
-import java.util.*
-import java.util.function.ToIntFunction
-import kotlin.Array
-import kotlin.Boolean
-import kotlin.Comparator
-import kotlin.Double
-import kotlin.Int
-import kotlin.Long
-import kotlin.math.max
-import kotlin.text.StringBuilder
-import kotlin.text.equals
-import kotlin.text.format
-import kotlin.text.lowercase
-import kotlin.unaryMinus
+import java.util.UUID
 
 class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
@@ -32,34 +19,10 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return true
         }
 
-        when (args[0].toString().lowercase()) {
-            "reload" -> {
-                if (!sender.hasPermission("townia.admin.reload")) {
-                    plugin.messageManager.sendMessage(sender, "error.no-permission")
-                    return true
-                }
-                plugin.towniaConfig.reload()
-                plugin.messageManager.loadAllMessages()
-                plugin.messageManager.sendMessage(sender, "admin.reloaded")
-            }
-
-            "info" -> {
-                val version = plugin.getDescription().version
-                val authors = java.lang.String.join(", ", plugin.getDescription().authors)
-                plugin.messageManager.sendMessage(
-                    sender, "admin.help",
-                    "version", version,
-                    "authors", authors
-                )
-            }
-
-            "map" -> {
-                val player = requirePlayer(sender)
-                if (player != null) {
-                    sendMap(player)
-                }
-            }
-
+        when (args[0].lowercase()) {
+            "reload" -> handleReload(sender)
+            "info" -> handleInfo(sender)
+            "map" -> requirePlayer(sender)?.let { sendMap(it) }
             "price" -> handlePrice(sender)
             "time" -> handleTime(sender)
             "top" -> handleTop(sender, args)
@@ -68,10 +31,6 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             else -> sendHelp(sender)
         }
         return true
-    }
-
-    private fun sendHelp(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "townia.help")
     }
 
     override fun onTabComplete(
@@ -84,13 +43,34 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         if (args.size == 1) {
             val options = mutableListOf("map", "price", "time", "top", "?", "info")
             if (sender.hasPermission("townia.admin.reload")) options.add("reload")
-            StringUtil.copyPartialMatches(args[0].toString(), options, completions)
+            if (sender.hasPermission("townia.admin.debug")) options.add("debug")
+            StringUtil.copyPartialMatches(args[0], options, completions)
         } else if (args.size == 2 && args[0].equals("top", ignoreCase = true)) {
-            StringUtil.copyPartialMatches(args[1].toString(), listOf("residents", "land"), completions)
+            StringUtil.copyPartialMatches(args[1], listOf("residents", "land"), completions)
         } else if (args.size == 3 && args[0].equals("top", ignoreCase = true)) {
-            StringUtil.copyPartialMatches(args[2].toString(), listOf("all", "town", "nation", "resident"), completions)
+            StringUtil.copyPartialMatches(args[2], listOf("all", "town", "nation", "resident"), completions)
         }
         return completions
+    }
+
+    private fun handleReload(sender: CommandSender) {
+        if (!sender.hasPermission("townia.admin.reload")) {
+            plugin.messageManager.sendMessage(sender, "error.no-permission")
+            return
+        }
+        plugin.towniaConfig.reload()
+        plugin.messageManager.loadAllMessages()
+        plugin.messageManager.sendMessage(sender, "admin.reloaded")
+    }
+
+    private fun handleInfo(sender: CommandSender) {
+        val version = plugin.description.version
+        val authors = plugin.description.authors.joinToString(", ")
+        plugin.messageManager.sendMessage(sender, "admin.help", "version", version, "authors", authors)
+    }
+
+    private fun sendHelp(sender: CommandSender) {
+        plugin.messageManager.sendMessage(sender, "townia.help")
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {
@@ -102,68 +82,70 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handlePrice(sender: CommandSender) {
-        val townCreate: Double = plugin.towniaConfig.townCreationCost
-        val claimCost: Double = plugin.towniaConfig.claimCost
-        val nationCreate: Double = plugin.towniaConfig.nationCreationCost
-        val townUpkeep: Double = plugin.towniaConfig.townUpkeep
         plugin.messageManager.sendMessage(
-            sender, "townia.price",
-            "town_create", formatMoney(townCreate),
-            "claim", formatMoney(claimCost),
-            "nation_create", formatMoney(nationCreate),
-            "town_upkeep", formatMoney(townUpkeep)
+            sender,
+            "townia.price",
+            "town_create", formatMoney(plugin.towniaConfig.townCreationCost),
+            "claim", formatMoney(plugin.towniaConfig.claimCost),
+            "nation_create", formatMoney(plugin.towniaConfig.nationCreationCost),
+            "town_upkeep", formatMoney(plugin.towniaConfig.townUpkeep)
         )
     }
 
     private fun handleTime(sender: CommandSender) {
-        val nextTick = plugin.nextUpkeepTime
-        val diff = nextTick - System.currentTimeMillis()
-        if (diff <= 0) {
-            plugin.messageManager.sendMessage(sender, "town.time-upkeep", "time", "Now")
+        val diff = plugin.nextUpkeepTime - System.currentTimeMillis()
+        val time = if (diff <= 0) {
+            "Now"
         } else {
             val hours = diff / 3600000L
             val mins = diff % 3600000L / 60000L
-            plugin.messageManager.sendMessage(sender, "town.time-upkeep", "time", String.format("%02d:%02d", hours, mins))
+            "%02d:%02d".format(hours, mins)
         }
+        plugin.messageManager.sendMessage(sender, "town.time-upkeep", "time", time)
     }
 
     private fun handleDebug(sender: CommandSender) {
         val player = requirePlayer(sender) ?: return
         if (!player.hasPermission("townia.admin.debug")) {
-            player.sendMessage("§cYou don't have permission.")
+            plugin.messageManager.sendMessage(player, "error.no-permission")
             return
         }
-        player.sendMessage("§e--- Townia Debug Info ---")
-        player.sendMessage("§eWorld Name: §a${player.world.name}")
-        player.sendMessage("§eIs World Allowed: §a${plugin.towniaConfig.isWorldAllowed(player.world.name)}")
-        
+
+        plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-header")
+        debugEntry(player, "World Name", player.world.name)
+        debugEntry(player, "Is World Allowed", plugin.towniaConfig.isWorldAllowed(player.world.name).toString())
+
         val x = player.location.blockX shr 4
         val z = player.location.blockZ shr 4
         val plotOpt = plugin.plotManager.getPlot(player.world.name, x, z)
-        player.sendMessage("§eChunk: §a$x, $z")
-        player.sendMessage("§ePlot Present: §a${plotOpt.isPresent}")
+        debugEntry(player, "Chunk", "$x, $z")
+        debugEntry(player, "Plot Present", plotOpt.isPresent.toString())
         if (plotOpt.isPresent) {
             val townOpt = plugin.townManager.getTown(plotOpt.get().townUuid)
-            player.sendMessage("§eTown: §a${townOpt.map { it.name }.orElse("Unknown")}")
+            debugEntry(player, "Town", townOpt.map { it.name ?: "Unknown" }.orElse("Unknown"))
         } else {
-            player.sendMessage("§eTown: §aWilderness")
+            debugEntry(player, "Town", plugin.messageManager.getPlainMessage(player, "town.actionbar-wilderness-name"))
         }
-        
+
         try {
             plugin.messageManager.sendActionBar(player, "town.actionbar-wilderness")
-            player.sendMessage("§eSent ActionBar test successfully.")
+            plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-actionbar-ok")
         } catch (e: Exception) {
-            player.sendMessage("§cActionBar error: ${e.message}")
+            plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-actionbar-error", "error", e.message ?: "Unknown")
             e.printStackTrace()
         }
-        
+
         try {
             plugin.messageManager.sendTitle(player, "town.title-wilderness-main", "town.title-wilderness-sub")
-            player.sendMessage("§eSent Title test successfully.")
+            plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-title-ok")
         } catch (e: Exception) {
-            player.sendMessage("§cTitle error: ${e.message}")
+            plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-title-error", "error", e.message ?: "Unknown")
             e.printStackTrace()
         }
+    }
+
+    private fun debugEntry(player: Player, key: String, value: String) {
+        plugin.messageManager.sendMessageWithoutPrefix(player, "townia.debug-entry", "key", key, "value", value)
     }
 
     private fun handleTop(sender: CommandSender, args: Array<out String>) {
@@ -171,189 +153,140 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
-        val category = args[1].toString().lowercase()
-        val scope = args[2].toString().lowercase()
 
-        when (category) {
-            "residents" -> handleTopResidents(sender, scope)
-            "land", "lands" -> handleTopLand(sender, scope)
+        when (args[1].lowercase()) {
+            "residents" -> handleTopResidents(sender, args[2].lowercase())
+            "land", "lands" -> handleTopLand(sender, args[2].lowercase())
             else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
         }
     }
 
-    private fun handleTopResidents(sender: CommandSender, scope: kotlin.String) {
-        val towns: MutableList<Town> = plugin.townManager.allTowns
-        val nations: MutableList<Nation> = plugin.nationManager.allNations
-
+    private fun handleTopResidents(sender: CommandSender, scope: String) {
         when (scope) {
-            "all" -> {
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", "住民数 (全佁E")
-                towns.stream()
-                    .sorted(
-                        Comparator.comparingInt(
-                            ToIntFunction { t: Town? ->
-                                -plugin.residentManager.getResidentsByTown(t!!.id!!).size
-                            })
-                    )
-                    .limit(10)
-                    .forEach { t: Town? ->
-                        val cnt: Int = plugin.residentManager.getResidentsByTown(t!!.id!!).size
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-town",
-                            "name", t.name!!, "count", cnt.toString()
-                        )
-                    }
+            "all", "town" -> {
+                val labelKey = if (scope == "all") "townia.top-label-residents-all" else "townia.top-label-residents-town"
+                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", plugin.messageManager.getPlainMessage(sender, labelKey))
+                plugin.townManager.allTowns
+                    .sortedByDescending { plugin.residentManager.getResidentsByTown(it.id!!).size }
+                    .take(10)
+                    .forEachIndexed { index, town -> sendTownTopEntry(sender, index + 1, town) }
             }
-
-            "town" -> {
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", "住民数 (町)")
-                towns.stream()
-                    .sorted(
-                        Comparator.comparingInt(
-                            ToIntFunction { t: Town? ->
-                                -plugin.residentManager.getResidentsByTown(t!!.id!!).size
-                            })
-                    )
-                    .limit(10)
-                    .forEach { t: Town? ->
-                        val cnt: Int = plugin.residentManager.getResidentsByTown(t!!.id!!).size
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-town",
-                            "name", t.name!!, "count", cnt.toString()
-                        )
-                    }
-            }
-
             "nation" -> {
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", "住民数 (国)")
-                nations.stream()
-                    .sorted(Comparator.comparingInt(ToIntFunction { n: Nation? ->
-                        var total = 0
-                        for (t in plugin.townManager.getTownsByNation(n!!.id!!)) {
-                            total += plugin.residentManager.getResidentsByTown(t.id!!).size
-                        }
-                        -total
-                    }))
-                    .limit(10)
-                    .forEach { n: Nation? ->
-                        var total = 0
-                        for (t in plugin.townManager.getTownsByNation(n!!.id!!)) {
-                            total += plugin.residentManager.getResidentsByTown(t.id!!).size
-                        }
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-nation",
-                            "name", n.name!!, "count", total.toString()
-                        )
-                    }
+                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", plugin.messageManager.getPlainMessage(sender, "townia.top-label-residents-nation"))
+                plugin.nationManager.allNations
+                    .sortedByDescending { nationResidentCount(it) }
+                    .take(10)
+                    .forEachIndexed { index, nation -> sendNationTopEntry(sender, index + 1, nation) }
             }
-
             else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
         }
     }
 
     private fun handleTopLand(sender: CommandSender, scope: String) {
-        val towns: MutableList<Town> = plugin.townManager.allTowns
-        val nations: MutableList<Nation> = plugin.nationManager.allNations
-
         when (scope) {
             "all", "town" -> {
-                val label = if (scope == "all") "土地の所有数 (全佁E" else "土地の所有数 (町)"
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", label)
-                towns.stream().filter { it != null }.map { it!! }
-                    .sorted(
-                        Comparator.comparingInt { t ->
-                            -plugin.plotManager.countPlotsByTown(t.id!!)
-                        }
-                    )
-                    .limit(10)
-                    .forEach { t ->
-                        val cnt: Int = plugin.plotManager.countPlotsByTown(t.id!!)
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-town",
-                            "name", t.name!!, "count", cnt.toString()
-                        )
-                    }
+                val labelKey = if (scope == "all") "townia.top-label-land-all" else "townia.top-label-land-town"
+                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", plugin.messageManager.getPlainMessage(sender, labelKey))
+                plugin.townManager.allTowns
+                    .sortedByDescending { plugin.plotManager.countPlotsByTown(it.id!!) }
+                    .take(10)
+                    .forEachIndexed { index, town -> sendTownTopEntry(sender, index + 1, town) }
             }
-
             "nation" -> {
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", "土地の所有数 (国)")
-                nations.stream().filter { it != null }.map { it!! }
-                    .sorted(Comparator.comparingInt { n ->
-                        var total = 0
-                        for (t in plugin.townManager.getTownsByNation(n.id!!)) {
-                            total += plugin.plotManager.countPlotsByTown(t.id!!)
-                        }
-                        -total
-                    })
-                    .limit(10)
-                    .forEach { n ->
-                        var total = 0
-                        for (t in plugin.townManager.getTownsByNation(n.id!!)) {
-                            total += plugin.plotManager.countPlotsByTown(t.id!!)
-                        }
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-nation",
-                            "name", n.name!!, "count", total.toString()
-                        )
-                    }
+                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", plugin.messageManager.getPlainMessage(sender, "townia.top-label-land-nation"))
+                plugin.nationManager.allNations
+                    .sortedByDescending { nationPlotCount(it) }
+                    .take(10)
+                    .forEachIndexed { index, nation -> sendNationTopEntry(sender, index + 1, nation) }
             }
-
             "resident" -> {
-                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", "土地の所有数 (住人)")
-                plugin.residentManager.allResidents.stream().filter { it != null }.map { it!! }
-                    .sorted(Comparator.comparingInt { r ->
-                        -plugin.plotManager.countPlotsByOwner(r.uuid!!)
-                    })
-                    .limit(10)
-                    .forEach { r ->
-                        val cnt: Int = plugin.plotManager.countPlotsByOwner(r.uuid!!)
-                        plugin.messageManager.sendMessage(
-                            sender, "townia.top-entry-resident",
-                            "name", r.name!!, "count", cnt.toString()
-                        )
-                    }
+                plugin.messageManager.sendMessage(sender, "townia.top-header", "type", plugin.messageManager.getPlainMessage(sender, "townia.top-label-land-resident"))
+                plugin.residentManager.allResidents
+                    .sortedByDescending { plugin.plotManager.countPlotsByOwner(it.uuid!!) }
+                    .take(10)
+                    .forEachIndexed { index, resident -> sendResidentTopEntry(sender, index + 1, resident) }
             }
-
             else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
         }
     }
 
-    protected fun formatMoney(amount: Double): String {
+    private fun sendTownTopEntry(sender: CommandSender, rank: Int, town: Town) {
+        plugin.messageManager.sendMessage(
+            sender,
+            "townia.top-entry-town",
+            "rank", rank.toString(),
+            "town", town.name ?: "Unknown",
+            "name", town.name ?: "Unknown",
+            "claims", plugin.plotManager.countPlotsByTown(town.id!!).toString(),
+            "residents", plugin.residentManager.getResidentsByTown(town.id!!).size.toString(),
+            "count", plugin.residentManager.getResidentsByTown(town.id!!).size.toString()
+        )
+    }
+
+    private fun sendNationTopEntry(sender: CommandSender, rank: Int, nation: Nation) {
+        plugin.messageManager.sendMessage(
+            sender,
+            "townia.top-entry-nation",
+            "rank", rank.toString(),
+            "nation", nation.name ?: "Unknown",
+            "name", nation.name ?: "Unknown",
+            "claims", nationPlotCount(nation).toString(),
+            "towns", plugin.townManager.getTownsByNation(nation.id!!).size.toString(),
+            "count", nationResidentCount(nation).toString()
+        )
+    }
+
+    private fun sendResidentTopEntry(sender: CommandSender, rank: Int, resident: TowniaPlayer) {
+        val claims = plugin.plotManager.countPlotsByOwner(resident.uuid!!)
+        plugin.messageManager.sendMessage(
+            sender,
+            "townia.top-entry-resident",
+            "rank", rank.toString(),
+            "player", resident.name ?: "Unknown",
+            "name", resident.name ?: "Unknown",
+            "claims", claims.toString(),
+            "balance", claims.toString(),
+            "count", claims.toString()
+        )
+    }
+
+    private fun nationResidentCount(nation: Nation): Int {
+        return plugin.townManager.getTownsByNation(nation.id!!).sumOf { town ->
+            plugin.residentManager.getResidentsByTown(town.id!!).size
+        }
+    }
+
+    private fun nationPlotCount(nation: Nation): Int {
+        return plugin.townManager.getTownsByNation(nation.id!!).sumOf { town ->
+            plugin.plotManager.countPlotsByTown(town.id!!)
+        }
+    }
+
+    private fun formatMoney(amount: Double): String {
         if (plugin.hasEconomy()) {
             return plugin.economy!!.format(amount).replace("[^\\d.,-]".toRegex(), "")
         }
-        return String.format("%.2f", amount)
+        return "%.2f".format(amount)
     }
-
 
     private fun sendMap(player: Player) {
         val center = player.location.chunk
-        val cx = center.x
-        val cz = center.z
-        val worldName = center.world.name
+        val playerTownUuid: UUID? = plugin.residentManager.getResident(player.uniqueId).orElse(null)?.townUuid
 
-        val resOpt: TowniaPlayer? =
-            plugin.residentManager.getResident(player.uniqueId).orElse(null)
-        val playerTownUuid: UUID? = resOpt?.townUuid
-
-        player.sendMessage("§8================ §6Townia Map §8================")
-        for (z in cz - 5..cz + 5) {
+        plugin.messageManager.sendMessageWithoutPrefix(player, "townia.map-header")
+        for (z in center.z - 5..center.z + 5) {
             val row = StringBuilder()
-            for (x in cx - 15..cx + 15) {
-                val plot: net.azisaba.townia.data.Plot? = plugin.plotManager.getPlot(worldName, x, z).orElse(null)
+            for (x in center.x - 15..center.x + 15) {
+                val plot = plugin.plotManager.getPlot(center.world.name, x, z).orElse(null)
                 val symbol = if (plot == null) "-" else "+"
-
-                if (x == cx && z == cz) {
-                    row.append("§e").append(symbol)
-                } else if (plot == null) {
-                    row.append("§7").append(symbol)
-                } else if (playerTownUuid != null && plot.townUuid == playerTownUuid) {
-                    row.append("§a").append(symbol)
-                } else {
-                    row.append("§c").append(symbol)
+                when {
+                    x == center.x && z == center.z -> row.append("<yellow>").append(symbol)
+                    plot == null -> row.append("<gray>").append(symbol)
+                    playerTownUuid != null && plot.townUuid == playerTownUuid -> row.append("<green>").append(symbol)
+                    else -> row.append("<red>").append(symbol)
                 }
             }
-            player.sendMessage(row.toString())
+            player.sendMessage(plugin.messageManager.miniMessage.deserialize(row.toString()))
         }
     }
 }

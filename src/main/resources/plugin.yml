@@ -15,6 +15,8 @@ commands:
   townia:
     description: Main command for Townia
     usage: /townia <help|reload|info|map|price|time|top>
+    aliases:
+      - towny
   townconfig:
     description: Town configuration command (mayor only)
     usage: /townconfig <allowInvisibility|allowSit|allowPetPickup|allowPassenger> <true|false>
@@ -27,6 +29,8 @@ commands:
   plot:
     description: Plot command
     usage: /plot <subcommand>
+    aliases:
+      - plotclaim
   resident:
     description: Resident command
     usage: /resident [player]
@@ -42,6 +46,7 @@ commands:
     usage: /towniaadmin <subcommand>
     aliases:
       - ta
+      - townyadmin
   towniaworld:
     description: TowniaWorld command
     usage: /towniaworld <subcommand>
@@ -84,6 +89,9 @@ permissions:
       townia.town.spawn: true
       townia.town.rank: true
       townia.town.delete: true
+      townia.town.outlaw: true
+      townia.town.jail: true
+      townia.town.jailcell: true
   townia.town.create:
     description: Create a new town
     default: true
@@ -135,6 +143,15 @@ permissions:
   townia.town.delete:
     description: Delete the town
     default: true
+  townia.town.outlaw:
+    description: Manage town outlaws
+    default: true
+  townia.town.jail:
+    description: Jail and unjail town residents
+    default: true
+  townia.town.jailcell:
+    description: Manage town jail cells
+    default: true
 
   townia.nation.*:
     description: All nation permissions
@@ -150,6 +167,8 @@ permissions:
       townia.nation.spawn: true
       townia.nation.bank: true
       townia.nation.delete: true
+      townia.nation.set: true
+      townia.nation.toggle: true
   townia.nation.create:
     description: Create a new nation
     default: true
@@ -180,6 +199,12 @@ permissions:
   townia.nation.delete:
     description: Delete the nation
     default: true
+  townia.nation.set:
+    description: Change nation settings
+    default: true
+  townia.nation.toggle:
+    description: Toggle nation settings
+    default: true
 
   townia.plot.*:
     description: All plot permissions
@@ -192,6 +217,8 @@ permissions:
       townia.plot.notforsale: true
       townia.plot.buy: true
       townia.plot.info: true
+      townia.plot.clear: true
+      townia.plot.evict: true
   townia.plot.claim:
     description: Claim a plot
     default: true
@@ -213,6 +240,12 @@ permissions:
   townia.plot.info:
     description: View plot information
     default: true
+  townia.plot.clear:
+    description: Clear plot settings
+    default: true
+  townia.plot.evict:
+    description: Evict a plot owner
+    default: true
 
   townia.resident.*:
     description: All resident permissions
@@ -221,6 +254,10 @@ permissions:
       townia.resident.info: true
       townia.resident.other: true
       townia.resident.list: true
+      townia.resident.set: true
+      townia.resident.toggle: true
+      townia.resident.spawn: true
+      townia.resident.jail: true
   townia.resident.info:
     description: View own resident info
     default: true
@@ -229,6 +266,18 @@ permissions:
     default: true
   townia.resident.list:
     description: List all residents
+    default: true
+  townia.resident.set:
+    description: Change resident settings
+    default: true
+  townia.resident.toggle:
+    description: Toggle resident modes
+    default: true
+  townia.resident.spawn:
+    description: Teleport to resident spawn
+    default: true
+  townia.resident.jail:
+    description: Use resident jail actions
     default: true
 
   townia.admin.*:

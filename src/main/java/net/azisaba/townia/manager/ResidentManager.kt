@@ -78,32 +78,36 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     }
 
     fun getOrCreate(player: Player): TowniaPlayer {
-        val existing: TowniaPlayer? = cache[player.uniqueId]
+        return getOrCreate(player.uniqueId, player.name)
+    }
+
+    fun getOrCreate(uuid: UUID, name: String): TowniaPlayer {
+        val existing: TowniaPlayer? = cache[uuid]
         if (existing != null) {
-            if (!existing.name.equals(player.name)) {
+            if (!existing.name.equals(name)) {
                 nameIndex.remove(existing.name!!.lowercase(Locale.getDefault()))
-                existing.name = player.name
-                nameIndex[player.name.lowercase(Locale.getDefault())] = player.uniqueId
+                existing.name = name
+                nameIndex[name.lowercase(Locale.getDefault())] = uuid
                 persist(existing)
             }
             return existing
         }
 
-        val oldUuid = nameIndex[player.name.lowercase(Locale.getDefault())]
-        if (oldUuid != null && oldUuid != player.uniqueId) {
+        val oldUuid = nameIndex[name.lowercase(Locale.getDefault())]
+        if (oldUuid != null && oldUuid != uuid) {
             val oldExisting = cache[oldUuid]
             if (oldExisting != null) {
-                plugin.logger.info("Migrating UUID for ${player.name} from $oldUuid to ${player.uniqueId}")
-                oldExisting.uuid = player.uniqueId
+                plugin.logger.info("Migrating UUID for $name from $oldUuid to $uuid")
+                oldExisting.uuid = uuid
                 cache.remove(oldUuid)
-                cache[player.uniqueId] = oldExisting
-                nameIndex[player.name.lowercase(Locale.getDefault())] = player.uniqueId
+                cache[uuid] = oldExisting
+                nameIndex[name.lowercase(Locale.getDefault())] = uuid
 
                 val tOpt = plugin.townManager.getTown(oldExisting.townUuid)
                 if (tOpt.isPresent) {
                     val town = tOpt.get()
                     if (town.mayorUuid == oldUuid) {
-                        town.mayorUuid = player.uniqueId
+                        town.mayorUuid = uuid
                         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable { plugin.databaseManager.saveTown(town) })
                     }
                     if (town.nationUuid != null) {
@@ -111,7 +115,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
                         if (nOpt.isPresent) {
                             val nation = nOpt.get()
                             if (nation.leaderUuid == oldUuid) {
-                                nation.leaderUuid = player.uniqueId
+                                nation.leaderUuid = uuid
                                 plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable { plugin.databaseManager.saveNation(nation) })
                             }
                         }
@@ -122,22 +126,22 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
                     try {
                         plugin.databaseManager.connection.use { conn ->
                             conn.prepareStatement("UPDATE residents SET uuid=? WHERE uuid=?").use { stmt ->
-                                stmt.setString(1, player.uniqueId.toString())
+                                stmt.setString(1, uuid.toString())
                                 stmt.setString(2, oldUuid.toString())
                                 stmt.executeUpdate()
                             }
                             conn.prepareStatement("UPDATE towns SET mayor_uuid=? WHERE mayor_uuid=?").use { stmt ->
-                                stmt.setString(1, player.uniqueId.toString())
+                                stmt.setString(1, uuid.toString())
                                 stmt.setString(2, oldUuid.toString())
                                 stmt.executeUpdate()
                             }
                             conn.prepareStatement("UPDATE nations SET leader_uuid=? WHERE leader_uuid=?").use { stmt ->
-                                stmt.setString(1, player.uniqueId.toString())
+                                stmt.setString(1, uuid.toString())
                                 stmt.setString(2, oldUuid.toString())
                                 stmt.executeUpdate()
                             }
                             conn.prepareStatement("UPDATE plots SET owner_uuid=? WHERE owner_uuid=?").use { stmt ->
-                                stmt.setString(1, player.uniqueId.toString())
+                                stmt.setString(1, uuid.toString())
                                 stmt.setString(2, oldUuid.toString())
                                 stmt.executeUpdate()
                             }
@@ -151,13 +155,17 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         }
 
         val newPlayer: TowniaPlayer = TowniaPlayer(
-            player.uniqueId,
-            player.name,
+            uuid,
+            name,
             null,
             TownRank.RESIDENT,
             System.currentTimeMillis(),
             null
         )
+        newPlayer.defaultPermsFriend = plugin.towniaConfig.defaultResidentPermsFriend
+        newPlayer.defaultPermsAlly = plugin.towniaConfig.defaultResidentPermsAlly
+        newPlayer.defaultPermsOutsider = plugin.towniaConfig.defaultResidentPermsOutsider
+        newPlayer.defaultPermsResident = plugin.towniaConfig.defaultResidentPermsResident
         newPlayer.uuid?.let { cache.put(it, newPlayer) }
         newPlayer.uuid?.let { nameIndex.put(newPlayer.name!!.lowercase(Locale.getDefault()), it) }
         persist(newPlayer)
