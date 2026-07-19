@@ -42,6 +42,20 @@ object TownyMigrator {
                 val townByResident = LinkedHashMap<UUID, UUID>()
                 val rankByResident = LinkedHashMap<UUID, TownRank>()
                 TownyUniverse.getInstance().towns.forEach { collectTownResidents(it, townByResident, rankByResident) }
+                val currentUuidByTownyUuid = TownyUniverse.getInstance().residents.associate { resident ->
+                    resident.uuid to resolveCurrentMinecraftUuid(resident.name, resident.uuid)
+                }
+                val reconciledUuids = currentUuidByTownyUuid.count { (townyUuid, currentUuid) -> townyUuid != currentUuid }
+                if (parts.contains("residents")) {
+                    plugin.messageManager.sendMessage(
+                        sender,
+                        "admin.migration-progress",
+                        "stage",
+                        "resident UUID reconciliation",
+                        "count",
+                        reconciledUuids.toString()
+                    )
+                }
 
                 if (parts.contains("towns")) {
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", "0")
@@ -84,7 +98,7 @@ object TownyMigrator {
                     val ourTown = Town(
                         tTown.uuid,
                         tTown.name,
-                        tTown.mayor.uuid,
+                        currentUuidByTownyUuid[tTown.mayor.uuid] ?: tTown.mayor.uuid,
                         nationUuid,
                         balance,
                         tTown.maxTownBlocks,
@@ -140,7 +154,7 @@ object TownyMigrator {
                         tNation.uuid,
                         tNation.name,
                         tNation.capital.uuid,
-                        tNation.king.uuid,
+                        currentUuidByTownyUuid[tNation.king.uuid] ?: tNation.king.uuid,
                         balance,
                         tNation.board,
                         tNation.taxes
@@ -177,10 +191,7 @@ object TownyMigrator {
                         rank = TownRank.ASSISTANT
                     }
 
-                    // Towny may still store a pre-upgrade UUID. For a player
-                    // currently connected to this server, the Minecraft UUID
-                    // is authoritative and lets the migration link them now.
-                    val playerUuid = Bukkit.getPlayerExact(tRes.name)?.uniqueId ?: tRes.uuid
+                    val playerUuid = currentUuidByTownyUuid[tRes.uuid] ?: tRes.uuid
 
                     val player = TowniaPlayer(
                         playerUuid,
@@ -214,7 +225,7 @@ object TownyMigrator {
                 if (parts.contains("townblocks")) {
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", "0")
                 for (tb in collectTownBlocks()) {
-                    if (migrateTownBlock(plugin, tb)) plots++
+                    if (migrateTownBlock(plugin, tb, currentUuidByTownyUuid)) plots++
                 }
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", plots.toString())
                 }
@@ -335,12 +346,23 @@ object TownyMigrator {
         return "${block.world.name}:${block.x}:${block.z}"
     }
 
-    private fun migrateTownBlock(plugin: Townia, tb: TownyTownBlock): Boolean {
+    private fun migrateTownBlock(
+        plugin: Townia,
+        tb: TownyTownBlock,
+        currentUuidByTownyUuid: Map<UUID, UUID>
+    ): Boolean {
         if (!tb.hasTown()) return false
 
         val townUuid = runCatching { tb.getTown().uuid }.getOrNull() ?: return false
         if (plugin.townManager.getTown(townUuid).isEmpty) return false
-        val ownerUuid = runCatching { if (tb.hasResident()) tb.getResident().uuid else null }.getOrNull()
+        val ownerUuid = runCatching {
+            if (tb.hasResident()) {
+                val owner = tb.getResident()
+                currentUuidByTownyUuid[owner.uuid] ?: owner.uuid
+            } else {
+                null
+            }
+        }.getOrNull()
 
         var type: PlotType? = PlotType.DEFAULT
         try {
@@ -456,5 +478,16 @@ object TownyMigrator {
         if (permission.getPerm(level, ActionType.SWITCH)) sb.append('S')
         if (permission.getPerm(level, ActionType.ITEM_USE)) sb.append('I')
         return sb.toString()
+    }
+
+    /**
+     * Only use Bukkit's name lookup when the server has seen the player. For
+     * unknown names it can synthesize an offline UUID, which must not replace
+     * a valid legacy Towny UUID before that player has joined.
+     */
+    private fun resolveCurrentMinecraftUuid(name: String, townyUuid: UUID): UUID {
+        Bukkit.getPlayerExact(name)?.let { return it.uniqueId }
+        val knownPlayer = Bukkit.getOfflinePlayer(name)
+        return if (knownPlayer.hasPlayedBefore()) knownPlayer.uniqueId else townyUuid
     }
 }
