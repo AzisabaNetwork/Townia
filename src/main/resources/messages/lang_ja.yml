@@ -144,6 +144,7 @@ town:
     - "<dark_green>銀行: <green>{balance} <gray>| <dark_green>維持費: <green>{upkeep} <gray>| <dark_green>税: <green>{taxes}"
     - "<dark_green>国: <green>{nation}"
     - "<dark_green>Assistant: <green>{assistants}"
+    - "<dark_green>副町長: <green>{submayors}"
     - "<dark_green>住民: <green>{residents}"
   list-header: "<dark_gray>[ <gold>町一覧 <dark_gray>] <yellow>======================================="
   list-entry: "<gold>{town}</gold> <gray>[<white>{residents}<gray>] - <white>{mayor}"

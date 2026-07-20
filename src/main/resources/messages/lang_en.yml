@@ -143,6 +143,7 @@ town:
     - "<dark_green>PVP: <green>{pvp} <dark_green>Explosions: <green>{explosions} <dark_green>Firespread: <green>{fire} <dark_green>Mob Spawns: <green>{mobs}"
     - "<dark_green>Bank: <green>{balance} <gray>| <dark_green>Daily upkeep: <green>{upkeep} <gray>| <dark_green>Tax: <green>{taxes}"
     - "<dark_green>Nation: <green>{nation}"
+    - "<dark_green>Co-Mayors: <green>{submayors}"
     - "<dark_green>Assistants: <green>{assistants}"
     - "<dark_green>Residents: <green>{residents}"
   list-header: "<dark_gray>[ <gold>Town <dark_gray>] <yellow>======================================="
