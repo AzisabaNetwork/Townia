@@ -336,7 +336,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) == "data") {
             StringUtil.copyPartialMatches(
                 args.last(),
-                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations"),
+                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "skip-profiles"),
                 completions
             )
         } else if (args.size == 2) {

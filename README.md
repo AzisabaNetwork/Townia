@@ -74,6 +74,12 @@ Towny の更新などで保存済み UUID と現在の Minecraft UUID が異な�
 
 Towny をアンロードする予定がある場合は、**Towny が有効なうちに**上記コマンドを実行してください。サーバーが一度でも確認したプレイヤーは、ログイン中でなくても現在の UUID へ一括変換されます。移行ログの `resident UUID reconciliation` は、この一括変換の件数です。現在UUIDを確認できない未訪問プレイヤーは、誤った UUID を作らないため旧UUIDのまま残り、後日の初回ログイン時に名前照合で統合されます。
 
+再移行時にプロフィール照会を行いたくない場合は、次のように `skip-profiles` を付けます。Towny のUUIDをそのまま利用するため、未解決プロフィールの照会ログを抑止できます。
+
+```text
+/towniaadmin migrate data all skip-profiles
+```
+
 所属に問題がある場合は、次の診断コマンドで Minecraft UUID、Towny API、Townia の各解決結果を比較できます。
 ```text
 /towniaadmin migrate diagnose [player]

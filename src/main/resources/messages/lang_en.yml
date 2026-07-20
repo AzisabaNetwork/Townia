@@ -323,7 +323,7 @@ admin:
   config-migration-not-found: "<red>Towny config.yml was not found. Check plugins/Towny/settings/config.yml."
   config-migration-success: "<green>Towny config migrated from <yellow>{file}</yellow>. Updated <yellow>{count}</yellow> keys."
   config-migration-updated: "<gray>Updated keys: <white>{keys}"
-  migrate-usage: "<red>Usage: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] | config]"
+  migrate-usage: "<red>Usage: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] | config]"
   help:
     - "<gold>Admin commands: <gray>/towniaadmin reload, bypass, setclaim, unclaim, deletetown, deletenation, givebonus, migrate"
 

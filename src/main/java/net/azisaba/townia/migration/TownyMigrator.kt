@@ -24,6 +24,7 @@ import kotlin.math.max
 
 object TownyMigrator {
     private val allParts = setOf("towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations")
+    private val skipProfileLookupOptions = setOf("skip-profiles", "skip-profile-lookup", "ignore-missing-profiles")
 
     fun migrate(plugin: Townia, sender: CommandSender, requestedParts: Set<String> = emptySet()) {
         if (!plugin.server.pluginManager.isPluginEnabled("Towny")) {
@@ -31,10 +32,13 @@ object TownyMigrator {
             return
         }
         val parts = normalizeParts(requestedParts)
+        val skipProfileLookup = requestedParts.any { it in skipProfileLookupOptions }
 
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             plugin.messageManager.sendMessage(sender, "admin.migration_start")
-            plugin.messageManager.sendMessage(sender, "admin.migration-source", "source", "Towny API (${parts.joinToString(",")})")
+            val source = "Towny API (${parts.joinToString(",")})" +
+                if (skipProfileLookup) " [profile lookup skipped]" else ""
+            plugin.messageManager.sendMessage(sender, "admin.migration-source", "source", source)
             var towns = 0
             var nations = 0
             var residents = 0
@@ -45,7 +49,8 @@ object TownyMigrator {
                 val rankByResident = LinkedHashMap<UUID, TownRank>()
                 TownyUniverse.getInstance().towns.forEach { collectTownResidents(it, townByResident, rankByResident) }
                 val currentUuidByTownyUuid = TownyUniverse.getInstance().residents.associate { resident ->
-                    resident.uuid to resolveCurrentMinecraftUuid(resident.name, resident.uuid)
+                    resident.uuid to if (skipProfileLookup) resident.uuid
+                    else resolveCurrentMinecraftUuid(resident.name, resident.uuid)
                 }
                 val reconciledUuids = currentUuidByTownyUuid.count { (townyUuid, currentUuid) -> townyUuid != currentUuid }
                 if (parts.contains("residents")) {
