@@ -9,5 +9,6 @@ data class TowniaOutpost(
     val z: Double,
     val yaw: Float,
     val pitch: Float,
-    val isPublic: Boolean
+    val isPublic: Boolean,
+    val name: String?
 )

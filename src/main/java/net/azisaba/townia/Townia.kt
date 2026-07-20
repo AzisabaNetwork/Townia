@@ -1,6 +1,8 @@
 package net.azisaba.townia
 
 import net.azisaba.townia.command.*
+import net.azisaba.townia.api.TowniaAPI
+import net.azisaba.townia.api.TowniaApiImpl
 import net.azisaba.townia.config.TowniaConfig
 import net.azisaba.townia.database.DatabaseManager
 import net.azisaba.townia.listener.PlayerJoinListener
@@ -13,6 +15,7 @@ import net.milkbowl.vault.economy.Economy
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.TabCompleter
 import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.plugin.ServicePriority
 
 import java.sql.SQLException
 import java.util.logging.Level
@@ -58,6 +61,7 @@ class  Townia : JavaPlugin() {
         townManager = TownManager(this, databaseManager, residentManager)
         nationManager = NationManager(this, databaseManager, townManager)
         plotManager = PlotManager(this, databaseManager, townManager)
+        server.servicesManager.register(TowniaAPI::class.java, TowniaApiImpl(this), this, ServicePriority.Normal)
 
         hookVault()
 
@@ -84,6 +88,7 @@ class  Townia : JavaPlugin() {
     }
 
     override fun onDisable() {
+        server.servicesManager.unregisterAll(this)
         if (::databaseManager.isInitialized) {
             databaseManager.close()
         }

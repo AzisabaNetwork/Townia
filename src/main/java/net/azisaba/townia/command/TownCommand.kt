@@ -287,7 +287,8 @@ class TownCommand
                             player.location.z,
                             player.location.yaw,
                             player.location.pitch,
-                            false
+                            false,
+                            null
                         )
                     )
                     this.plugin.messageManager.sendMessage(
@@ -437,6 +438,7 @@ class TownCommand
                         this.plugin.messageManager.sendMessage(
                             sender, "town.outpost-list-entry",
                             "index", (i + 1).toString(),
+                            "name", outpost.name ?: "-",
                             "x", outpost.x.toInt().toString(),
                             "y", outpost.y.toInt().toString(),
                             "z", outpost.z.toInt().toString(),
@@ -451,15 +453,19 @@ class TownCommand
             "tp" -> {
                 if (args.size >= 4) {
                     val townName = args[2]
-                    val indexStr = args[3]
                     val targetTown = this.plugin.townManager.getTownByName(townName).orElse(null)
                     if (targetTown == null) {
                         this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", townName)
                         return
                     }
                     try {
-                        teleportToOutpost(sender, player, res, targetTown.id, indexStr.toInt())
-                    } catch (_: NumberFormatException) {
+                        val outpostIndex = findOutpostIndex(targetTown, args.drop(3).joinToString(" "))
+                        if (outpostIndex == null) {
+                            this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found")
+                            return
+                        }
+                        teleportToOutpost(sender, player, res, targetTown.id, outpostIndex)
+                    } catch (_: IllegalArgumentException) {
                         this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
                     }
                 } else if (args.size >= 3) {
@@ -468,8 +474,14 @@ class TownCommand
                         return
                     }
                     try {
-                        teleportToOutpost(sender, player, res, res.townUuid, args[2].toInt())
-                    } catch (e: NumberFormatException) {
+                        val targetTown = this.plugin.townManager.getTown(res.townUuid).orElse(null) ?: return
+                        val outpostIndex = findOutpostIndex(targetTown, args.drop(2).joinToString(" "))
+                        if (outpostIndex == null) {
+                            this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found")
+                            return
+                        }
+                        teleportToOutpost(sender, player, res, res.townUuid, outpostIndex)
+                    } catch (_: IllegalArgumentException) {
                         this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
                     }
                 } else {
@@ -511,20 +523,60 @@ class TownCommand
                     this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
                 }
             }
-            else -> {
-                // If subCmd is just a number, treat it as /town outpost <number>
-                try {
-                    val index = subCmd.toInt()
-                    if (res?.townUuid == null) {
-                        this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
-                        return
-                    }
-                    teleportToOutpost(sender, player, res, res.townUuid, index)
-                } catch (e: NumberFormatException) {
-                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            "rename" -> {
+                if (res?.townUuid == null) {
+                    this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                    return
                 }
+                if (!res.isAssistantOrHigher) {
+                    this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
+                    return
+                }
+                if (args.size < 4) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return
+                }
+                val outpostIndex = args[2].toIntOrNull()
+                val name = args.drop(3).joinToString(" ").trim()
+                val targetTown = this.plugin.townManager.getTown(res.townUuid).orElse(null) ?: return
+                if (outpostIndex == null || outpostIndex !in 1..targetTown.outposts.size || name.isEmpty() || name.length > 64) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return
+                }
+                if (targetTown.outposts.withIndex().any { (index, outpost) -> index != outpostIndex - 1 && outpost?.name.equals(name, ignoreCase = true) }) {
+                    this.plugin.messageManager.sendMessage(sender, "town.outpost-name-taken", "name", name)
+                    return
+                }
+                val renamedOutpost = targetTown.outposts[outpostIndex - 1]?.copy(name = name) ?: run {
+                    this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found")
+                    return
+                }
+                targetTown.outposts[outpostIndex - 1] = renamedOutpost
+                this.plugin.databaseManager.saveTownOutpost(targetTown.id!!, renamedOutpost)
+                this.plugin.messageManager.sendMessage(sender, "town.outpost-renamed", "index", outpostIndex.toString(), "name", name)
+            }
+            else -> {
+                if (res?.townUuid == null) {
+                    this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
+                    return
+                }
+                val targetTown = this.plugin.townManager.getTown(res.townUuid).orElse(null) ?: return
+                val outpostIndex = findOutpostIndex(targetTown, args.drop(1).joinToString(" "))
+                if (outpostIndex == null) {
+                    this.plugin.messageManager.sendMessage(sender, "error.outpost-not-found")
+                    return
+                }
+                teleportToOutpost(sender, player, res, res.townUuid, outpostIndex)
             }
         }
+    }
+
+    private fun findOutpostIndex(town: Town, selector: String): Int? {
+        val index = selector.toIntOrNull()
+        if (index != null) return index.takeIf { it in 1..town.outposts.size && town.outposts[it - 1] != null }
+        return town.outposts.indexOfFirst { it?.name.equals(selector, ignoreCase = true) }
+            .takeIf { it >= 0 }
+            ?.plus(1)
     }
 
     private fun teleportToOutpost(sender: CommandSender, player: Player, res: TowniaPlayer?, townId: UUID?, outpostIndex: Int) {
@@ -2139,7 +2191,7 @@ class TownCommand
                 "outpost" -> {
                     StringUtil.copyPartialMatches(
                         args[1],
-                        mutableListOf<String?>("list", "tp", "togglepublic"),
+                        mutableListOf<String?>("list", "tp", "togglepublic", "rename"),
                         completions
                     )
                 }
@@ -2202,6 +2254,8 @@ class TownCommand
             } else if (args[0].equals("outpost", ignoreCase = true) && (args[1].equals("list", ignoreCase = true) || args[1].equals("tp", ignoreCase = true))) {
                 val townNames: MutableList<String?> = this.townManager.allTowns.stream().map(Town::name).toList()
                 StringUtil.copyPartialMatches(args[2], townNames, completions)
+            } else if (args[0].equals("outpost", ignoreCase = true) && args[1].equals("rename", ignoreCase = true)) {
+                StringUtil.copyPartialMatches(args[2], mutableListOf("1", "2", "3", "4", "5"), completions)
             } else if (args[0].toString().equals("list", ignoreCase = true) && args[1].toString().equals("by", ignoreCase = true)) {
                 StringUtil.copyPartialMatches(
                     args[2],

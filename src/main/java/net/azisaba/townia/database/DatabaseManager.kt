@@ -219,6 +219,7 @@ class DatabaseManager(private val plugin: Townia) {
                             "yaw FLOAT NOT NULL, " +
                             "pitch FLOAT NOT NULL, " +
                             "is_public BOOLEAN DEFAULT false, " +
+                            "name VARCHAR(64), " +
                             "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
                 )
                 stmt.execute(
@@ -358,6 +359,10 @@ class DatabaseManager(private val plugin: Townia) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN is_outpost BOOLEAN DEFAULT false")
+                } catch (_: Exception) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE town_outposts ADD COLUMN name VARCHAR(64)")
                 } catch (_: Exception) {
                 }
                 try {
@@ -703,7 +708,7 @@ class DatabaseManager(private val plugin: Townia) {
     fun loadTownOutposts(town: Town) {
         town.outposts.clear()
         dataSource!!.getConnection().use { connection ->
-            connection.prepareStatement("SELECT * FROM town_outposts WHERE town_uuid = ?").use { ps ->
+            connection.prepareStatement("SELECT * FROM town_outposts WHERE town_uuid = ? ORDER BY id").use { ps ->
                 ps.setString(1, town.id.toString())
                 ps.executeQuery().use { rs ->
                     while (rs.next()) {
@@ -716,7 +721,8 @@ class DatabaseManager(private val plugin: Townia) {
                                 rs.getDouble("z"),
                                 rs.getFloat("yaw"),
                                 rs.getFloat("pitch"),
-                                rs.getInt("is_public") == 1
+                                rs.getInt("is_public") == 1,
+                                rs.getString("name")
                             )
                         )
                     }
@@ -729,12 +735,12 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun saveTownOutpost(townId: UUID, outpost: TowniaOutpost) {
         val sql = if (isMySQL) """
-            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch), is_public=VALUES(is_public)
+            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE world=VALUES(world), x=VALUES(x), y=VALUES(y), z=VALUES(z), yaw=VALUES(yaw), pitch=VALUES(pitch), is_public=VALUES(is_public), name=VALUES(name)
         
         """.trimIndent() else """
-            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch, is_public=excluded.is_public
+            INSERT INTO town_outposts (id, town_uuid, world, x, y, z, yaw, pitch, is_public, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch, is_public=excluded.is_public, name=excluded.name
         
         """.trimIndent()
         dataSource!!.getConnection().use { connection ->
@@ -752,6 +758,7 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setFloat(7, outpost.yaw)
                 ps.setFloat(8, outpost.pitch)
                 ps.setInt(9, if (outpost.isPublic) 1 else 0)
+                ps.setString(10, outpost.name)
                 ps.executeUpdate()
             }
         }

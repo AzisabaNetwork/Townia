@@ -466,7 +466,8 @@ object TownyMigrator {
                                 location.z,
                                 location.yaw,
                                 location.pitch,
-                                false
+                                false,
+                                null
                             )
                         )
                         count++
