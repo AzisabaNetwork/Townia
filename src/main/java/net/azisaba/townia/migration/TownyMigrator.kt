@@ -12,6 +12,7 @@ import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.PlotType
 import net.azisaba.townia.data.Town
 import net.azisaba.townia.data.TowniaJailCell
+import net.azisaba.townia.data.TowniaOutpost
 import net.azisaba.townia.data.TownRank
 import net.azisaba.townia.data.TowniaPlayer
 import org.bukkit.Bukkit
@@ -38,6 +39,7 @@ object TownyMigrator {
             var nations = 0
             var residents = 0
             var plots = 0
+            var outposts = 0
             try {
                 val townByResident = LinkedHashMap<UUID, UUID>()
                 val rankByResident = LinkedHashMap<UUID, TownRank>()
@@ -228,6 +230,12 @@ object TownyMigrator {
                     if (migrateTownBlock(plugin, tb, currentUuidByTownyUuid)) plots++
                 }
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", plots.toString())
+                }
+
+                if (parts.contains("towns") || parts.contains("townblocks")) {
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outposts", "count", "0")
+                    outposts = migrateTownOutposts(plugin)
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outposts", "count", outposts.toString())
                 }
 
                 if (parts.contains("jails")) {
@@ -424,6 +432,54 @@ object TownyMigrator {
                         count++
                     }
                 }
+            }
+        }
+        return count
+    }
+
+    /** Restores Towny's outpost spawn locations and their claimed-plot marker. */
+    private fun migrateTownOutposts(plugin: Townia): Int {
+        var count = 0
+        for (townyTown in TownyUniverse.getInstance().towns) {
+            val town = plugin.townManager.getTown(townyTown.uuid).orElse(null) ?: continue
+            runCatching {
+                // Re-running migration must retain any already-saved Townia outposts.
+                plugin.databaseManager.loadTownOutposts(town)
+                townyTown.allOutpostSpawns.forEach { location ->
+                    val exists = town.outposts.filterNotNull().any { outpost ->
+                        outpost.world == location.world.name &&
+                            outpost.x == location.x && outpost.y == location.y && outpost.z == location.z
+                    }
+                    if (!exists) {
+                        plugin.townManager.addTownOutpost(
+                            town.id,
+                            TowniaOutpost(
+                                0,
+                                location.world.name,
+                                location.x,
+                                location.y,
+                                location.z,
+                                location.yaw,
+                                location.pitch,
+                                false
+                            )
+                        )
+                        count++
+                    }
+
+                    val plot = plugin.plotManager.getPlot(
+                        location.world.name,
+                        location.blockX shr 4,
+                        location.blockZ shr 4
+                    ).orElse(null)
+                    if (plot != null && !plot.isOutpost) {
+                        plot.isOutpost = true
+                        plugin.databaseManager.savePlot(plot)
+                        plugin.plotManager.cachePlot(plot)
+                    }
+                }
+            }.onFailure { error ->
+                plugin.logger.log(Level.WARNING, "Failed to migrate outposts for ${townyTown.name}", error)
             }
         }
         return count

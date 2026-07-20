@@ -277,7 +277,8 @@ class TownCommand
                 })
                 val townOpt: Optional<Town> = this.plugin.townManager.getTown(res.townUuid)
                 townOpt.ifPresent(Consumer { t: Town? ->
-                    t!!.outposts.add(
+                    this.plugin.townManager.addTownOutpost(
+                        t!!.id,
                         TowniaOutpost(
                             0,
                             player.world.name,
@@ -289,7 +290,6 @@ class TownCommand
                             false
                         )
                     )
-                    this.plugin.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.outpost-claimed",
