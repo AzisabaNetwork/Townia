@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.4.10"
     id("com.gradleup.shadow") version "9.6.0"
+    id("maven-publish")
 }
 
 repositories {
@@ -38,6 +39,28 @@ tasks {
         val props = mapOf("version" to version, "description" to project.description)
         filesMatching("plugin.yml") {
             expand(props)
+        }
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "repo"
+            credentials(PasswordCredentials::class)
+            url = uri(if (project.version.toString().endsWith("SNAPSHOT")) {
+                project.findProperty("deploySnapshotURL")
+                    ?: System.getProperty("deploySnapshotURL", "https://repo.azisaba.net/repository/maven-snapshots/")
+            } else {
+                project.findProperty("deployReleasesURL")
+                    ?: System.getProperty("deployReleasesURL", "https://repo.azisaba.net/repository/maven-releases/")
+            },
+            )
+        }
+    }
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
         }
     }
 }
