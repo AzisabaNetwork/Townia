@@ -10,45 +10,29 @@ on:
       - "renovate.json"
 
 jobs:
-  build-test:
-    name: Build test for release
+  build-and-publish:
+    name: Build and Publish
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 21
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: chmod gradlew
-        run: chmod +x gradlew
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
 
-      - name: Build
-        run: ./gradlew build
+      - name: Deploy to azisaba repo
+        run: ./gradlew publish
         env:
-          VERSION: ${{ github.event.inputs.version }}
+          REPO_USERNAME: ${{ secrets.NEWREPO_USERNAME }}
+          REPO_PASSWORD: ${{ secrets.NEWREPO_PASSWORD }}
 
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           path: build/libs/
-
-      - name: Publish to azisaba repo
-        run: ./gradlew publish
-        env:
-          VERSION: ${{ github.event.inputs.version }}
-          REPO_USERNAME: ${{ secrets.NEWREPO_USERNAME }}
-          REPO_PASSWORD: ${{ secrets.NEWREPO_PASSWORD }}
-
-      - name: Create release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          files: build/libs/*.jar
-          generate_release_notes: true
