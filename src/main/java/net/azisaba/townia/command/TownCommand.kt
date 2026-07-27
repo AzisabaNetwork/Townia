@@ -435,7 +435,7 @@ class TownCommand
                         } else {
                             this.plugin.messageManager.getRawMessage(sender, "town.outpost-private")
                         }
-                        this.plugin.messageManager.sendMessage(
+                        this.plugin.messageManager.sendMessageWithoutPrefix(
                             sender, "town.outpost-list-entry",
                             "index", (i + 1).toString(),
                             "name", outpost.name ?: "-",
@@ -447,7 +447,7 @@ class TownCommand
                     }
                 }
                 if (!hasOutposts) {
-                    this.plugin.messageManager.sendMessage(sender, "town.outpost-list-empty")
+                    this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.outpost-list-empty")
                 }
             }
             "tp" -> {
