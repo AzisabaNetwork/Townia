@@ -44,23 +44,28 @@ tasks {
 }
 
 publishing {
-    repositories {
-        maven {
-            name = "repo"
-            credentials(PasswordCredentials::class)
-            url = uri(if (project.version.toString().endsWith("SNAPSHOT")) {
-                project.findProperty("deploySnapshotURL")
-                    ?: System.getProperty("deploySnapshotURL", "https://maven.azisaba.net/snapshots")
-            } else {
-                project.findProperty("deployReleasesURL")
-                    ?: System.getProperty("deployReleasesURL", "https://maven.azisaba.net/releases")
-            },
-            )
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
+            artifact(tasks.jar)
         }
     }
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
+
+    repositories {
+        maven {
+            name = "azisaba-repo"
+            credentials {
+                username = System.getenv("REPO_USERNAME")
+                password = System.getenv("REPO_PASSWORD")
+            }
+            url =
+                if (project.version.toString().endsWith("-SNAPSHOT")) {
+                    uri("https://maven.azisaba.net/snapshots")
+                } else {
+                    uri("https://maven.azisaba.net/releases")
+                }
         }
     }
 }
