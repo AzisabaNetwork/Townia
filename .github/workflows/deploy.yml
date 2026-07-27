@@ -34,10 +34,8 @@ jobs:
         with:
           path: build/libs/
 
-      - name: Prepare gradle.properties
-        run: |
-          mkdir -p $HOME/.gradle
-          echo "repoUsername=${{ secrets.NEWREPO_USERNAME }}" >> $HOME/.gradle/gradle.properties
-          echo "repoPassword=${{ secrets.NEWREPO_PASSWORD }}" >> $HOME/.gradle/gradle.properties
       - name: Deploy
         run: ./gradlew clean test publish
+        env:
+          REPO_USERNAME: ${{ secrets.NEWREPO_USERNAME }}
+          REPO_PASSWORD: ${{ secrets.NEWREPO_PASSWORD }}
