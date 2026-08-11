@@ -157,6 +157,21 @@ object TownyMigrator {
                     } catch (_: Exception) {
                     }
 
+                    var spawnWorld: String? = null
+                    var spawnX = 0.0
+                    var spawnY = 0.0
+                    var spawnZ = 0.0
+                    var spawnYaw = 0f
+                    var spawnPitch = 0f
+                    runCatching { tNation.spawn }.getOrNull()?.let { spawn ->
+                        spawnWorld = spawn.world.name
+                        spawnX = spawn.x
+                        spawnY = spawn.y
+                        spawnZ = spawn.z
+                        spawnYaw = spawn.yaw
+                        spawnPitch = spawn.pitch
+                    }
+
                     val ourNation = Nation(
                         tNation.uuid,
                         tNation.name,
@@ -164,7 +179,13 @@ object TownyMigrator {
                         currentUuidByTownyUuid[tNation.king.uuid] ?: tNation.king.uuid,
                         balance,
                         tNation.board,
-                        tNation.taxes
+                        tNation.taxes,
+                        spawnWorld,
+                        spawnX,
+                        spawnY,
+                        spawnZ,
+                        spawnYaw,
+                        spawnPitch
                     )
 
                     plugin.databaseManager.saveNation(ourNation)
