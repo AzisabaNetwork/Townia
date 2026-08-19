@@ -276,6 +276,21 @@ object TownyFlatfileMigrator {
             )
             resident.registeredAt = values.long("registered", "registeredat", "createdat")
             applyResidentProtection(values, resident)
+
+            val title = values.first("title")
+            val surname = values.first("surname")
+            if (!title.isNullOrBlank() || !surname.isNullOrBlank()) {
+                val townOpt = townUuid?.let { plugin.townManager.getTown(it).orElse(null) }
+                if (townOpt?.nationUuid != null) {
+                    val nOpt = plugin.nationManager.getNation(townOpt.nationUuid).orElse(null)
+                    if (nOpt != null) {
+                        if (!title.isNullOrBlank()) nOpt.setTitle(uuid, title)
+                        if (!surname.isNullOrBlank()) nOpt.setSurname(uuid, surname)
+                        plugin.databaseManager.saveNationTitles(nOpt)
+                    }
+                }
+            }
+
             plugin.databaseManager.saveResident(resident)
             plugin.residentManager.cacheResident(resident)
             count++

@@ -235,7 +235,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
      */
     private fun diagnoseTownyResident(sender: CommandSender, playerName: String?) {
         if (!plugin.server.pluginManager.isPluginEnabled("Towny")) {
-            sender.sendMessage("§c[Townia] Towny is not enabled; Towny API diagnostics are unavailable.")
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-towny-disabled")
             return
         }
 
@@ -245,33 +245,49 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             else -> null
         }
         if (target == null) {
-            sender.sendMessage("§c[Townia] Target must be online. Usage: /towniaadmin migrate diagnose <player>")
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-target-offline")
             return
         }
 
         val minecraftUuid = target.uniqueId
-        sender.sendMessage("§6[Townia] Town membership diagnostic for §e${target.name}")
-        sender.sendMessage("§7Minecraft UUID: §f$minecraftUuid")
+        plugin.messageManager.sendMessage(sender, "admin.diagnose-header", "{player}", target.name)
+        plugin.messageManager.sendMessage(sender, "admin.diagnose-uuid", "{uuid}", minecraftUuid.toString())
 
         val townyResident = runCatching { TownyUniverse.getInstance().getResident(minecraftUuid) }.getOrNull()
         if (townyResident == null) {
-            sender.sendMessage("§cTowny API: no Resident for this UUID")
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-towny-api-no-resident")
         } else {
             val townyTown = runCatching { if (townyResident.hasTown()) townyResident.town else null }.getOrNull()
-            sender.sendMessage("§aTowny API: §f${townyResident.name} §7(uuid=${townyResident.uuid})")
-            sender.sendMessage("§7Towny town: §f${townyTown?.name ?: "<none>"} §7(uuid=${townyTown?.uuid ?: "<none>"})")
+            val townyNation = runCatching { if (townyTown?.hasNation() == true) townyTown.nation else null }.getOrNull()
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-towny-api-resident", "{name}", townyResident.name, "{uuid}", townyResident.uuid.toString())
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-towny-api-town", "{town}", townyTown?.name ?: "<none>", "{uuid}", townyTown?.uuid?.toString() ?: "<none>")
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-towny-api-nation", "{nation}", townyNation?.name ?: "<none>", "{uuid}", townyNation?.uuid?.toString() ?: "<none>")
         }
 
         val towniaResident = residentManager.getResident(minecraftUuid).orElse(null)
         val towniaTown = towniaResident?.townUuid?.let { townManager.getTown(it).orElse(null) }
-        sender.sendMessage("§bTownia UUID lookup: §f${towniaResident?.name ?: "<none>"} §7(town=${towniaTown?.name ?: "<none>"}, uuid=${towniaResident?.townUuid ?: "<none>"})")
+        val towniaNation = towniaTown?.nationUuid?.let { nationManager.getNation(it).orElse(null) }
+        plugin.messageManager.sendMessage(sender, "admin.diagnose-townia-lookup", 
+            "{name}", towniaResident?.name ?: "<none>", 
+            "{town}", towniaTown?.name ?: "<none>", 
+            "{uuid}", towniaResident?.townUuid?.toString() ?: "<none>",
+            "{nation}", towniaNation?.name ?: "<none>",
+            "{nation_uuid}", towniaNation?.id?.toString() ?: "<none>"
+        )
 
         val nameMatch = residentManager.getResidentByName(target.name).orElse(null)
         if (nameMatch != null && nameMatch.uuid != minecraftUuid) {
             val nameMatchTown = nameMatch.townUuid?.let { townManager.getTown(it).orElse(null) }
-            sender.sendMessage("§eTownia name lookup differs: §f${nameMatch.uuid} §7(town=${nameMatchTown?.name ?: "<none>"}, uuid=${nameMatch.townUuid ?: "<none>"})")
+            val nameMatchNation = nameMatchTown?.nationUuid?.let { nationManager.getNation(it).orElse(null) }
+            plugin.messageManager.sendMessage(sender, "admin.diagnose-townia-name-lookup", 
+                "{uuid}", nameMatch.uuid.toString(), 
+                "{town}", nameMatchTown?.name ?: "<none>", 
+                "{town_uuid}", nameMatch.townUuid?.toString() ?: "<none>",
+                "{nation}", nameMatchNation?.name ?: "<none>",
+                "{nation_uuid}", nameMatchNation?.id?.toString() ?: "<none>"
+            )
         }
-        sender.sendMessage("§7Copy these lines from console/chat when reporting the result.")
+        plugin.messageManager.sendMessage(sender, "admin.diagnose-footer")
     }
 
     private fun migrateTownyData(sender: CommandSender, parts: Set<String>) {

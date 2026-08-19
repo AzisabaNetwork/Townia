@@ -175,7 +175,7 @@ object TownyMigrator {
                     val ourNation = Nation(
                         tNation.uuid,
                         tNation.name,
-                        tNation.capital.uuid,
+                        if (tNation.hasCapital()) tNation.capital.uuid else null,
                         currentUuidByTownyUuid[tNation.king.uuid] ?: tNation.king.uuid,
                         balance,
                         tNation.board,
@@ -187,6 +187,7 @@ object TownyMigrator {
                         spawnYaw,
                         spawnPitch
                     )
+                    ourNation.isNeutral = tNation.isNeutral
 
                     plugin.databaseManager.saveNation(ourNation)
                     plugin.nationManager.cacheNation(ourNation)
@@ -220,6 +221,22 @@ object TownyMigrator {
                     }
 
                     val playerUuid = currentUuidByTownyUuid[tRes.uuid] ?: tRes.uuid
+
+                    runCatching {
+                        val title = tRes.title
+                        val surname = tRes.surname
+                        if (!title.isNullOrBlank() || !surname.isNullOrBlank()) {
+                            if (tRes.hasTown() && tRes.town.hasNation()) {
+                                val nOpt = plugin.nationManager.getNation(tRes.town.nation.uuid)
+                                if (nOpt.isPresent) {
+                                    val nation = nOpt.get()
+                                    if (!title.isNullOrBlank()) nation.setTitle(playerUuid, title)
+                                    if (!surname.isNullOrBlank()) nation.setSurname(playerUuid, surname)
+                                    plugin.databaseManager.saveNationTitles(nation)
+                                }
+                            }
+                        }
+                    }
 
                     val player = TowniaPlayer(
                         playerUuid,

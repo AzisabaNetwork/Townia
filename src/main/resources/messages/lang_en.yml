@@ -327,6 +327,17 @@ admin:
   config-migration-success: "<green>Towny config migrated from <yellow>{file}</yellow>. Updated <yellow>{count}</yellow> keys."
   config-migration-updated: "<gray>Updated keys: <white>{keys}"
   migrate-usage: "<red>Usage: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] | config]"
+  diagnose-towny-disabled: "<red>Towny is not enabled; Towny API diagnostics are unavailable."
+  diagnose-target-offline: "<red>Target must be online. Usage: /towniaadmin migrate diagnose <player>"
+  diagnose-header: "<gold>Town membership diagnostic for <yellow>{player}"
+  diagnose-uuid: "<gray>Minecraft UUID: <white>{uuid}"
+  diagnose-towny-api-no-resident: "<red>Towny API: no Resident for this UUID."
+  diagnose-towny-api-resident: "<green>Towny API: <white>{name} <gray>(uuid={uuid})"
+  diagnose-towny-api-town: "<gray>Towny town: <white>{town} <gray>(uuid={uuid})"
+  diagnose-towny-api-nation: "<gray>Towny nation: <white>{nation} <gray>(uuid={uuid})"
+  diagnose-townia-lookup: "<aqua>Townia UUID lookup: <white>{name} <gray>(town={town}, uuid={uuid}, nation={nation}, nation_uuid={nation_uuid})"
+  diagnose-townia-name-lookup: "<yellow>Townia name lookup differs: <white>{uuid} <gray>(town={town}, uuid={town_uuid}, nation={nation}, nation_uuid={nation_uuid})"
+  diagnose-footer: "<gray>Copy these lines from console/chat when reporting the result."
   help:
     - "<gold>Admin commands: <gray>/towniaadmin reload, bypass, setclaim, unclaim, deletetown, deletenation, givebonus, migrate"
 
