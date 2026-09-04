@@ -1052,25 +1052,8 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 )
 
                 "spawn" -> {
-                    val player = sender as? Player
-                    val res = player?.let { residentManager.getResident(it.uniqueId).orElse(null) }
-                    val playerTown = res?.townUuid?.let { townManager.getTown(it).orElse(null) }
-                    val nationUuid = playerTown?.nationUuid
-                    val towns = if (nationUuid != null) {
-                        val nation = nationManager.getNation(nationUuid).orElse(null)
-                        val candidateTowns = townManager.getTownsByNation(nationUuid).mapNotNull { it.name }.toMutableList()
-                        nation?.allies?.forEach { allyUuid ->
-                            if (allyUuid != null) {
-                                candidateTowns.addAll(townManager.getTownsByNation(allyUuid).mapNotNull { it.name })
-                            }
-                        }
-                        candidateTowns
-                    } else if (sender.hasPermission("townia.admin")) {
-                        townManager.allTowns.mapNotNull { it.name }
-                    } else {
-                        emptyList()
-                    }
-                    StringUtil.copyPartialMatches(args[1], towns, completions)
+                    val townNames = townManager.allTowns.mapNotNull { it.name }
+                    StringUtil.copyPartialMatches(args[1], townNames, completions)
                 }
             }
         } else if (args.size == 3) {
