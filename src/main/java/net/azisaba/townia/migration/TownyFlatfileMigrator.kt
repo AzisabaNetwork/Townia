@@ -7,6 +7,7 @@ import net.azisaba.townia.data.PlotType
 import net.azisaba.townia.data.Town
 import net.azisaba.townia.data.TowniaJailCell
 import net.azisaba.townia.data.TownRank
+import net.azisaba.townia.data.TowniaOutpost
 import net.azisaba.townia.data.TowniaPlayer
 import org.bukkit.Bukkit
 import org.bukkit.command.CommandSender
@@ -18,7 +19,7 @@ import java.util.UUID
 import java.util.logging.Level
 
 object TownyFlatfileMigrator {
-    private val allParts = setOf("towns", "nations", "residents", "townblocks", "jails")
+    private val allParts = setOf("towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations")
 
     fun migrate(plugin: Townia, sender: CommandSender, requestedParts: Set<String> = emptySet()) {
         val dataDir = findTownyDataDir(plugin)
@@ -45,6 +46,18 @@ object TownyFlatfileMigrator {
                 val townsByName = loadTowns(plugin, dataDir, residentsByName, nationsByName, parts.contains("towns"))
                 if (parts.contains("nations")) repairNationCapitals(plugin, dataDir, townsByName, nationsByName)
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", if (parts.contains("towns")) townsByName.size.toString() else "0")
+
+                if (parts.contains("outlaws")) {
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", "0")
+                    val outlaws = loadTownOutlaws(plugin, dataDir, townsByName, residentsByName)
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", outlaws.toString())
+                }
+
+                if (parts.contains("relations")) {
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", "0")
+                    val relations = loadNationRelations(plugin, dataDir, nationsByName)
+                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", relations.toString())
+                }
 
                 val townMemberships = loadTownMemberships(dataDir, townsByName)
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", "0")
@@ -90,19 +103,21 @@ object TownyFlatfileMigrator {
                 "resident", "residents" -> result.add("residents")
                 "plot", "plots", "townblock", "townblocks" -> result.add("townblocks")
                 "jail", "jails" -> result.add("jails")
+                "outlaw", "outlaws" -> result.add("outlaws")
+                "relation", "relations", "allies", "enemies" -> result.add("relations")
                 "data" -> result.addAll(allParts)
             }
         }
         return if (result.isEmpty()) allParts else result
     }
 
-    private fun findTownyDataDir(plugin: Townia): File? {
+    fun findTownyDataDir(plugin: Townia): File? {
         val pluginsDir = plugin.dataFolder.parentFile ?: return null
         val townyDir = File(pluginsDir, "Towny")
         return listOf(
             File(townyDir, "data"),
             townyDir
-        ).firstOrNull { File(it, "towns").isDirectory || File(it, "residents").isDirectory }
+        ).firstOrNull { File(it, "towns").isDirectory || File(it, "residents").isDirectory || File(it, "nations").isDirectory }
     }
 
     private fun loadResidentIds(dataDir: File): MutableMap<String, UUID> {
@@ -142,6 +157,7 @@ object TownyFlatfileMigrator {
                 spawn?.yaw ?: 0f,
                 spawn?.pitch ?: 0f
             )
+            nation.isNeutral = values.boolean("neutral", "isneutral", "is_neutral")
             if (save) {
                 plugin.databaseManager.saveNation(nation)
                 plugin.nationManager.cacheNation(nation)
@@ -164,8 +180,10 @@ object TownyFlatfileMigrator {
             val nationUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
                 ?: nationsByName[nationName.lowercase(Locale.getDefault())]
                 ?: return@forEach
+            val capitalName = values.first("capitalname", "capital_town_name")
             val capitalUuid = resolveGovernmentUuid(values.first("capital", "capitaltown", "capital_town"), townsByName)
-                ?: resolveGovernmentUuid(values.first("capitalname", "capital_town_name"), townsByName)
+                ?: resolveGovernmentUuid(capitalName, townsByName)
+                ?: capitalName?.let { plugin.townManager.getTownByName(it).orElse(null)?.id }
                 ?: return@forEach
             val nationOpt = plugin.nationManager.getNation(nationUuid)
             val townOpt = plugin.townManager.getTown(capitalUuid)
@@ -177,6 +195,71 @@ object TownyFlatfileMigrator {
             plugin.databaseManager.saveNation(nation)
             plugin.nationManager.cacheNation(nation)
         }
+    }
+
+    private fun loadTownOutlaws(
+        plugin: Townia,
+        dataDir: File,
+        townsByName: Map<String, UUID>,
+        residentsByName: Map<String, UUID>
+    ): Int {
+        var count = 0
+        val dir = File(dataDir, "towns")
+        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+            val values = readValues(file)
+            val townName = values.first("name", "town") ?: file.nameWithoutExtension
+            val townUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
+                ?: townsByName[townName.lowercase(Locale.getDefault())]
+                ?: return@forEach
+            val town = plugin.townManager.getTown(townUuid).orElse(null) ?: return@forEach
+            val outlawList = values.list("outlaws", "outlaw")
+            outlawList.forEach { raw ->
+                val outlawUuid = resolveResidentUuid(raw, residentsByName) ?: return@forEach
+                runCatching {
+                    plugin.databaseManager.addTownOutlaw(town.id!!, outlawUuid)
+                    town.outlaws.add(outlawUuid)
+                    count++
+                }
+            }
+        }
+        return count
+    }
+
+    private fun loadNationRelations(
+        plugin: Townia,
+        dataDir: File,
+        nationsByName: Map<String, UUID>
+    ): Int {
+        var count = 0
+        val dir = File(dataDir, "nations")
+        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+            val values = readValues(file)
+            val nationName = values.first("name", "nation") ?: file.nameWithoutExtension
+            val nationUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
+                ?: nationsByName[nationName.lowercase(Locale.getDefault())]
+                ?: return@forEach
+            val nation = plugin.nationManager.getNation(nationUuid).orElse(null) ?: return@forEach
+            val alliesList = values.list("allies", "ally")
+            alliesList.forEach { raw ->
+                val allyUuid = resolveGovernmentUuid(raw, nationsByName) ?: return@forEach
+                runCatching {
+                    nation.allies.add(allyUuid)
+                    plugin.databaseManager.addNationRelation(nation.id!!, allyUuid, "ALLY")
+                    count++
+                }
+            }
+            val enemiesList = values.list("enemies", "enemy")
+            enemiesList.forEach { raw ->
+                val enemyUuid = resolveGovernmentUuid(raw, nationsByName) ?: return@forEach
+                runCatching {
+                    nation.enemies.add(enemyUuid)
+                    plugin.databaseManager.addNationRelation(nation.id!!, enemyUuid, "ENEMY")
+                    count++
+                }
+            }
+            plugin.nationManager.cacheNation(nation)
+        }
+        return count
     }
 
     private fun loadTowns(
@@ -225,6 +308,30 @@ object TownyFlatfileMigrator {
             town.isOpen = values.boolean("open", "is_open")
             applyTownProtection(values, town)
             if (homeBlock != null) town.setHomeBlock(homeBlock.world, homeBlock.x, homeBlock.z)
+
+            val outpostLine = values.first("outpostspawns", "outpost_spawns")
+            if (!outpostLine.isNullOrBlank()) {
+                val spawns = outpostLine.split(";").map { it.trim() }.filter { it.isNotEmpty() }
+                spawns.forEachIndexed { index, rawSpawn ->
+                    val spawnParts = rawSpawn.split(",").map { it.trim() }
+                    if (spawnParts.size >= 6) {
+                        val w = spawnParts[0]
+                        val x = spawnParts[1].toDoubleOrNull() ?: return@forEachIndexed
+                        val y = spawnParts[2].toDoubleOrNull() ?: return@forEachIndexed
+                        val z = spawnParts[3].toDoubleOrNull() ?: return@forEachIndexed
+                        val pitch = spawnParts[4].toFloatOrNull() ?: 0f
+                        val yaw = spawnParts[5].toFloatOrNull() ?: 0f
+                        val outpost = TowniaOutpost(0, w, x, y, z, yaw, pitch, false, "outpost-${index + 1}")
+                        if (save) {
+                            runCatching {
+                                plugin.databaseManager.saveTownOutpost(town.id!!, outpost)
+                                town.outposts.add(outpost)
+                            }
+                        }
+                    }
+                }
+            }
+
             if (save) {
                 plugin.databaseManager.saveTown(town)
                 plugin.townManager.cacheTown(town)
@@ -565,7 +672,8 @@ object TownyFlatfileMigrator {
 
     private fun sendValidation(plugin: Townia, sender: CommandSender) {
         val townResidents = plugin.residentManager.allResidents.count { it.townUuid != null }
-        val unresolvedTownResidents = plugin.residentManager.allResidents.count { it.townUuid != null && plugin.townManager.getTown(it.townUuid).isEmpty }
+        val unresolvedTownResidents =
+            plugin.residentManager.allResidents.count { it.townUuid != null && plugin.townManager.getTown(it.townUuid).isEmpty }
         val ownedPlots = plugin.residentManager.allResidents.sumOf { resident ->
             resident.uuid?.let { uuid -> plugin.plotManager.countPlotsByOwner(uuid) } ?: 0
         }

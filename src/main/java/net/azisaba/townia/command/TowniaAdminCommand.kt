@@ -223,7 +223,13 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 // Default to data migration if no sub-args provided
                 migrateTownyData(sender, emptySet())
             } else {
-                plugin.messageManager.sendMessage(sender, "admin.migrate-usage")
+                val candidateParts = parseMigrationParts(args.drop(1))
+                val validParts = setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles")
+                if (candidateParts.isNotEmpty() && candidateParts.any { it in validParts }) {
+                    migrateTownyData(sender, candidateParts)
+                } else {
+                    plugin.messageManager.sendMessage(sender, "admin.migrate-usage")
+                }
             }
         }
     }
@@ -291,10 +297,17 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     }
 
     private fun migrateTownyData(sender: CommandSender, parts: Set<String>) {
-        if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
-            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender, parts)
+        val forceApi = parts.contains("api")
+        val forceFlatfile = parts.contains("flatfile")
+        val filteredParts = parts - setOf("api", "flatfile")
+
+        val flatfileDir = net.azisaba.townia.migration.TownyFlatfileMigrator.findTownyDataDir(plugin)
+        if (!forceApi && (forceFlatfile || flatfileDir != null)) {
+            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, filteredParts)
+        } else if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
+            net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender, filteredParts)
         } else {
-            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, parts)
+            net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, filteredParts)
         }
     }
 
@@ -344,15 +357,15 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "migrate") {
             StringUtil.copyPartialMatches(
                 args[1],
-                mutableListOf("data", "config", "diagnose"),
+                mutableListOf("data", "config", "diagnose", "all", "towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations", "flatfile", "api"),
                 completions
             )
         } else if (args.size == 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
             StringUtil.copyPartialMatches(args[2], plugin.server.onlinePlayers.map { it.name }, completions)
-        } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) == "data") {
+        } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && (args[1].lowercase(Locale.getDefault()) == "data" || args[1].lowercase(Locale.getDefault()) in setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api"))) {
             StringUtil.copyPartialMatches(
                 args.last(),
-                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "skip-profiles"),
+                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles"),
                 completions
             )
         } else if (args.size == 2) {
