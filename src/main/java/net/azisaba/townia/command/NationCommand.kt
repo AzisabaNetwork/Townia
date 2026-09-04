@@ -68,7 +68,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "enemy" -> handleEnemy(sender, args)
             "info" -> handleInfo(sender, args)
             "list" -> handleList(sender, args)
-            "spawn" -> handleSpawn(sender)
+            "spawn" -> handleSpawn(sender, args)
             "setspawn" -> handleSetSpawn(sender)
             "delete" -> handleDelete(sender, args)
             "online" -> handleOnline(sender)
@@ -736,38 +736,100 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         )
     }
 
-    private fun handleSpawn(sender: CommandSender) {
+    private fun handleSpawn(sender: CommandSender, args: Array<out String>) {
         val player = requirePlayer(sender) ?: return
 
         val res: TowniaPlayer = requireInTown(sender, player) ?: return
 
-        val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-        if (townOpt.isEmpty || !townOpt.get().isInNation) {
+        val playerTownOpt: Optional<Town> = townManager.getTown(res.townUuid)
+        if (playerTownOpt.isEmpty || !playerTownOpt.get().isInNation) {
             plugin.messageManager.sendMessage(sender, "town.not-in-nation")
             return
         }
 
-        val nation: Nation = nationManager.getNation(townOpt.get().nationUuid).orElse(null) ?: return
+        val playerTown = playerTownOpt.get()
+        val nationUuid = playerTown.nationUuid
+        val nation: Nation = nationManager.getNation(nationUuid).orElse(null) ?: return
 
-        if (!nation.hasSpawn()) {
+        if (args.size >= 2) {
+            val townOpt: Optional<Town> = runCatching { UUID.fromString(args[1]) }
+                .map { townManager.getTown(it) }
+                .getOrElse { townManager.getTownByName(args[1]) }
+            if (townOpt.isEmpty) {
+                plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+                return
+            }
+            val targetTown = townOpt.get()
+
+            val isSameNation = targetTown.nationUuid != null && targetTown.nationUuid == nationUuid
+            val isAlly = targetTown.nationUuid != null && nation.allies.contains(targetTown.nationUuid)
+            if (!isSameNation && !isAlly && !targetTown.isPublic && !player.hasPermission("townia.admin")) {
+                plugin.messageManager.sendMessage(sender, "error.no-permission")
+                return
+            }
+            if (targetTown.outlaws.contains(player.uniqueId) && !player.hasPermission("townia.admin")) {
+                plugin.messageManager.sendMessage(sender, "outlaw.entry-denied", "town", targetTown.name ?: "Unknown")
+                return
+            }
+            if (!targetTown.hasSpawn()) {
+                plugin.messageManager.sendMessage(sender, "town.spawn-not-set")
+                return
+            }
+            val world: World? = Bukkit.getWorld(targetTown.spawnWorld ?: "")
+            if (world == null) {
+                plugin.messageManager.sendMessage(sender, "error.wrong-world", "world", targetTown.spawnWorld ?: "")
+                return
+            }
+            val loc = Location(
+                world,
+                targetTown.spawnX,
+                targetTown.spawnY,
+                targetTown.spawnZ,
+                targetTown.spawnYaw,
+                targetTown.spawnPitch
+            )
+            plugin.messageManager.sendMessage(sender, "town.teleporting", "town", targetTown.name ?: "")
+            player.teleport(loc)
+            return
+        }
+
+        var loc: Location? = null
+        if (nation.hasSpawn()) {
+            val world: World? = Bukkit.getWorld((nation.spawnWorld ?: "world"))
+            if (world != null) {
+                loc = Location(
+                    world,
+                    nation.spawnX,
+                    nation.spawnY,
+                    nation.spawnZ,
+                    nation.spawnYaw,
+                    nation.spawnPitch
+                )
+            }
+        }
+        if (loc == null && nation.capitalTownUuid != null) {
+            val capitalOpt = townManager.getTown(nation.capitalTownUuid)
+            if (capitalOpt.isPresent && capitalOpt.get().hasSpawn()) {
+                val cap = capitalOpt.get()
+                val world = Bukkit.getWorld(cap.spawnWorld ?: "")
+                if (world != null) {
+                    loc = Location(
+                        world,
+                        cap.spawnX,
+                        cap.spawnY,
+                        cap.spawnZ,
+                        cap.spawnYaw,
+                        cap.spawnPitch
+                    )
+                }
+            }
+        }
+
+        if (loc == null) {
             plugin.messageManager.sendMessage(sender, "nation.spawn-not-set")
             return
         }
 
-        val world: World? = Bukkit.getWorld((nation.spawnWorld ?: "world"))
-        if (world == null) {
-            plugin.messageManager.sendMessage(sender, "nation.spawn-not-set")
-            return
-        }
-
-        val loc = Location(
-            world,
-            nation.spawnX,
-            nation.spawnY,
-            nation.spawnZ,
-            nation.spawnYaw,
-            nation.spawnPitch
-        )
         plugin.messageManager.sendMessage(sender, "nation.teleporting", "nation", (nation.name ?: "Unknown"))
         player.teleport(loc)
     }
@@ -988,6 +1050,28 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                     mutableListOf("by"),
                     completions
                 )
+
+                "spawn" -> {
+                    val player = sender as? Player
+                    val res = player?.let { residentManager.getResident(it.uniqueId).orElse(null) }
+                    val playerTown = res?.townUuid?.let { townManager.getTown(it).orElse(null) }
+                    val nationUuid = playerTown?.nationUuid
+                    val towns = if (nationUuid != null) {
+                        val nation = nationManager.getNation(nationUuid).orElse(null)
+                        val candidateTowns = townManager.getTownsByNation(nationUuid).mapNotNull { it.name }.toMutableList()
+                        nation?.allies?.forEach { allyUuid ->
+                            if (allyUuid != null) {
+                                candidateTowns.addAll(townManager.getTownsByNation(allyUuid).mapNotNull { it.name })
+                            }
+                        }
+                        candidateTowns
+                    } else if (sender.hasPermission("townia.admin")) {
+                        townManager.allTowns.mapNotNull { it.name }
+                    } else {
+                        emptyList()
+                    }
+                    StringUtil.copyPartialMatches(args[1], towns, completions)
+                }
             }
         } else if (args.size == 3) {
             if (args[0].equals("list", ignoreCase = true) && args[1].equals("by", ignoreCase = true)) {
