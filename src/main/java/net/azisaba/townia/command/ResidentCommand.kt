@@ -1,4 +1,4 @@
-﻿package net.azisaba.townia.command
+package net.azisaba.townia.command
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Nation
@@ -46,7 +46,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         }
 
         when (args[0].lowercase(Locale.getDefault())) {
-            "list" -> showList(sender)
+            "list" -> showList(sender, args)
             "set" -> {
                 if (args.size >= 3 && args[1].equals("mode", ignoreCase = true) && args[2].equals(
                         "map",
@@ -316,22 +316,42 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         return "<click:run_command:'/$command'><hover:show_text:'$hover'>[$count]</hover></click>"
     }
 
-    private fun showList(sender: CommandSender) {
+    private fun showList(sender: CommandSender, args: Array<out String>) {
         val all: MutableList<TowniaPlayer> = residentManager.allResidents
+        all.sortBy { it.name?.lowercase(Locale.getDefault()) ?: "" }
+        var page = 1
+        if (args.size > 1) {
+            page = args[1].toIntOrNull() ?: 1
+        }
+        val pageSize = 10
+        val maxPage = if (all.isEmpty()) 1 else (all.size + pageSize - 1) / pageSize
+        if (page < 1) page = 1
+        if (page > maxPage) page = maxPage
+
         plugin.messageManager.sendMessageWithoutPrefix(
             sender, "resident.list-header",
             "count", all.size.toString()
         )
-        for (res in all) {
-            var townName = "None"
-            if (res.isInTown) {
-                val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
-                townName = townOpt.map({ it.name ?: "None" }).orElse("None")
+        if (all.isNotEmpty()) {
+            val start = (page - 1) * pageSize
+            val end = (start + pageSize).coerceAtMost(all.size)
+            for (i in start until end) {
+                val res = all[i]
+                var townName = "None"
+                if (res.isInTown) {
+                    val townOpt: Optional<Town> = townManager.getTown(res.townUuid)
+                    townName = townOpt.map { it.name ?: "None" }.orElse("None")
+                }
+                plugin.messageManager.sendMessageWithoutPrefix(
+                    sender, "resident.list-entry",
+                    "player", (res.name ?: "Unknown"),
+                    "town", townName
+                )
             }
             plugin.messageManager.sendMessageWithoutPrefix(
-                sender, "resident.list-entry",
-                "player", (res.name ?: "Unknown"),
-                "town", townName
+                sender, "resident.list-page",
+                "page", page.toString(),
+                "max", maxPage.toString()
             )
         }
     }

@@ -233,6 +233,7 @@ resident:
     - "<dark_green>PVP: <green>{pvp} <dark_green>爆発: <green>{explosions} <dark_green>火: <green>{fire} <dark_green>Mob: <green>{mobs}"
   list-header: "<green>=== 住民一覧 (<yellow>{count}</yellow>) ==="
   list-entry: "<gold>{player}</gold> <gray>- 町: <white>{town}"
+  list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
   perm-applied: "<green>あなたの所有区画にResident権限設定を反映しました。"
   perm-updated: "<green>Residentのデフォルト権限を更新しました。"
   toggle-set: "<green><yellow>{setting}</yellow> を <aqua>{state}</aqua> にしました。"

@@ -233,6 +233,7 @@ resident:
     - "<dark_green>PVP: <green>{pvp} <dark_green>Explosions: <green>{explosions} <dark_green>Firespread: <green>{fire} <dark_green>Mob Spawns: <green>{mobs}"
   list-header: "<green>=== Residents List (<yellow>{count}</yellow>) ==="
   list-entry: "<gold>{player}</gold> <gray>- Town: <white>{town}"
+  list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
   perm-applied: "<green>Resident plot permissions have been applied to your owned plots."
   perm-updated: "<green>Resident default permissions updated."
   toggle-set: "<green><yellow>{setting}</yellow> is now <aqua>{state}</aqua>."
