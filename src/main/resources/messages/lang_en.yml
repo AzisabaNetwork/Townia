@@ -201,6 +201,7 @@ plot:
   not-owned-by-your-town: "<red>This plot does not belong to your town."
   set-type: "<green>Plot type set to <yellow>{type}</yellow>."
   for-sale: "<green>Plot is now for sale at <yellow>{price}</yellow>."
+  price-too-high: "<red>Plot sale price must be less than or equal to <yellow>{max}</yellow>."
   not-for-sale: "<yellow>Plot is no longer for sale."
   bought: "<green>You bought this plot for <yellow>{price}</yellow>."
   not-for-sale-error: "<red>This plot is not for sale."

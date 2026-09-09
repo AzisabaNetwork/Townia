@@ -96,9 +96,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
             .orElseThrow { TowniaException("error.town-not-found") }
 
         val currentClaims = countPlotsByTown(townId)
-        val limit: Int = (town.totalClaimLimit
-                + (plugin.towniaConfig.claimsPerResident
-                * plugin.residentManager.getResidentsByTown(townId).size))
+        val limit: Int = town.totalClaimLimit
         if (currentClaims >= limit) {
             throw TowniaException(
                 "town.claim-limit-reached",

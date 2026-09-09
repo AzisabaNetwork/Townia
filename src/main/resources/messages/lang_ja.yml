@@ -201,6 +201,7 @@ plot:
   not-owned-by-your-town: "<red>この区画はあなたの町の土地ではありません。"
   set-type: "<green>区画タイプを <yellow>{type}</yellow> に設定しました。"
   for-sale: "<green>この区画を <yellow>{price}</yellow> で売りに出しました。"
+  price-too-high: "<red>区画の販売価格は <yellow>{max}</yellow> 以下である必要があります。"
   not-for-sale: "<yellow>この区画の売出を取り消しました。"
   bought: "<green>この区画を <yellow>{price}</yellow> で購入しました。"
   not-for-sale-error: "<red>この区画は売りに出されていません。"

@@ -147,7 +147,7 @@ object TownyFlatfileMigrator {
                 name,
                 values.uuid("capital", "capitaltown") ?: stableUuid("towny-town", values.first("capitalname", "capital_town_name") ?: name),
                 leaderUuid,
-                values.double("balance", "bank", "account"),
+                resolveFlatfileNationBalance(plugin, name, uuid, values.double("balance", "bank", "account")),
                 values.first("board", "nationboard", "nation_board") ?: "",
                 values.double("taxes", "tax"),
                 spawn?.world,
@@ -286,9 +286,9 @@ object TownyFlatfileMigrator {
                 name,
                 mayorUuid,
                 nationUuid,
-                values.double("balance", "bank", "account"),
+                resolveFlatfileTownBalance(plugin, name, uuid, values.double("balance", "bank", "account")),
                 values.int("maxblocks", "max_town_blocks", "claimlimit", "claim_limit"),
-                values.int("bonusblocks", "bonus_blocks", "bonus"),
+                values.int("bonusblocks", "bonus_blocks", "bonus") + values.int("purchasedblocks", "purchased_blocks", "purchased_bonus_blocks"),
                 values.boolean("public", "is_public"),
                 values.long("registered", "registeredat", "createdat"),
                 values.first("board", "townboard", "town_board") ?: "",
@@ -687,5 +687,39 @@ object TownyFlatfileMigrator {
             "owned_plots",
             ownedPlots.toString()
         )
+    }
+
+    private fun resolveFlatfileTownBalance(plugin: Townia, name: String, uuid: UUID, parsedBalance: Double): Double {
+        if (parsedBalance > 0.0) return parsedBalance
+        if (plugin.hasEconomy()) {
+            val eco = plugin.economy!!
+            val candidates = listOf("town-$name", "town-$uuid", name)
+            for (cand in candidates) {
+                runCatching {
+                    if (eco.hasAccount(cand)) {
+                        val b = eco.getBalance(cand)
+                        if (b > 0.0) return b
+                    }
+                }
+            }
+        }
+        return parsedBalance
+    }
+
+    private fun resolveFlatfileNationBalance(plugin: Townia, name: String, uuid: UUID, parsedBalance: Double): Double {
+        if (parsedBalance > 0.0) return parsedBalance
+        if (plugin.hasEconomy()) {
+            val eco = plugin.economy!!
+            val candidates = listOf("nation-$name", "nation-$uuid", name)
+            for (cand in candidates) {
+                runCatching {
+                    if (eco.hasAccount(cand)) {
+                        val b = eco.getBalance(cand)
+                        if (b > 0.0) return b
+                    }
+                }
+            }
+        }
+        return parsedBalance
     }
 }

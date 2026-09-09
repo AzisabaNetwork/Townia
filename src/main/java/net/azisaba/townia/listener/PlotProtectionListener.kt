@@ -12,9 +12,14 @@ import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
 import org.bukkit.Chunk
 import org.bukkit.Material
+import io.papermc.paper.event.player.PlayerOpenSignEvent
 import org.bukkit.block.Block
+import org.bukkit.block.Sign
+import org.bukkit.entity.ArmorStand
+import org.bukkit.entity.Hanging
 import org.bukkit.entity.Monster
 import org.bukkit.entity.Player
+import org.bukkit.entity.Projectile
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
@@ -22,6 +27,7 @@ import org.bukkit.event.block.*
 import org.bukkit.event.entity.CreatureSpawnEvent
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
+import org.bukkit.event.hanging.HangingBreakByEntityEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
 import java.util.*
@@ -81,6 +87,16 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             return
         }
 
+        if (block.state is Sign) {
+            if (event.action == Action.RIGHT_CLICK_BLOCK) {
+                if (handleAction(event.player, block.chunk, ActionType.BUILD)) {
+                    event.isCancelled = true
+                    plugin.messageManager.sendMessage(event.player, "protection.build-denied")
+                    return
+                }
+            }
+        }
+
         val type = block.type
         if (CONTAINER_MATERIALS.contains(type) || DOOR_MATERIALS.contains(type)) {
             if (handleAction(event.getPlayer(), block.chunk, ActionType.SWITCH)) {
@@ -96,6 +112,34 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerOpenSign(event: PlayerOpenSignEvent) {
+        if (handleAction(event.player, event.sign.chunk, ActionType.BUILD)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.player, "protection.build-denied")
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onSignChange(event: SignChangeEvent) {
+        if (handleAction(event.player, event.block.chunk, ActionType.BUILD)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.player, "protection.build-denied")
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onHangingBreakByEntity(event: HangingBreakByEntityEvent) {
+        val remover = event.remover ?: return
+        val player = resolvePlayerDamager(remover)
+        if (player != null) {
+            if (handleAction(player, event.entity.location.chunk, ActionType.DESTROY)) {
+                event.isCancelled = true
+                plugin.messageManager.sendMessage(player, "protection.build-denied")
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onPlayerInteractEntity(event: PlayerInteractEntityEvent) {
         if (handleAction(event.getPlayer(), event.rightClicked.location.chunk, ActionType.SWITCH)) {
             event.isCancelled = true
@@ -105,8 +149,23 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
-        val defender = event.entity as? Player ?: return
-        val damager = event.damager as? Player ?: return
+        val damagerPlayer = resolvePlayerDamager(event.damager)
+        val entity = event.entity
+
+        // 額縁、絵画、防具立てなどの保護
+        if (entity is Hanging || entity is ArmorStand) {
+            if (damagerPlayer != null) {
+                if (handleAction(damagerPlayer, entity.location.chunk, ActionType.DESTROY)) {
+                    event.isCancelled = true
+                    plugin.messageManager.sendMessage(damagerPlayer, "protection.build-denied")
+                    return
+                }
+            }
+            return
+        }
+
+        val defender = entity as? Player ?: return
+        val damager = damagerPlayer ?: return
 
         val chunk: Chunk = defender.location.chunk
         if (TowniaAdminCommand.isBypassing(damager.uniqueId)) return
@@ -292,6 +351,15 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
             return Relationship.OUTSIDER
         }
+    }
+
+    private fun resolvePlayerDamager(damager: org.bukkit.entity.Entity): Player? {
+        if (damager is Player) return damager
+        if (damager is Projectile) {
+            val shooter = damager.shooter
+            if (shooter is Player) return shooter
+        }
+        return null
     }
 
     companion object {

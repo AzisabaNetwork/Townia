@@ -172,6 +172,12 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
+        val maxPrice = plugin.towniaConfig.maxPlotPrice
+        if (maxPrice > 0.0 && price > maxPrice) {
+            plugin.messageManager.sendMessage(player, "plot.price-too-high", "max", formatMoney(maxPrice))
+            return
+        }
+
         if (args.size >= 4 && isRangeShape(args[2])) {
             val radius = parseRadius(args[3])
             if (radius == null) {

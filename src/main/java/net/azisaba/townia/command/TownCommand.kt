@@ -1,4 +1,4 @@
-﻿package net.azisaba.townia.command
+package net.azisaba.townia.command
 
 import net.azisaba.townia.data.Invite
 import net.azisaba.townia.data.Nation
@@ -1591,13 +1591,23 @@ class TownCommand
         val submayors = ArrayList<String>()
         val residentNames = ArrayList<String>()
         for (r in townResidents) {
-            residentNames.add((r.name ?: ""))
-            if (r.rank === TownRank.ASSISTANT) {
-                assistants.add((r.name ?: ""))
+            val name = r.name?.takeIf { it.isNotBlank() } ?: continue
+            if (r.uuid == town.mayorUuid || r.rank === TownRank.MAYOR) {
+                continue
             }
-            if (r.rank !== TownRank.CO_MAYOR) continue
-            submayors.add((r.name ?: ""))
+            if (r.rank === TownRank.CO_MAYOR) {
+                submayors.add(name)
+                continue
+            }
+            if (r.rank === TownRank.ASSISTANT) {
+                assistants.add(name)
+                continue
+            }
+            residentNames.add(name)
         }
+        val distinctSubmayors = submayors.distinct()
+        val distinctAssistants = assistants.distinct()
+        val distinctResidents = residentNames.distinct()
         this.plugin.messageManager.sendMessageWithoutPrefix(
             sender,
             "town.info",
@@ -1610,7 +1620,7 @@ class TownCommand
             "claims",
             claims.toString(),
             "max_claims",
-            (claimLimit + bonusClaims + nationBonus).toString(),
+            town.totalClaimLimit.toString(),
             "nation_bonus",
             nationBonus.toString(),
             "home_x",
@@ -1648,17 +1658,17 @@ class TownCommand
             "mayor_last_seen",
             mayorLastSeen,
             "assistant_count",
-            assistants.size.toString(),
+            distinctAssistants.size.toString(),
             "assistants",
-            if (assistants.isEmpty()) "None" else java.lang.String.join(", " as CharSequence, assistants),
+            if (distinctAssistants.isEmpty()) "None" else java.lang.String.join(", " as CharSequence, distinctAssistants),
             "submayor_count",
-            submayors.size.toString(),
+            distinctSubmayors.size.toString(),
             "submayors",
-            if (submayors.isEmpty()) "None" else java.lang.String.join(", " as CharSequence, submayors),
+            if (distinctSubmayors.isEmpty()) "None" else java.lang.String.join(", " as CharSequence, distinctSubmayors),
             "nation",
             nationName,
             "residents",
-            java.lang.String.join(", " as CharSequence, residentNames)
+            if (distinctResidents.isEmpty()) "None" else java.lang.String.join(", " as CharSequence, distinctResidents)
         )
     }
 

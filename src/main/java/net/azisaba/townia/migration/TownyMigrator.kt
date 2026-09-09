@@ -68,11 +68,7 @@ object TownyMigrator {
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", "0")
                 for (tTown in TownyUniverse.getInstance().towns) {
                     val nationUuid = if (tTown.hasNation()) tTown.nation.uuid else null
-                    var balance = 0.0
-                    try {
-                        balance = tTown.getAccount().getCachedBalance()
-                    } catch (_: Exception) {
-                    }
+                    val balance = resolveTownBalance(plugin, tTown)
 
                     var spawnWorld: String? = null
                     var spawnX = 0.0
@@ -109,7 +105,7 @@ object TownyMigrator {
                         nationUuid,
                         balance,
                         tTown.maxTownBlocks,
-                        tTown.bonusBlocks,
+                        tTown.bonusBlocks + tTown.purchasedBlocks,
                         tTown.isPublic,
                         tTown.registered,
                         tTown.board,
@@ -151,11 +147,7 @@ object TownyMigrator {
                 if (parts.contains("nations")) {
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "nations", "count", "0")
                 for (tNation in TownyUniverse.getInstance().nations) {
-                    var balance = 0.0
-                    try {
-                        balance = tNation.getAccount().getCachedBalance()
-                    } catch (_: Exception) {
-                    }
+                    val balance = resolveNationBalance(plugin, tNation)
 
                     var spawnWorld: String? = null
                     var spawnX = 0.0
@@ -589,5 +581,49 @@ object TownyMigrator {
         Bukkit.getPlayerExact(name)?.let { return it.uniqueId }
         val knownPlayer = Bukkit.getOfflinePlayer(name)
         return if (knownPlayer.hasPlayedBefore()) knownPlayer.uniqueId else townyUuid
+    }
+
+    private fun resolveTownBalance(plugin: Townia, tTown: TownyTown): Double {
+        var balance = 0.0
+        runCatching {
+            balance = tTown.getAccount().getHoldingBalance(true)
+        }
+        if (balance > 0.0) return balance
+
+        if (plugin.hasEconomy()) {
+            val eco = plugin.economy!!
+            val candidates = listOf("town-${tTown.name}", "town-${tTown.uuid}", tTown.name)
+            for (name in candidates) {
+                runCatching {
+                    if (eco.hasAccount(name)) {
+                        val bal = eco.getBalance(name)
+                        if (bal > 0.0) return bal
+                    }
+                }
+            }
+        }
+        return balance
+    }
+
+    private fun resolveNationBalance(plugin: Townia, tNation: com.palmergames.bukkit.towny.`object`.Nation): Double {
+        var balance = 0.0
+        runCatching {
+            balance = tNation.getAccount().getHoldingBalance(true)
+        }
+        if (balance > 0.0) return balance
+
+        if (plugin.hasEconomy()) {
+            val eco = plugin.economy!!
+            val candidates = listOf("nation-${tNation.name}", "nation-${tNation.uuid}", tNation.name)
+            for (name in candidates) {
+                runCatching {
+                    if (eco.hasAccount(name)) {
+                        val bal = eco.getBalance(name)
+                        if (bal > 0.0) return bal
+                    }
+                }
+            }
+        }
+        return balance
     }
 }

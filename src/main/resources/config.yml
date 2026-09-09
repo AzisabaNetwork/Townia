@@ -38,6 +38,9 @@ nation-bonus-claims: 10
 # Invite expiry time in seconds (120 = 2 minutes)
 invite-timeout: 120
 
+# Maximum plot price for /plot fs (set to 0 or negative to disable limit)
+max-plot-price: 1000000.0
+
 # Town creation cost (requires Vault; set to 0 to disable)
 town-creation-cost: 0.0
 
