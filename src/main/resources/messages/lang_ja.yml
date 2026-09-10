@@ -1,6 +1,6 @@
 # Townia - Japanese Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 16
+version: 17
 
 common:
   none: "なし"
@@ -67,6 +67,7 @@ town:
   chunk-not-claimed: "<red>この区画は保護されていません。"
   chunk-not-owned: "<red>この区画はあなたの町の土地ではありません。"
   claim-limit-reached: "<red>町の保護上限に達しています。<yellow>{current}/{max}</yellow>"
+  claim-insufficient-funds: "<red>町の銀行残高が不足しています。必要額: <yellow>{cost}</yellow> (残高: <yellow>{balance}</yellow>)"
   not-mayor: "<red>町長のみ実行できます。"
   not-assistant: "<red>Assistant以上の役職が必要です。"
   invite-sent: "<green><yellow>{player}</yellow> に招待を送りました。"

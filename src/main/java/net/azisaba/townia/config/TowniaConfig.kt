@@ -77,8 +77,8 @@ class TowniaConfig(private val plugin: Townia) {
     var defaultResidentPermsResident: String = "BDSI"
         private set
 
-    val claimCost: Double
-        get() = plugin.config.getDouble("claim-cost", 0.0)
+    var claimCost: Double = 0.0
+        private set
 
     init {
         reload()
@@ -119,6 +119,7 @@ class TowniaConfig(private val plugin: Townia) {
         nationBonusClaims  = config.getInt("nation-bonus-claims", 10)
         maxPlotPrice       = config.getDouble("max-plot-price", 1000000.0)
         townCreationCost   = config.getDouble("town-creation-cost", 0.0)
+        claimCost          = config.getDouble("claim-cost", 0.0)
         nationCreationCost = config.getDouble("nation-creation-cost", 0.0)
         townUpkeep         = config.getDouble("town-upkeep", 0.0)
         defaultTownTax     = config.getDouble("default-town-tax", 0.0)

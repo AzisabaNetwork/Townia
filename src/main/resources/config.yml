@@ -44,6 +44,9 @@ max-plot-price: 1000000.0
 # Town creation cost (requires Vault; set to 0 to disable)
 town-creation-cost: 0.0
 
+# Cost to claim a chunk for a town (requires Vault; set to 0 to disable)
+claim-cost: 0.0
+
 # Nation creation cost (requires Vault; set to 0 to disable)
 nation-creation-cost: 0.0
 

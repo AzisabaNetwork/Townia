@@ -262,10 +262,46 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
+        val townUuid = res.townUuid!!
+        val townOpt = this.plugin.townManager.getTown(townUuid)
+        if (townOpt.isEmpty) {
+            this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", "Unknown")
+            return
+        }
+        val town = townOpt.get()
+
+        val claimCost = this.plugin.towniaConfig.claimCost
+        val hasEco = this.plugin.hasEconomy() && claimCost > 0.0
+
         val isOutpost = args.size > 1 && args[1].toString().equals("outpost", ignoreCase = true)
         try {
             if (isOutpost) {
-                this.plotManager.claimChunk(res.townUuid!!, player.location.chunk)
+                if (hasEco && town.balance < claimCost) {
+                    this.plugin.messageManager.sendMessage(
+                        sender,
+                        "town.claim-insufficient-funds",
+                        "cost", (this.formatMoney(claimCost) ?: "0"),
+                        "balance", (this.formatMoney(town.balance) ?: "0")
+                    )
+                    return
+                }
+                this.plotManager.claimChunk(townUuid, player.location.chunk)
+                if (hasEco) {
+                    this.townManager.subtractBalance(townUuid, claimCost)
+                    val newBalance = this.townManager.getTown(townUuid).map { it.balance }.orElse(0.0)
+                    try {
+                        this.plugin.databaseManager.recordBankTransaction(
+                            "TOWN",
+                            townUuid,
+                            player.uniqueId,
+                            -claimCost,
+                            "claim_outpost",
+                            newBalance
+                        )
+                    } catch (e: SQLException) {
+                        this.plugin.logger.log(Level.SEVERE, "Failed to record town claim transaction", e)
+                    }
+                }
                 val plotOpt: Optional<Plot> = this.plotManager.getPlot(player.location.chunk)
                 plotOpt.ifPresent(Consumer { p: Plot? ->
                     try {
@@ -275,52 +311,106 @@ class TownCommand
                         this.plugin.logger.log(Level.SEVERE, "Failed to save outpost", e)
                     }
                 })
-                val townOpt: Optional<Town> = this.plugin.townManager.getTown(res.townUuid)
-                townOpt.ifPresent(Consumer { t: Town? ->
-                    this.plugin.townManager.addTownOutpost(
-                        t!!.id,
-                        TowniaOutpost(
-                            0,
-                            player.world.name,
-                            player.location.x,
-                            player.location.y,
-                            player.location.z,
-                            player.location.yaw,
-                            player.location.pitch,
-                            false,
-                            null
-                        )
+                this.plugin.townManager.addTownOutpost(
+                    town.id,
+                    TowniaOutpost(
+                        0,
+                        player.world.name,
+                        player.location.x,
+                        player.location.y,
+                        player.location.z,
+                        player.location.yaw,
+                        player.location.pitch,
+                        false,
+                        null
                     )
-                    this.plugin.messageManager.sendMessage(
-                        sender,
-                        "town.outpost-claimed",
-                        "x",
-                        player.location.chunk.x.toString(),
-                        "z",
-                        player.location.chunk.z.toString(),
-                        "town",
-                        (t.name ?: "")
-                    )
-                })
+                )
+                this.plugin.messageManager.sendMessage(
+                    sender,
+                    "town.outpost-claimed",
+                    "x",
+                    player.location.chunk.x.toString(),
+                    "z",
+                    player.location.chunk.z.toString(),
+                    "town",
+                    (town.name ?: "")
+                )
             } else {
                 val radius = parseRadius(args.getOrNull(1))
                 if (radius != null) {
+                    if (hasEco && town.balance < claimCost) {
+                        this.plugin.messageManager.sendMessage(
+                            sender,
+                            "town.claim-insufficient-funds",
+                            "cost", (this.formatMoney(claimCost) ?: "0"),
+                            "balance", (this.formatMoney(town.balance) ?: "0")
+                        )
+                        return
+                    }
                     val chunks = collectSquareChunks(player.location.chunk, radius)
                     var claimed = 0
                     var failed = 0
                     for (chunk in chunks) {
+                        val currentTown = this.townManager.getTown(townUuid).orElse(null)
+                        if (hasEco && (currentTown == null || currentTown.balance < claimCost)) {
+                            failed += (chunks.size - claimed - failed)
+                            break
+                        }
                         try {
-                            this.plotManager.claimChunk(res.townUuid!!, chunk)
+                            this.plotManager.claimChunk(townUuid, chunk)
+                            if (hasEco) {
+                                this.townManager.subtractBalance(townUuid, claimCost)
+                            }
                             claimed++
                         } catch (_: TowniaException) {
                             failed++
                         }
                     }
+                    if (claimed > 0 && hasEco) {
+                        val finalBalance = this.townManager.getTown(townUuid).map { it.balance }.orElse(0.0)
+                        try {
+                            this.plugin.databaseManager.recordBankTransaction(
+                                "TOWN",
+                                townUuid,
+                                player.uniqueId,
+                                -(claimCost * claimed),
+                                "claim_range",
+                                finalBalance
+                            )
+                        } catch (e: SQLException) {
+                            this.plugin.logger.log(Level.SEVERE, "Failed to record town claim transaction", e)
+                        }
+                    }
                     plugin.messageManager.sendMessage(sender, "town.claimed-range", "count", claimed.toString(), "failed", failed.toString())
                     return
                 }
-                this.plotManager.claimChunk(res.townUuid!!, player.location.chunk)
-                val townOpt: Optional<Town> = this.plugin.townManager.getTown(res.townUuid)
+                if (hasEco && town.balance < claimCost) {
+                    this.plugin.messageManager.sendMessage(
+                        sender,
+                        "town.claim-insufficient-funds",
+                        "cost", (this.formatMoney(claimCost) ?: "0"),
+                        "balance", (this.formatMoney(town.balance) ?: "0")
+                    )
+                    return
+                }
+                this.plotManager.claimChunk(townUuid, player.location.chunk)
+                if (hasEco) {
+                    this.townManager.subtractBalance(townUuid, claimCost)
+                    val newBalance = this.townManager.getTown(townUuid).map { it.balance }.orElse(0.0)
+                    try {
+                        this.plugin.databaseManager.recordBankTransaction(
+                            "TOWN",
+                            townUuid,
+                            player.uniqueId,
+                            -claimCost,
+                            "claim",
+                            newBalance
+                        )
+                    } catch (e: SQLException) {
+                        this.plugin.logger.log(Level.SEVERE, "Failed to record town claim transaction", e)
+                    }
+                }
+                val currentTown = this.plugin.townManager.getTown(townUuid).orElse(town)
                 this.plugin.messageManager.sendMessage(
                     sender,
                     "town.claimed",
@@ -329,7 +419,7 @@ class TownCommand
                     "z",
                     player.location.chunk.z.toString(),
                     "town",
-                    townOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
+                    (currentTown.name ?: "Unknown")
                 )
             }
         } catch (e: TowniaException) {

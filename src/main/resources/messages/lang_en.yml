@@ -1,6 +1,6 @@
 # Townia - English Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 16
+version: 17
 
 common:
   none: "None"
@@ -67,6 +67,7 @@ town:
   chunk-not-claimed: "<red>This chunk is not claimed."
   chunk-not-owned: "<red>This chunk does not belong to your town."
   claim-limit-reached: "<red>Your town has reached its claim limit: <yellow>{current}/{max}</yellow>"
+  claim-insufficient-funds: "<red>The town bank does not have enough money. Required: <yellow>{cost}</yellow> (Balance: <yellow>{balance}</yellow>)"
   not-mayor: "<red>Only the mayor can do this."
   not-assistant: "<red>You must be at least an Assistant to do this."
   invite-sent: "<green>Invite sent to <yellow>{player}</yellow>."
