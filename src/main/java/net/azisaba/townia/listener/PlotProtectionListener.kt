@@ -15,6 +15,8 @@ import org.bukkit.Material
 import io.papermc.paper.event.player.PlayerOpenSignEvent
 import org.bukkit.block.Block
 import org.bukkit.block.Sign
+import org.bukkit.block.data.type.Lectern as LecternData
+import org.bukkit.event.player.PlayerTakeLecternBookEvent
 import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Hanging
 import org.bukkit.entity.Monster
@@ -50,7 +52,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     fun onBlockBreak(event: BlockBreakEvent) {
         if (handleAction(event.player, event.getBlock().chunk, ActionType.DESTROY)) {
             event.isCancelled = true
-            plugin.messageManager.sendMessage(event.player, "protection.build-denied")
+            plugin.messageManager.sendMessage(event.player, "protection.destroy-denied")
         }
     }
 
@@ -97,6 +99,20 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             }
         }
 
+        if (block.type == Material.LECTERN && event.action == Action.RIGHT_CLICK_BLOCK) {
+            val lecternData = block.blockData as? LecternData
+            if (lecternData != null && !lecternData.hasBook()) {
+                val itemType = event.item?.type
+                if (itemType == Material.WRITABLE_BOOK || itemType == Material.WRITTEN_BOOK) {
+                    if (handleAction(event.player, block.chunk, ActionType.BUILD)) {
+                        event.isCancelled = true
+                        plugin.messageManager.sendMessage(event.player, "protection.build-denied")
+                        return
+                    }
+                }
+            }
+        }
+
         val type = block.type
         if (CONTAINER_MATERIALS.contains(type) || DOOR_MATERIALS.contains(type)) {
             if (handleAction(event.getPlayer(), block.chunk, ActionType.SWITCH)) {
@@ -128,13 +144,21 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerTakeLecternBook(event: PlayerTakeLecternBookEvent) {
+        if (handleAction(event.player, event.lectern.block.chunk, ActionType.DESTROY)) {
+            event.isCancelled = true
+            plugin.messageManager.sendMessage(event.player, "protection.destroy-denied")
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onHangingBreakByEntity(event: HangingBreakByEntityEvent) {
         val remover = event.remover ?: return
         val player = resolvePlayerDamager(remover)
         if (player != null) {
             if (handleAction(player, event.entity.location.chunk, ActionType.DESTROY)) {
                 event.isCancelled = true
-                plugin.messageManager.sendMessage(player, "protection.build-denied")
+                plugin.messageManager.sendMessage(player, "protection.destroy-denied")
             }
         }
     }
@@ -157,7 +181,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
             if (damagerPlayer != null) {
                 if (handleAction(damagerPlayer, entity.location.chunk, ActionType.DESTROY)) {
                     event.isCancelled = true
-                    plugin.messageManager.sendMessage(damagerPlayer, "protection.build-denied")
+                    plugin.messageManager.sendMessage(damagerPlayer, "protection.destroy-denied")
                     return
                 }
             }
