@@ -82,6 +82,7 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun createNation(name: String, capitalTownUuid: UUID?, leaderUuid: UUID?) {
+        if (!TownManager.NAME_REGEX.matches(name)) throw TowniaException("error.invalid-name")
         if (nationExists(name)) throw TowniaException("nation.already-exists", "{nation}", name)
 
         val capital: Town = townManager.getTown(capitalTownUuid)
@@ -112,6 +113,11 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
         }
         cache.remove(nationId)
         nameIndex.remove(nation.name!!.lowercase(Locale.getDefault()))
+        // Other nations must not keep dangling ally/enemy references to the deleted nation.
+        for (other in cache.values) {
+            other.allies.remove(nationId)
+            other.enemies.remove(nationId)
+        }
         try {
             db.deleteNation(nationId)
         } catch (e: SQLException) {
@@ -142,6 +148,7 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun addBalance(nationId: UUID?, amount: Double) {
+        if (amount.isNaN() || amount < 0) throw TowniaException("error.invalid-args")
         val nation: Nation = requireNation(nationId)
         nation.balance += amount
         persist(nation)
@@ -149,6 +156,7 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun subtractBalance(nationId: UUID?, amount: Double) {
+        if (amount.isNaN() || amount < 0) throw TowniaException("error.invalid-args")
         val nation: Nation = requireNation(nationId)
         if (nation.balance < amount) throw TowniaException("nation.withdraw-insufficient")
         nation.balance -= amount
@@ -167,7 +175,9 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun renameNation(nationId: UUID?, newName: String) {
-        if (nationExists(newName)) throw TowniaException("nation.already-exists", "{nation}", newName)
+        if (!TownManager.NAME_REGEX.matches(newName)) throw TowniaException("error.invalid-name")
+        val existingId = nameIndex[newName.lowercase(Locale.getDefault())]
+        if (existingId != null && existingId != nationId) throw TowniaException("nation.already-exists", "{nation}", newName)
         val nation = requireNation(nationId)
         nameIndex.remove(nation.name!!.lowercase(Locale.getDefault()))
         nation.name = newName

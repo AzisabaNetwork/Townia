@@ -83,16 +83,12 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
     }
 
     fun getClaimCount(townId: UUID?): Int {
-        try {
-            return db.countPlotsByTown(townId!!)
-        } catch (e: SQLException) {
-            plugin.logger.log(Level.WARNING, "Failed to count plots for town $townId", e)
-            return 0
-        }
+        return townId?.let { plugin.plotManager.countPlotsByTown(it) } ?: 0
     }
 
     @Throws(TowniaException::class)
     fun createTown(name: String, mayorUuid: UUID?): Town {
+        if (!isValidName(name)) throw TowniaException("error.invalid-name")
         if (townExists(name)) {
             throw TowniaException("town.already-exists", "{town}", name)
         }
@@ -126,6 +122,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
     fun deleteTown(townId: UUID) {
         val town: Town = cache[townId] ?: throw TowniaException("error.town-not-found")
 
+        plugin.plotManager.removeTownPlots(townId)
         for (p in residentManager.getResidentsByTown(townId)) {
             residentManager.clearTown(p.uuid!!)
         }
@@ -151,7 +148,9 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun renameTown(townId: UUID?, newName: String) {
-        if (townExists(newName)) throw TowniaException("town.already-exists", "{town}", newName)
+        if (!isValidName(newName)) throw TowniaException("error.invalid-name")
+        val existingId = nameIndex[newName.lowercase(Locale.getDefault())]
+        if (existingId != null && existingId != townId) throw TowniaException("town.already-exists", "{town}", newName)
         val town: Town = requireTown(townId)
         nameIndex.remove(town.name!!.lowercase(Locale.getDefault()))
         town.name = newName
@@ -231,14 +230,22 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
         val oldMayor: UUID? = town.mayorUuid
         town.mayorUuid = newMayorUuid
         persist(town)
-        residentManager.setRank(oldMayor, TownRank.RESIDENT
-)
-        residentManager.setRank(newMayorUuid, TownRank.MAYOR
-)
+        residentManager.setRank(oldMayor, TownRank.RESIDENT)
+        residentManager.setRank(newMayorUuid, TownRank.MAYOR)
+
+        if (town.nationUuid != null) {
+            plugin.nationManager.getNation(town.nationUuid).ifPresent { nation ->
+                if (nation.capitalTownUuid == townId) {
+                    nation.leaderUuid = newMayorUuid
+                    plugin.nationManager.saveNation(nation)
+                }
+            }
+        }
     }
 
     @Throws(TowniaException::class)
     fun addBalance(townId: UUID?, amount: Double) {
+        if (amount.isNaN() || amount < 0) throw TowniaException("error.invalid-args")
         val town: Town = requireTown(townId)
         town.balance += amount
         persist(town)
@@ -246,6 +253,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun subtractBalance(townId: UUID?, amount: Double) {
+        if (amount.isNaN() || amount < 0) throw TowniaException("error.invalid-args")
         val town: Town = requireTown(townId)
         if (town.balance < amount) throw TowniaException("town.withdraw-insufficient")
         town.balance -= amount
@@ -303,6 +311,8 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
         }
     }
 
+    private fun isValidName(name: String): Boolean = NAME_REGEX.matches(name)
+
     private fun persist(town: Town) {
         town.id?.let { cache.put(it, town) }
         town.id?.let { nameIndex.put(town.name!!.lowercase(Locale.getDefault()), it) }
@@ -311,5 +321,9 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to save town " + town.name, e)
         }
+    }
+
+    companion object {
+        val NAME_REGEX = Regex("^[\\p{L}\\p{N}_\\-]{2,32}$")
     }
 }

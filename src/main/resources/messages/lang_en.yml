@@ -9,6 +9,7 @@ common:
   no: "No"
 
 error:
+  invalid-name: "<red>Names may only contain letters, numbers, underscores and hyphens (2-32 characters)."
   no-permission: "<red>You do not have permission."
   player-only: "<red>This command can only be used by a player."
   invalid-args: "<red>Invalid arguments. Use <yellow>/town help</yellow>."
@@ -66,6 +67,7 @@ town:
   already-claimed: "<red>This chunk is already claimed."
   chunk-not-claimed: "<red>This chunk is not claimed."
   chunk-not-owned: "<red>This chunk does not belong to your town."
+  claim-not-adjacent: "<red>You can only claim chunks adjacent to your town's land. Use /town claim outpost for a separate area."
   claim-limit-reached: "<red>Your town has reached its claim limit: <yellow>{current}/{max}</yellow>"
   claim-insufficient-funds: "<red>The town bank does not have enough money. Required: <yellow>{cost}</yellow> (Balance: <yellow>{balance}</yellow>)"
   not-mayor: "<red>Only the mayor can do this."

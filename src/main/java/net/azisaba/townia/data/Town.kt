@@ -56,7 +56,7 @@ class Town(
 
     val totalClaimLimit: Int
         get() {
-            val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+            val resCount = Townia.instance.residentManager.countResidentsByTown(id!!)
             val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
             val levelLimit = townLevel?.townBlockLimit ?: Townia.instance.towniaConfig.defaultClaimLimit
             val baseLimit = maxOf(levelLimit, claimLimit)
@@ -74,7 +74,7 @@ class Town(
         }
 
     fun getFormattedName(sender: org.bukkit.command.CommandSender? = null): String {
-        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val resCount = Townia.instance.residentManager.countResidentsByTown(id!!)
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
         val prefix = townLevel?.namePrefix ?: ""
         val postfix = townLevel?.namePostfix ?: ""
@@ -82,14 +82,14 @@ class Town(
     }
 
     fun getMayorPrefix(sender: org.bukkit.command.CommandSender? = null): String {
-        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val resCount = Townia.instance.residentManager.countResidentsByTown(id!!)
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
         val prefix = townLevel?.mayorPrefix ?: ""
         return Townia.instance.messageManager.processTranslationKeys(prefix, sender)
     }
 
     fun getMayorPostfix(sender: org.bukkit.command.CommandSender? = null): String {
-        val resCount = Townia.instance.residentManager.getResidentsByTown(id!!).size
+        val resCount = Townia.instance.residentManager.countResidentsByTown(id!!)
         val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
         val postfix = townLevel?.mayorPostfix ?: ""
         return Townia.instance.messageManager.processTranslationKeys(postfix, sender)
@@ -137,7 +137,7 @@ class Town(
 
     val townSizeRank: String
         get() {
-            val count: Int = Townia.instance.residentManager.getResidentsByTown(id!!).size
+            val count: Int = Townia.instance.residentManager.countResidentsByTown(id!!)
             if (count >= 28) return "MetroPolis"
             if (count >= 24) return "Large City"
             if (count >= 20) return "City"

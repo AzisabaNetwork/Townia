@@ -8,6 +8,8 @@ import net.azisaba.townia.data.Town
 import net.azisaba.townia.database.DatabaseManager
 import net.azisaba.townia.util.ChunkKey
 import org.bukkit.Chunk
+import org.bukkit.Location
+import org.bukkit.World
 import java.sql.SQLException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -47,6 +49,13 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         return Optional.ofNullable<Plot?>(cache.get(ChunkKey.of(worldName, chunkX, chunkZ)))
     }
 
+    /** Looks up the plot containing a block position without materialising a [Chunk] object. */
+    fun getPlotAt(world: World, blockX: Int, blockZ: Int): Plot? {
+        return cache[ChunkKey(world.name, blockX shr 4, blockZ shr 4)]
+    }
+
+    fun getPlotAt(location: Location): Plot? = getPlotAt(location.world, location.blockX, location.blockZ)
+
     fun isClaimed(chunk: Chunk?): Boolean {
         return cache.containsKey(ChunkKey.of(chunk!!))
     }
@@ -64,11 +73,15 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
     }
 
     fun countPlotsByTown(townId: UUID): Int {
-        return cache.values.stream().filter { p: Plot -> townId == p.townUuid }.count().toInt()
+        var n = 0
+        for (p in cache.values) if (townId == p.townUuid) n++
+        return n
     }
 
     fun countPlotsByOwner(ownerUuid: UUID): Int {
-        return cache.values.stream().filter { p: Plot -> ownerUuid == p.ownerUuid }.count().toInt()
+        var n = 0
+        for (p in cache.values) if (ownerUuid == p.ownerUuid) n++
+        return n
     }
 
     fun getPlotsByOwner(ownerUuid: UUID): MutableList<Plot> {
@@ -81,7 +94,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
 
 
     @Throws(TowniaException::class)
-    fun claimChunk(townId: UUID, chunk: Chunk) {
+    fun claimChunk(townId: UUID, chunk: Chunk, outpost: Boolean = false) {
         val worldName = chunk.world.name
         if (!plugin.towniaConfig.isWorldAllowed(worldName)) {
             throw TowniaException("error.wrong-world", "{world}", worldName)
@@ -94,6 +107,11 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
 
         val town: Town = townManager.getTown(townId)
             .orElseThrow { TowniaException("error.town-not-found") }
+
+        // Towny requires a normal claim to touch the town's existing land; outposts and the first claim are exempt.
+        if (!outpost && !isAdjacentToTown(townId, worldName, chunk.x, chunk.z) && countPlotsByTown(townId) > 0) {
+            throw TowniaException("town.claim-not-adjacent")
+        }
 
         val currentClaims = countPlotsByTown(townId)
         val limit: Int = town.totalClaimLimit
@@ -120,16 +138,24 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         }
     }
 
+    private fun isAdjacentToTown(townId: UUID, worldName: String, x: Int, z: Int): Boolean {
+        return ADJACENT.any { (dx, dz) ->
+            cache[ChunkKey.of(worldName, x + dx, z + dz)]?.townUuid == townId
+        }
+    }
+
     @Throws(TowniaException::class)
     fun forceClaimChunk(townId: UUID?, chunk: Chunk) {
         val key: ChunkKey = ChunkKey.of(chunk)
-        if (cache.containsKey(key)) {
+        val previous = cache[key]
+        if (previous != null) {
             try {
                 db.deletePlot(chunk.world.name, chunk.x, chunk.z)
             } catch (e: SQLException) {
                 plugin.logger.log(Level.WARNING, "Error clearing old plot", e)
             }
             cache.remove(key)
+            cleanupTownReferences(previous.townUuid, chunk.world.name, chunk.x, chunk.z)
         }
         val plot = Plot(
             chunk.world.name, chunk.x, chunk.z,
@@ -147,16 +173,53 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
 
     @Throws(TowniaException::class)
     fun unclaimChunk(townId: UUID, chunk: Chunk) {
-        val key: ChunkKey = ChunkKey.of(chunk)
+        unclaimChunk(townId, chunk.world.name, chunk.x, chunk.z)
+    }
+
+    @Throws(TowniaException::class)
+    fun unclaimChunk(townId: UUID, worldName: String, chunkX: Int, chunkZ: Int) {
+        val key: ChunkKey = ChunkKey.of(worldName, chunkX, chunkZ)
         val plot: Plot = cache[key] ?: throw TowniaException("town.chunk-not-claimed")
         if (townId != plot.townUuid) throw TowniaException("town.chunk-not-owned")
 
         cache.remove(key)
         try {
-            db.deletePlot(chunk.world.name, chunk.x, chunk.z)
+            db.deletePlot(worldName, chunkX, chunkZ)
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to delete plot", e)
             throw TowniaException("error.database")
+        }
+        cleanupTownReferences(townId, worldName, chunkX, chunkZ)
+    }
+
+    private fun cleanupTownReferences(townId: UUID?, worldName: String?, chunkX: Int, chunkZ: Int) {
+        val town = townManager.getTown(townId).orElse(null) ?: return
+        if (town.homeBlockWorld == worldName && town.homeBlockX == chunkX && town.homeBlockZ == chunkZ) {
+            town.setHomeBlock(null, 0, 0)
+            townManager.saveTown(town)
+        }
+        for (outpost in town.outposts.filterNotNull()) {
+            if (outpost.world == worldName && Math.floorDiv(outpost.x.toInt(), 16) == chunkX &&
+                Math.floorDiv(outpost.z.toInt(), 16) == chunkZ
+            ) {
+                try {
+                    townManager.removeTownOutpost(town.id, outpost.id)
+                } catch (_: TowniaException) {
+                }
+            }
+        }
+    }
+
+    fun removeTownPlots(townId: UUID) {
+        cache.values.removeIf { it.townUuid == townId }
+    }
+
+    fun releaseOwnedPlots(ownerUuid: UUID) {
+        for (plot in getPlotsByOwner(ownerUuid)) {
+            plot.ownerUuid = null
+            plot.isForSale = false
+            plot.price = 0.0
+            persistPlot(plot)
         }
     }
 
@@ -164,6 +227,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
     fun forceUnclaimChunk(chunk: Chunk) {
         val key: ChunkKey? = ChunkKey.of(chunk)
         if (!cache.containsKey(key)) throw TowniaException("town.chunk-not-claimed")
+        val previousTown = cache[key]?.townUuid
         cache.remove(key)
         try {
             db.deletePlot(chunk.world.name, chunk.x, chunk.z)
@@ -171,6 +235,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
             plugin.logger.log(Level.SEVERE, "Failed to delete plot", e)
             throw TowniaException("error.database")
         }
+        cleanupTownReferences(previousTown, chunk.world.name, chunk.x, chunk.z)
     }
 
     @Throws(TowniaException::class)
@@ -213,5 +278,9 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to save plot", e)
         }
+    }
+
+    companion object {
+        private val ADJACENT = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
     }
 }

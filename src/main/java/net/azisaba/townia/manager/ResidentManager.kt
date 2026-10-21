@@ -60,6 +60,12 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         return list
     }
 
+    fun countResidentsByTown(townUuid: UUID): Int {
+        var n = 0
+        for (p in cache.values) if (townUuid == p.townUuid) n++
+        return n
+    }
+
     fun getResidentsByNation(nationUuid: UUID): MutableList<TowniaPlayer> {
         val list: MutableList<TowniaPlayer> = ArrayList<TowniaPlayer>()
         for (p in cache.values) {
@@ -267,6 +273,8 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         p.townUuid = null
         p.rank = TownRank.RESIDENT
         persist(p)
+        // Plots are only owned by town members: a resident who leaves or is kicked loses them (as in Towny).
+        playerUuid?.let { plugin.plotManager.releaseOwnedPlots(it) }
     }
 
     fun setRank(playerUuid: UUID?, rank: TownRank?) {

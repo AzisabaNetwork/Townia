@@ -9,6 +9,7 @@ common:
   no: "いいえ"
 
 error:
+  invalid-name: "<red>名前には文字・数字・アンダースコア・ハイフンのみ使用でき、2〜32文字にしてください。"
   no-permission: "<red>権限がありません。"
   player-only: "<red>このコマンドはプレイヤーのみ実行できます。"
   invalid-args: "<red>引数が正しくありません。<yellow>/town help</yellow> を確認してください。"
@@ -66,6 +67,7 @@ town:
   already-claimed: "<red>この区画は既に保護されています。"
   chunk-not-claimed: "<red>この区画は保護されていません。"
   chunk-not-owned: "<red>この区画はあなたの町の土地ではありません。"
+  claim-not-adjacent: "<red>町の土地に隣接する区画のみ保護できます。離れた場所には /town claim outpost を使用してください。"
   claim-limit-reached: "<red>町の保護上限に達しています。<yellow>{current}/{max}</yellow>"
   claim-insufficient-funds: "<red>町の銀行残高が不足しています。必要額: <yellow>{cost}</yellow> (残高: <yellow>{balance}</yellow>)"
   not-mayor: "<red>町長のみ実行できます。"

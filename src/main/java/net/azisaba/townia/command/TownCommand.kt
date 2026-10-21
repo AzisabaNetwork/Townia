@@ -226,6 +226,7 @@ class TownCommand
             eco.withdrawPlayer(player as OfflinePlayer, cost)
         }
         val name = args[1]
+        var createdTown: Town? = null
         try {
             val chunk = player.location.chunk
             if (this.plugin.plotManager.getPlot(chunk.world.name, chunk.x, chunk.z)
@@ -234,6 +235,7 @@ class TownCommand
                 throw TowniaException("town.already-claimed")
             }
             val town: Town = this.townManager.createTown(name, player.uniqueId)
+            createdTown = town
             this.plugin.plotManager.claimChunk(town.id!!, chunk)
             town.setHomeBlock(chunk.world.name, chunk.x, chunk.z)
             val loc = player.location
@@ -241,6 +243,13 @@ class TownCommand
             this.townManager.saveTown(town)
             this.plugin.messageManager.sendMessage(sender, "town.created", "town", name)
         } catch (e: TowniaException) {
+            // The town was created but its first chunk could not be claimed: do not leave an empty town behind.
+            createdTown?.id?.let {
+                try {
+                    this.townManager.deleteTown(it)
+                } catch (_: TowniaException) {
+                }
+            }
             if (cost > 0.0 && this.plugin.hasEconomy()) {
                 this.plugin.economy!!.depositPlayer(player as OfflinePlayer, cost)
             }
@@ -285,7 +294,7 @@ class TownCommand
                     )
                     return
                 }
-                this.plotManager.claimChunk(townUuid, player.location.chunk)
+                this.plotManager.claimChunk(townUuid, player.location.chunk, outpost = true)
                 if (hasEco) {
                     this.townManager.subtractBalance(townUuid, claimCost)
                     val newBalance = this.townManager.getTown(townUuid).map { it.balance }.orElse(0.0)
@@ -347,25 +356,36 @@ class TownCommand
                         )
                         return
                     }
-                    val chunks = collectSquareChunks(player.location.chunk, radius)
+                    // Retry in passes so that chunks which only become adjacent after their neighbours
+                    // were claimed are not reported as failures just because of iteration order.
+                    var pending = collectSquareChunks(player.location.chunk, radius)
                     var claimed = 0
-                    var failed = 0
-                    for (chunk in chunks) {
-                        val currentTown = this.townManager.getTown(townUuid).orElse(null)
-                        if (hasEco && (currentTown == null || currentTown.balance < claimCost)) {
-                            failed += (chunks.size - claimed - failed)
-                            break
-                        }
-                        try {
-                            this.plotManager.claimChunk(townUuid, chunk)
-                            if (hasEco) {
-                                this.townManager.subtractBalance(townUuid, claimCost)
+                    var outOfFunds = false
+                    var progress = true
+                    while (progress && pending.isNotEmpty() && !outOfFunds) {
+                        progress = false
+                        val remaining = ArrayList<Chunk>()
+                        for (chunk in pending) {
+                            val currentTown = this.townManager.getTown(townUuid).orElse(null)
+                            if (hasEco && (currentTown == null || currentTown.balance < claimCost)) {
+                                outOfFunds = true
+                                remaining.add(chunk)
+                                continue
                             }
-                            claimed++
-                        } catch (_: TowniaException) {
-                            failed++
+                            try {
+                                this.plotManager.claimChunk(townUuid, chunk)
+                                if (hasEco) {
+                                    this.townManager.subtractBalance(townUuid, claimCost)
+                                }
+                                claimed++
+                                progress = true
+                            } catch (_: TowniaException) {
+                                remaining.add(chunk)
+                            }
                         }
+                        pending = remaining
                     }
+                    val failed = pending.count { !this.plotManager.isClaimed(it) }
                     if (claimed > 0 && hasEco) {
                         val finalBalance = this.townManager.getTown(townUuid).map { it.balance }.orElse(0.0)
                         try {
@@ -441,12 +461,7 @@ class TownCommand
                 val plots: MutableList<Plot> = this.plotManager.getPlotsByTown(res.townUuid!!)
                 var count = 0
                 for (plot in plots) {
-                    val world: World? = this.plugin.server.getWorld((plot.worldName ?: ""))
-                    if (world == null) continue
-                    this.plotManager.unclaimChunk(
-                        res.townUuid!!,
-                        world.getChunkAt(plot.chunkX, plot.chunkZ)
-                    )
+                    this.plotManager.unclaimChunk(res.townUuid!!, plot.worldName ?: continue, plot.chunkX, plot.chunkZ)
                     ++count
                 }
                 this.plugin.messageManager.sendMessage(sender, "town.unclaimed-all", "count", count.toString())
@@ -833,7 +848,7 @@ class TownCommand
             return
         }
         val target: TowniaPlayer = targetOpt.get()
-        if (!res.townUuid.toString().equals(target.townUuid)) {
+        if (res.townUuid != target.townUuid) {
             this.plugin.messageManager.sendMessage(sender, "error.not-same-town")
             return
         }
@@ -969,7 +984,7 @@ class TownCommand
                 val c = player.location.chunk
                 val plotOpt: Optional<Plot> =
                     this.plugin.plotManager.getPlot(c.world.name, c.x, c.z)
-                if (plotOpt.isEmpty || !plotOpt.get().townUuid.toString().equals(res.townUuid)) {
+                if (plotOpt.isEmpty || plotOpt.get().townUuid != res.townUuid) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-owned-plot")
                     return
@@ -1006,7 +1021,7 @@ class TownCommand
                 val c = player.location.chunk
                 val plotOpt: Optional<Plot> =
                     this.plugin.plotManager.getPlot(c.world.name, c.x, c.z)
-                if (plotOpt.isEmpty || !plotOpt.get().townUuid.toString().equals(res.townUuid)) {
+                if (plotOpt.isEmpty || plotOpt.get().townUuid != res.townUuid) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-owned-plot")
                     return
@@ -1562,7 +1577,7 @@ class TownCommand
             return
         }
         val target: TowniaPlayer = targetOpt.get()
-        if (!res.townUuid.toString().equals(target.townUuid)) {
+        if (res.townUuid != target.townUuid) {
             this.plugin.messageManager.sendMessage(sender, "error.not-same-town")
             return
         }
