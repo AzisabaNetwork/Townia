@@ -120,6 +120,16 @@ object TownyFlatfileMigrator {
         ).firstOrNull { File(it, "towns").isDirectory || File(it, "residents").isDirectory || File(it, "nations").isDirectory }
     }
 
+    /** Towny's `database.database_load` (flatfile/mysql), or null when database.yml is absent. */
+    fun findTownyDatabaseLoadType(plugin: Townia): String? {
+        val pluginsDir = plugin.dataFolder.parentFile ?: return null
+        val file = File(pluginsDir, "Towny/settings/database.yml")
+        if (!file.isFile) return null
+        return runCatching {
+            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file).getString("database.database_load")
+        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private fun loadResidentIds(dataDir: File): MutableMap<String, UUID> {
         val result = LinkedHashMap<String, UUID>()
         val dir = File(dataDir, "residents")
@@ -139,9 +149,20 @@ object TownyFlatfileMigrator {
             val values = readValues(file)
             val name = values.first("name", "nation") ?: file.nameWithoutExtension
             val uuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull() ?: stableUuid("towny-nation", name)
-            val leaderValue = values.first("king", "kingname", "leader", "leadername", "mayor", "mayorname", "capital", "capitalname") ?: ""
-            val leaderUuid = resolveResidentUuid(leaderValue, residentsByName) ?: stableUuid("towny-resident", leaderValue.ifBlank { "$name-leader" })
-            val spawn = parseLocation(values.first("spawn", "nationspawn", "nation_spawn"))
+            // Only player keys: "capital" holds a town name, which must never be
+            // looked up as a player. repairNationCapitals() sets the leader from
+            // the capital's mayor afterwards.
+            val leaderValue = values.first("king", "kingname", "leader", "leadername", "mayor", "mayorname") ?: ""
+            val leaderUuid = resolveGovernmentPlayerUuid(plugin, leaderValue, residentsByName, "nation $name leader")
+                ?: stableUuid("towny-resident", "$name-leader")
+            val rawSpawn = values.first("spawn", "nationspawn", "nation_spawn")
+            val spawn = parseLocation(rawSpawn)
+            if (spawn == null) {
+                plugin.logger.warning(
+                    if (rawSpawn == null) "Towny flatfile: nation $name has no nationSpawn in ${file.name}."
+                    else "Towny flatfile: nation $name has an unreadable nationSpawn '$rawSpawn' in ${file.name}."
+                )
+            }
             val nation = Nation(
                 uuid,
                 name,
@@ -276,7 +297,8 @@ object TownyFlatfileMigrator {
             val name = values.first("name", "town") ?: file.nameWithoutExtension
             val uuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull() ?: stableUuid("towny-town", name)
             val mayorValue = values.first("mayor", "mayorname", "king", "kingname") ?: ""
-            val mayorUuid = resolveResidentUuid(mayorValue, residentsByName) ?: stableUuid("towny-resident", mayorValue.ifBlank { "$name-mayor" })
+            val mayorUuid = resolveGovernmentPlayerUuid(plugin, mayorValue, residentsByName, "town $name mayor")
+                ?: stableUuid("towny-resident", "$name-mayor")
             val nationUuid = resolveGovernmentUuid(values.first("nation", "nationuuid", "nation_uuid"), nationsByName)
                 ?: resolveGovernmentUuid(values.first("nationname", "nation_name"), nationsByName)
             val spawn = parseLocation(values.first("spawn", "spawnloc", "spawn_location"))
@@ -554,6 +576,7 @@ object TownyFlatfileMigrator {
         }.getOrDefault(PlotType.DEFAULT)
     }
 
+    /** Parses Towny's Position format: `world,x,y,z,pitch,yaw` (pitch comes before yaw). */
     private fun parseLocation(value: String?): FlatLocation? {
         if (value.isNullOrBlank()) return null
         val parts = value.split(',', ';', ' ').map { it.trim() }.filter { it.isNotEmpty() }
@@ -563,8 +586,8 @@ object TownyFlatfileMigrator {
             parts[1].toDoubleOrNull() ?: return null,
             parts[2].toDoubleOrNull() ?: return null,
             parts[3].toDoubleOrNull() ?: return null,
-            parts.getOrNull(4)?.toFloatOrNull() ?: 0f,
-            parts.getOrNull(5)?.toFloatOrNull() ?: 0f
+            yaw = parts.getOrNull(5)?.toFloatOrNull() ?: 0f,
+            pitch = parts.getOrNull(4)?.toFloatOrNull() ?: 0f
         )
     }
 
@@ -603,6 +626,25 @@ object TownyFlatfileMigrator {
 
     private fun maxRank(current: TownRank?, candidate: TownRank): TownRank {
         return if (current == null || candidate.level > current.level) candidate else current
+    }
+
+    /**
+     * Mayor/leader names missing from the residents folder used to become a
+     * synthetic UUID no player can ever log in with, so the town stayed
+     * mayor-less forever. Resolve the name the same way resident files are
+     * resolved instead; only a blank value falls back to a placeholder.
+     */
+    private fun resolveGovernmentPlayerUuid(
+        plugin: Townia,
+        value: String,
+        residentsByName: Map<String, UUID>,
+        role: String
+    ): UUID? {
+        if (value.isBlank()) return null
+        resolveResidentUuid(value, residentsByName)?.let { return it }
+        val uuid = Bukkit.getOfflinePlayer(value).uniqueId
+        plugin.logger.warning("Towny flatfile: $role '$value' has no resident file; using UUID $uuid from the server's name lookup.")
+        return uuid
     }
 
     private fun resolveResidentUuid(value: String?, residentsByName: Map<String, UUID>): UUID? {

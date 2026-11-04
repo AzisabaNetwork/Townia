@@ -885,6 +885,11 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun saveResident(player: TowniaPlayer) {
+        dataSource!!.getConnection().use { connection -> saveResident(connection, player) }
+    }
+
+    @Throws(SQLException::class)
+    private fun saveResident(connection: java.sql.Connection, player: TowniaPlayer) {
         val sql = if (isMySQL) """
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
@@ -914,7 +919,7 @@ class DatabaseManager(private val plugin: Townia) {
                 jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        run {
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, player.uuid.toString())
                 ps.setString(2, player.name)
@@ -1079,6 +1084,88 @@ class DatabaseManager(private val plugin: Townia) {
                     ps.setString(2, friendUuid.toString())
                     ps.executeUpdate()
                 }
+        }
+    }
+
+    /**
+     * Moves every reference of a resident from [oldUuid] to the already saved
+     * [newResident] row, then removes the old row, in one transaction.
+     *
+     * The resident primary key is never updated in place: resident_friends
+     * references it without ON UPDATE CASCADE, so an in-place UPDATE fails as
+     * soon as the resident has a friend. Friend rows are copied to the new UUID
+     * before the old row is deleted, because that delete cascades to them.
+     */
+    @Synchronized
+    @Throws(SQLException::class)
+    fun remapResidentUuid(oldUuid: UUID, newResident: TowniaPlayer) {
+        val newUuid = newResident.uuid ?: return
+        if (oldUuid == newUuid) return
+        val old = oldUuid.toString()
+        val new = newUuid.toString()
+        val insertIgnore = if (isMySQL) "INSERT IGNORE INTO" else "INSERT OR IGNORE INTO"
+        dataSource!!.getConnection().use { connection ->
+            val autoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                saveResident(connection, newResident)
+                connection.prepareStatement(
+                    "$insertIgnore resident_friends (resident_uuid, friend_uuid) " +
+                        "SELECT ?, friend_uuid FROM resident_friends WHERE resident_uuid = ? AND friend_uuid <> ?"
+                ).use { ps ->
+                    ps.setString(1, new)
+                    ps.setString(2, old)
+                    ps.setString(3, new)
+                    ps.executeUpdate()
+                }
+                connection.prepareStatement(
+                    "$insertIgnore resident_friends (resident_uuid, friend_uuid) " +
+                        "SELECT resident_uuid, ? FROM resident_friends WHERE friend_uuid = ? AND resident_uuid <> ?"
+                ).use { ps ->
+                    ps.setString(1, new)
+                    ps.setString(2, old)
+                    ps.setString(3, new)
+                    ps.executeUpdate()
+                }
+                // Tables keyed by the resident UUID: copy, keeping any value the
+                // current UUID already has, then drop the old rows below.
+                for (sql in listOf(
+                    "$insertIgnore nation_titles (nation_uuid, uuid, title_type, value) " +
+                        "SELECT nation_uuid, ?, title_type, value FROM nation_titles WHERE uuid = ?",
+                    "$insertIgnore town_outlaws (town_uuid, resident_uuid) " +
+                        "SELECT town_uuid, ? FROM town_outlaws WHERE resident_uuid = ?",
+                    "UPDATE towns SET mayor_uuid = ? WHERE mayor_uuid = ?",
+                    "UPDATE nations SET leader_uuid = ? WHERE leader_uuid = ?",
+                    "UPDATE plots SET owner_uuid = ? WHERE owner_uuid = ?",
+                    "UPDATE invites SET target_uuid = ? WHERE target_uuid = ?",
+                    "UPDATE invites SET inviter_uuid = ? WHERE inviter_uuid = ?"
+                )) {
+                    connection.prepareStatement(sql).use { ps ->
+                        ps.setString(1, new)
+                        ps.setString(2, old)
+                        ps.executeUpdate()
+                    }
+                }
+                for (sql in listOf(
+                    "DELETE FROM nation_titles WHERE uuid = ?",
+                    "DELETE FROM town_outlaws WHERE resident_uuid = ?"
+                )) {
+                    connection.prepareStatement(sql).use { ps ->
+                        ps.setString(1, old)
+                        ps.executeUpdate()
+                    }
+                }
+                connection.prepareStatement("DELETE FROM residents WHERE uuid = ?").use { ps ->
+                    ps.setString(1, old)
+                    ps.executeUpdate()
+                }
+                connection.commit()
+            } catch (e: SQLException) {
+                runCatching { connection.rollback() }
+                throw e
+            } finally {
+                connection.autoCommit = autoCommit
+            }
         }
     }
 
