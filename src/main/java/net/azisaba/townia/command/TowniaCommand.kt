@@ -64,8 +64,8 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun handleInfo(sender: CommandSender) {
-        val version = plugin.description.version
-        val authors = plugin.description.authors.joinToString(", ")
+        val version = plugin.pluginMeta.version
+        val authors = plugin.pluginMeta.authors.joinToString(", ")
         plugin.messageManager.sendMessage(sender, "admin.help", "version", version, "authors", authors)
     }
 
@@ -218,8 +218,8 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "town", town.name ?: "Unknown",
             "name", town.name ?: "Unknown",
             "claims", plugin.plotManager.countPlotsByTown(town.id!!).toString(),
-            "residents", plugin.residentManager.getResidentsByTown(town.id!!).size.toString(),
-            "count", plugin.residentManager.getResidentsByTown(town.id!!).size.toString()
+            "residents", plugin.residentManager.getResidentsByTown(town.id).size.toString(),
+            "count", plugin.residentManager.getResidentsByTown(town.id).size.toString()
         )
     }
 

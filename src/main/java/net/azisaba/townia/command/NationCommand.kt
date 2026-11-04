@@ -125,7 +125,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             plugin.messageManager.sendMessage(sender, "nation.created", "nation", "{nation}", name)
         } catch (e: TowniaException) {
             if (cost > 0 && plugin.hasEconomy()) plugin.economy!!.depositPlayer(player, cost)
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
     }
 
@@ -224,7 +224,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             pendingNationInvites.remove(townUuid)
             plugin.messageManager.sendMessage(sender, "nation.joined", "nation", "{nation}", (nation.name ?: "Unknown"))
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
     }
 
@@ -253,7 +253,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             val nationName = nationOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
             plugin.messageManager.sendMessage(sender, "nation.left", "nation", "{nation}", nationName)
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
     }
 
@@ -306,7 +306,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 )
             }
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
     }
 
@@ -334,7 +334,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         val amount: Double
         try {
-            amount = args[1]!!.toDouble()
+            amount = args[1].toDouble()
             if (amount <= 0) throw NumberFormatException()
         } catch (_: NumberFormatException) {
             plugin.messageManager.sendMessage(sender, "error.invalid-amount")
@@ -376,7 +376,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 "{amount}", formatMoney(amount), "{balance}", balance
             )
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to record nation deposit transaction", e)
             plugin.messageManager.sendMessage(sender, "error.database")
@@ -445,7 +445,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 "{amount}", formatMoney(amount), "{balance}", formatMoney(updated.balance)
             )
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to record nation withdraw transaction", e)
             plugin.messageManager.sendMessage(sender, "error.database")
@@ -916,7 +916,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             nationManager.deleteNation(nationUuid!!)
             plugin.messageManager.sendMessage(sender, "nation.deleted", "nation", nationName)
         } catch (e: TowniaException) {
-            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements as? Array<out String> ?: emptyArray()))
+            plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
     }
 

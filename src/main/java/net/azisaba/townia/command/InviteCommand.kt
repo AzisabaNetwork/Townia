@@ -57,7 +57,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
     private fun handleList(player: Player, playerUuid: UUID) {
         try {
-            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid) as MutableList<Invite>
+            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid).filterNotNull().toMutableList()
             val timeoutSecs = plugin.towniaConfig.inviteTimeout
 
             if (invites.isEmpty()) {
@@ -92,7 +92,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
     private fun handleAcceptOldest(player: Player, playerUuid: UUID) {
         try {
-            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid) as MutableList<Invite>
+            val invites: MutableList<Invite> = databaseManager!!.getInvitesByTarget(playerUuid).filterNotNull().toMutableList()
             val timeoutSecs = plugin.towniaConfig.inviteTimeout
 
             var toAccept: Invite? = null
@@ -199,7 +199,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             plugin.messageManager.sendMessage(
                 player,
                 e.messageKey!!,
-                *(e.replacements as? Array<out String> ?: emptyArray())
+                *(e.replacements.filterNotNull().toTypedArray())
             )
         } else if (e is SQLException) {
             plugin.logger.log(Level.SEVERE, "DB error in InviteCommand", e)
@@ -228,7 +228,7 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             townManager.allTowns.stream()
                 .map<String?>(Town::name)
                 .filter { n: String? ->
-                    n!!.lowercase(Locale.getDefault()).startsWith(args[1]!!.lowercase(Locale.getDefault()))
+                    n!!.lowercase(Locale.getDefault()).startsWith(args[1].lowercase(Locale.getDefault()))
                 }
                 .forEach { e: String? -> completions.add(e) }
         }

@@ -731,6 +731,7 @@ object TownyFlatfileMigrator {
         )
     }
 
+    @Suppress("DEPRECATION")
     private fun resolveFlatfileTownBalance(plugin: Townia, name: String, uuid: UUID, parsedBalance: Double): Double {
         if (parsedBalance > 0.0) return parsedBalance
         if (plugin.hasEconomy()) {
@@ -748,6 +749,7 @@ object TownyFlatfileMigrator {
         return parsedBalance
     }
 
+    @Suppress("DEPRECATION")
     private fun resolveFlatfileNationBalance(plugin: Townia, name: String, uuid: UUID, parsedBalance: Double): Double {
         if (parsedBalance > 0.0) return parsedBalance
         if (plugin.hasEconomy()) {

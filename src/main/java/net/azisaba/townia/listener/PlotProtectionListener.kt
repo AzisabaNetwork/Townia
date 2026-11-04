@@ -173,7 +173,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onHangingBreakByEntity(event: HangingBreakByEntityEvent) {
-        val remover = event.remover ?: return
+        val remover = event.remover
         val player = resolvePlayerDamager(remover)
         if (player != null) {
             if (handleAction(player, event.entity.location, ActionType.DESTROY)) {

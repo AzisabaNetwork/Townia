@@ -627,6 +627,7 @@ object TownyMigrator {
         return if (knownPlayer.hasPlayedBefore()) knownPlayer.uniqueId else townyUuid
     }
 
+    @Suppress("DEPRECATION")
     private fun resolveTownBalance(plugin: Townia, tTown: TownyTown): Double {
         var balance = 0.0
         runCatching {
@@ -649,6 +650,7 @@ object TownyMigrator {
         return balance
     }
 
+    @Suppress("DEPRECATION")
     private fun resolveNationBalance(plugin: Townia, tNation: com.palmergames.bukkit.towny.`object`.Nation): Double {
         var balance = 0.0
         runCatching {

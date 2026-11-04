@@ -84,7 +84,7 @@ class  Townia : JavaPlugin() {
         
         ActionBarTask(this).runTaskTimer(this, 40L, 40L)
 
-        logger.info("Townia " + description.version + " enabled.")
+        logger.info("Townia " + pluginMeta.version + " enabled.")
     }
 
     override fun onDisable() {
