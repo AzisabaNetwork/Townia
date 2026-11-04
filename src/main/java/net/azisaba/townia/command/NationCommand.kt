@@ -756,7 +756,25 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 .map { townManager.getTown(it) }
                 .getOrElse { townManager.getTownByName(args[1]) }
             if (townOpt.isEmpty) {
-                plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+                // Not a town: the argument may be a nation name (e.g. a pre-migration nation).
+                val targetNation = nationManager.getNationByName(args[1]).orElse(null)
+                if (targetNation == null) {
+                    plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+                    return
+                }
+                val ownNation = targetNation.id == nationUuid
+                val allied = nation.allies.contains(targetNation.id)
+                if (!ownNation && !allied && !player.hasPermission("townia.admin")) {
+                    plugin.messageManager.sendMessage(sender, "error.no-permission")
+                    return
+                }
+                val nationLoc = resolveNationSpawn(targetNation)
+                if (nationLoc == null) {
+                    plugin.messageManager.sendMessage(sender, "nation.spawn-not-set")
+                    return
+                }
+                plugin.messageManager.sendMessage(sender, "nation.teleporting", "nation", targetNation.name ?: "Unknown")
+                player.teleport(nationLoc)
                 return
             }
             val targetTown = townOpt.get()
@@ -832,6 +850,21 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
         plugin.messageManager.sendMessage(sender, "nation.teleporting", "nation", (nation.name ?: "Unknown"))
         player.teleport(loc)
+    }
+
+    private fun resolveNationSpawn(target: Nation): Location? {
+        if (target.hasSpawn()) {
+            Bukkit.getWorld(target.spawnWorld ?: "world")?.let {
+                return Location(it, target.spawnX, target.spawnY, target.spawnZ, target.spawnYaw, target.spawnPitch)
+            }
+        }
+        val cap = target.capitalTownUuid?.let { townManager.getTown(it).orElse(null) }
+        if (cap != null && cap.hasSpawn()) {
+            Bukkit.getWorld(cap.spawnWorld ?: "")?.let {
+                return Location(it, cap.spawnX, cap.spawnY, cap.spawnZ, cap.spawnYaw, cap.spawnPitch)
+            }
+        }
+        return null
     }
 
     private fun handleSetSpawn(sender: CommandSender) {
@@ -1052,8 +1085,9 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 )
 
                 "spawn" -> {
-                    val townNames = townManager.allTowns.mapNotNull { it.name }
-                    StringUtil.copyPartialMatches(args[1], townNames, completions)
+                    val names = townManager.allTowns.mapNotNull { it.name } +
+                        nationManager.allNations.mapNotNull { it?.name }
+                    StringUtil.copyPartialMatches(args[1], names, completions)
                 }
             }
         } else if (args.size == 3) {
