@@ -37,7 +37,10 @@ tasks {
     }
 
     processResources {
-        val props = mapOf("version" to version, "description" to project.description)
+        val props = mapOf("version" to project.version.toString(), "description" to project.description.orEmpty())
+        // expand() values are not tracked automatically; without these, a version bump
+        // leaves processResources UP-TO-DATE / cache-hit with the old plugin.yml.
+        inputs.properties(props)
         filesMatching("plugin.yml") {
             expand(props)
         }
