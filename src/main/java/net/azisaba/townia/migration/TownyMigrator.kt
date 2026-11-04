@@ -140,7 +140,7 @@ object TownyMigrator {
 
                 if (parts.contains("outlaws")) {
                     plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", "0")
-                    val outlaws = migrateTownOutlaws(plugin)
+                    val outlaws = migrateTownOutlaws(plugin, currentUuidByTownyUuid)
                     plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", outlaws.toString())
                 }
 
@@ -196,7 +196,8 @@ object TownyMigrator {
 
                 if (parts.contains("residents")) {
                 plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", "0")
-                for (tRes in TownyUniverse.getInstance().residents) {
+                val residentsToMigrate = pickOneResidentPerPlayer(plugin, currentUuidByTownyUuid, townByResident, rankByResident)
+                for (tRes in residentsToMigrate) {
                     // Towny's resident pointer can be stale while a town is being loaded or
                     // repaired. The town's membership list is the authoritative side of this
                     // relation, so prefer the mapping collected from every Town first.
@@ -336,14 +337,49 @@ object TownyMigrator {
         )
     }
 
-    private fun migrateTownOutlaws(plugin: Townia): Int {
+    /**
+     * Towny can hold the same player twice (an old-UUID record next to the
+     * current one). Both map to the same Townia UUID, and saving both would let
+     * iteration order decide which one survives - possibly a town-less record
+     * overwriting the town member. Keep the most meaningful record per player.
+     */
+    private fun pickOneResidentPerPlayer(
+        plugin: Townia,
+        currentUuidByTownyUuid: Map<UUID, UUID>,
+        townByResident: Map<UUID, UUID>,
+        rankByResident: Map<UUID, TownRank>
+    ): List<com.palmergames.bukkit.towny.`object`.Resident> {
+        fun hasTown(res: com.palmergames.bukkit.towny.`object`.Resident): Boolean =
+            townByResident[res.uuid] != null || runCatching { res.hasTown() }.getOrDefault(false)
+        val preference = compareBy<com.palmergames.bukkit.towny.`object`.Resident>(
+            { hasTown(it) },
+            { (rankByResident[it.uuid] ?: TownRank.RESIDENT).level },
+            { it.lastOnline }
+        )
+        return TownyUniverse.getInstance().residents
+            .groupBy { currentUuidByTownyUuid[it.uuid] ?: it.uuid }
+            .map { (playerUuid, group) ->
+                val chosen = group.maxWith(preference)
+                if (group.size > 1) {
+                    plugin.logger.warning(
+                        "Towny has ${group.size} residents for player $playerUuid " +
+                            "(${group.joinToString { "${it.name}/${it.uuid}" }}); migrating ${chosen.name}/${chosen.uuid}."
+                    )
+                }
+                chosen
+            }
+    }
+
+    private fun migrateTownOutlaws(plugin: Townia, currentUuidByTownyUuid: Map<UUID, UUID>): Int {
         var count = 0
         for (tTown in TownyUniverse.getInstance().towns) {
             val town = plugin.townManager.getTown(tTown.uuid).orElse(null) ?: continue
             runCatching {
                 tTown.getOutlaws().forEach { outlaw ->
-                    plugin.databaseManager.addTownOutlaw(town.id!!, outlaw.uuid)
-                    town.outlaws.add(outlaw.uuid)
+                    // Same UUID mapping as residents, or the ban would not apply to the joining player.
+                    val outlawUuid = currentUuidByTownyUuid[outlaw.uuid] ?: outlaw.uuid
+                    plugin.databaseManager.addTownOutlaw(town.id!!, outlawUuid)
+                    town.outlaws.add(outlawUuid)
                     count++
                 }
             }

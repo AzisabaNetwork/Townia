@@ -88,18 +88,16 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     }
 
     fun getOrCreate(uuid: UUID, name: String): TowniaPlayer {
+        val legacyUuid = findLegacyUuid(name, uuid)
+        val legacy = legacyUuid?.let { cache[it] }
         val existing: TowniaPlayer? = cache[uuid]
         if (existing != null) {
             // A Towny upgrade can leave its data on an old UUID while this
             // server already created a blank record for the player's current
             // Minecraft UUID. Merge that legacy record instead of returning
             // the blank one and losing the migrated town membership.
-            val legacyUuid = findLegacyUuid(name, uuid)
-            if (legacyUuid != null && legacyUuid != uuid) {
-                val legacy = cache[legacyUuid]
-                if (legacy != null) {
-                    mergeLegacyResident(legacyUuid, legacy, existing)
-                }
+            if (legacyUuid != null && legacy != null) {
+                mergeLegacyResident(legacyUuid, legacy, existing)
             }
             if (!existing.name.equals(name)) {
                 nameIndex.remove(existing.name!!.lowercase(Locale.getDefault()))
@@ -110,65 +108,17 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             return existing
         }
 
-        val oldUuid = findLegacyUuid(name, uuid)
-        if (oldUuid != null && oldUuid != uuid) {
-            val oldExisting = cache[oldUuid]
-            if (oldExisting != null) {
-                plugin.logger.info("Migrating UUID for $name from $oldUuid to $uuid")
-                oldExisting.uuid = uuid
-                cache.remove(oldUuid)
-                cache[uuid] = oldExisting
-                nameIndex[name.lowercase(Locale.getDefault())] = uuid
-
-                val tOpt = plugin.townManager.getTown(oldExisting.townUuid)
-                if (tOpt.isPresent) {
-                    val town = tOpt.get()
-                    if (town.mayorUuid == oldUuid) {
-                        town.mayorUuid = uuid
-                        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable { plugin.databaseManager.saveTown(town) })
-                    }
-                    if (town.nationUuid != null) {
-                        val nOpt = plugin.nationManager.getNation(town.nationUuid)
-                        if (nOpt.isPresent) {
-                            val nation = nOpt.get()
-                            if (nation.leaderUuid == oldUuid) {
-                                nation.leaderUuid = uuid
-                                plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable { plugin.databaseManager.saveNation(nation) })
-                            }
-                        }
-                    }
-                }
-
-                plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                    try {
-                        plugin.databaseManager.connection.use { conn ->
-                            conn.prepareStatement("UPDATE residents SET uuid=? WHERE uuid=?").use { stmt ->
-                                stmt.setString(1, uuid.toString())
-                                stmt.setString(2, oldUuid.toString())
-                                stmt.executeUpdate()
-                            }
-                            conn.prepareStatement("UPDATE towns SET mayor_uuid=? WHERE mayor_uuid=?").use { stmt ->
-                                stmt.setString(1, uuid.toString())
-                                stmt.setString(2, oldUuid.toString())
-                                stmt.executeUpdate()
-                            }
-                            conn.prepareStatement("UPDATE nations SET leader_uuid=? WHERE leader_uuid=?").use { stmt ->
-                                stmt.setString(1, uuid.toString())
-                                stmt.setString(2, oldUuid.toString())
-                                stmt.executeUpdate()
-                            }
-                            conn.prepareStatement("UPDATE plots SET owner_uuid=? WHERE owner_uuid=?").use { stmt ->
-                                stmt.setString(1, uuid.toString())
-                                stmt.setString(2, oldUuid.toString())
-                                stmt.executeUpdate()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                })
-                return oldExisting
-            }
+        if (legacyUuid != null && legacy != null) {
+            plugin.logger.info("Migrating UUID for $name from $legacyUuid to $uuid")
+            cache.remove(legacyUuid)
+            legacy.name?.let { nameIndex.remove(it.lowercase(Locale.getDefault())) }
+            legacy.uuid = uuid
+            legacy.name = name
+            cache[uuid] = legacy
+            nameIndex[name.lowercase(Locale.getDefault())] = uuid
+            moveReferencesInMemory(legacyUuid, uuid)
+            persistUuidRemap(legacyUuid, legacy)
+            return legacy
         }
 
         val newPlayer: TowniaPlayer = TowniaPlayer(
@@ -191,7 +141,8 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     }
 
     private fun mergeLegacyResident(legacyUuid: UUID, legacy: TowniaPlayer, current: TowniaPlayer) {
-        plugin.logger.info("Merging legacy UUID $legacyUuid into current UUID ${current.uuid} for ${current.name}")
+        val currentUuid = current.uuid ?: return
+        plugin.logger.info("Merging legacy UUID $legacyUuid into current UUID $currentUuid for ${current.name}")
         if (current.townUuid == null && legacy.townUuid != null) {
             current.townUuid = legacy.townUuid
             current.rank = legacy.rank
@@ -205,59 +156,83 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             .filter { it > 0L }
             .minOrNull() ?: current.registeredAt
         legacy.friends?.filterNotNull()?.forEach { friend ->
-            if (current.friends?.contains(friend) != true) current.friends?.add(friend)
+            if (friend != currentUuid.toString() && current.friends?.contains(friend) != true) current.friends?.add(friend)
         }
 
         cache.remove(legacyUuid)
-        current.uuid?.let { nameIndex[current.name!!.lowercase(Locale.getDefault())] = it }
-        updateGovernmentReferences(legacyUuid, current.uuid!!)
+        nameIndex[current.name!!.lowercase(Locale.getDefault())] = currentUuid
+        moveReferencesInMemory(legacyUuid, currentUuid)
+        persistUuidRemap(legacyUuid, current)
+    }
 
+    /**
+     * Saves [resident] under its new UUID and moves friends, mayor/leader and
+     * plot ownership away from [oldUuid] in one database transaction.
+     */
+    private fun persistUuidRemap(oldUuid: UUID, resident: TowniaPlayer) {
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
-                // Save the current UUID first; the old row can then be safely removed.
-                db.saveResident(current)
-                plugin.databaseManager.connection.use { conn ->
-                    conn.prepareStatement("UPDATE towns SET mayor_uuid=? WHERE mayor_uuid=?").use { stmt ->
-                        stmt.setString(1, current.uuid.toString())
-                        stmt.setString(2, legacyUuid.toString())
-                        stmt.executeUpdate()
-                    }
-                    conn.prepareStatement("UPDATE nations SET leader_uuid=? WHERE leader_uuid=?").use { stmt ->
-                        stmt.setString(1, current.uuid.toString())
-                        stmt.setString(2, legacyUuid.toString())
-                        stmt.executeUpdate()
-                    }
-                    conn.prepareStatement("UPDATE plots SET owner_uuid=? WHERE owner_uuid=?").use { stmt ->
-                        stmt.setString(1, current.uuid.toString())
-                        stmt.setString(2, legacyUuid.toString())
-                        stmt.executeUpdate()
-                    }
-                    conn.prepareStatement("DELETE FROM residents WHERE uuid=?").use { stmt ->
-                        stmt.setString(1, legacyUuid.toString())
-                        stmt.executeUpdate()
-                    }
-                }
+                db.remapResidentUuid(oldUuid, resident)
             } catch (e: Exception) {
-                plugin.logger.log(Level.SEVERE, "Failed to merge legacy resident UUID for ${current.name}", e)
+                plugin.logger.log(Level.SEVERE, "Failed to move resident UUID $oldUuid to ${resident.uuid} for ${resident.name}", e)
             }
         })
     }
 
+    /**
+     * Only a name match is available to link an old record to the joining
+     * player, and Mojang names can be re-registered by a different account.
+     * Two distinct online-mode UUIDs are therefore two different people, so a
+     * record is only taken over when one side is the offline-mode UUID derived
+     * from the name (offline-era data, or an offline-mode server where the
+     * name is the identity anyway).
+     */
     private fun findLegacyUuid(name: String, currentUuid: UUID): UUID? {
         // Do not rely only on nameIndex: after an interrupted migration both
         // UUID rows can have the same name, and map iteration order decides
         // which row nameIndex happens to retain.
-        return cache.entries.firstOrNull { (uuid, resident) ->
-            uuid != currentUuid && resident.name.equals(name, ignoreCase = true) && resident.townUuid != null
-        }?.key ?: nameIndex[name.lowercase(Locale.getDefault())]?.takeIf { it != currentUuid }
+        val candidates = cache.entries
+            .filter { (uuid, resident) -> uuid != currentUuid && resident.name.equals(name, ignoreCase = true) }
+            .sortedByDescending { it.value.townUuid != null }
+        for ((uuid, resident) in candidates) {
+            if (isSafeLegacyMatch(uuid, resident.name, currentUuid, name)) return uuid
+            plugin.logger.warning(
+                "Not merging resident $uuid (${resident.name}) into $currentUuid ($name): " +
+                    "both are online-mode UUIDs, so the name was probably re-registered by another account."
+            )
+        }
+        return null
     }
 
-    private fun updateGovernmentReferences(oldUuid: UUID, newUuid: UUID) {
+    private fun isSafeLegacyMatch(legacyUuid: UUID, legacyName: String?, currentUuid: UUID, currentName: String): Boolean {
+        val offlineUuids = listOfNotNull(currentName, legacyName).map { offlineUuid(it) }
+        return currentUuid in offlineUuids || legacyUuid in offlineUuids
+    }
+
+    private fun offlineUuid(name: String): UUID =
+        UUID.nameUUIDFromBytes("OfflinePlayer:$name".toByteArray(Charsets.UTF_8))
+
+    private fun moveReferencesInMemory(oldUuid: UUID, newUuid: UUID) {
         plugin.townManager.allTowns.forEach { town ->
             if (town.mayorUuid == oldUuid) town.mayorUuid = newUuid
+            // An outlaw must stay an outlaw after a UUID change.
+            if (town.outlaws.remove(oldUuid)) town.outlaws.add(newUuid)
         }
         plugin.nationManager.allNations.forEach { nation ->
             if (nation.leaderUuid == oldUuid) nation.leaderUuid = newUuid
+            // Same precedence as the database copy: a value already set on the new UUID wins.
+            nation.titles.remove(oldUuid)?.let { nation.titles.putIfAbsent(newUuid, it) }
+            nation.surnames.remove(oldUuid)?.let { nation.surnames.putIfAbsent(newUuid, it) }
+        }
+        // Plots are read from this cache; leaving the old owner here would hide
+        // the player's plots until restart and write the old UUID back on save.
+        plugin.plotManager.getPlotsByOwner(oldUuid).forEach { it.ownerUuid = newUuid }
+        val old = oldUuid.toString()
+        val new = newUuid.toString()
+        cache.values.forEach { resident ->
+            val friends = resident.friends ?: return@forEach
+            if (!friends.remove(old)) return@forEach
+            if (resident.uuid != newUuid && !friends.contains(new)) friends.add(new)
         }
     }
 
