@@ -76,13 +76,16 @@ object TownyMigrator {
                     var spawnZ = 0.0
                     var spawnYaw = 0f
                     var spawnPitch = 0f
-                    if (tTown.hasSpawn()) {
-                        spawnWorld = tTown.getSpawn().getWorld().name
-                        spawnX = tTown.getSpawn().x
-                        spawnY = tTown.getSpawn().y
-                        spawnZ = tTown.getSpawn().z
-                        spawnYaw = tTown.getSpawn().yaw
-                        spawnPitch = tTown.getSpawn().pitch
+                    val townSpawn = if (tTown.hasSpawn()) tTown.spawnPosition() else null
+                    if (townSpawn != null) {
+                        // Read Towny's stored Position, not getSpawn(): the Location it builds
+                        // has a null world when that world is not loaded right now.
+                        spawnWorld = townSpawn.world().name
+                        spawnX = townSpawn.x()
+                        spawnY = townSpawn.y()
+                        spawnZ = townSpawn.z()
+                        spawnYaw = townSpawn.yaw()
+                        spawnPitch = townSpawn.pitch()
                     } else if (tTown.hasHomeBlock()) {
                         try {
                             spawnWorld = tTown.homeBlock.world.name
@@ -155,13 +158,18 @@ object TownyMigrator {
                     var spawnZ = 0.0
                     var spawnYaw = 0f
                     var spawnPitch = 0f
-                    runCatching { tNation.spawn }.getOrNull()?.let { spawn ->
-                        spawnWorld = spawn.world.name
-                        spawnX = spawn.x
-                        spawnY = spawn.y
-                        spawnZ = spawn.z
-                        spawnYaw = spawn.yaw
-                        spawnPitch = spawn.pitch
+                    // Read Towny's stored Position, not getSpawn(): the Location it builds has
+                    // a null world when that world is not loaded, which aborted the migration.
+                    val nationSpawn = tNation.spawnPosition()
+                    if (nationSpawn != null) {
+                        spawnWorld = nationSpawn.world().name
+                        spawnX = nationSpawn.x()
+                        spawnY = nationSpawn.y()
+                        spawnZ = nationSpawn.z()
+                        spawnYaw = nationSpawn.yaw()
+                        spawnPitch = nationSpawn.pitch()
+                    } else {
+                        plugin.logger.warning("Towny API: nation ${tNation.name} has no spawn set in Towny.")
                     }
 
                     val ourNation = Nation(

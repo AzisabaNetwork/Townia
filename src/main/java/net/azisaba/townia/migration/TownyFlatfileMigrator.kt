@@ -120,6 +120,16 @@ object TownyFlatfileMigrator {
         ).firstOrNull { File(it, "towns").isDirectory || File(it, "residents").isDirectory || File(it, "nations").isDirectory }
     }
 
+    /** Towny's `database.database_load` (flatfile/mysql), or null when database.yml is absent. */
+    fun findTownyDatabaseLoadType(plugin: Townia): String? {
+        val pluginsDir = plugin.dataFolder.parentFile ?: return null
+        val file = File(pluginsDir, "Towny/settings/database.yml")
+        if (!file.isFile) return null
+        return runCatching {
+            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file).getString("database.database_load")
+        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private fun loadResidentIds(dataDir: File): MutableMap<String, UUID> {
         val result = LinkedHashMap<String, UUID>()
         val dir = File(dataDir, "residents")
@@ -145,7 +155,14 @@ object TownyFlatfileMigrator {
             val leaderValue = values.first("king", "kingname", "leader", "leadername", "mayor", "mayorname") ?: ""
             val leaderUuid = resolveGovernmentPlayerUuid(plugin, leaderValue, residentsByName, "nation $name leader")
                 ?: stableUuid("towny-resident", "$name-leader")
-            val spawn = parseLocation(values.first("spawn", "nationspawn", "nation_spawn"))
+            val rawSpawn = values.first("spawn", "nationspawn", "nation_spawn")
+            val spawn = parseLocation(rawSpawn)
+            if (spawn == null) {
+                plugin.logger.warning(
+                    if (rawSpawn == null) "Towny flatfile: nation $name has no nationSpawn in ${file.name}."
+                    else "Towny flatfile: nation $name has an unreadable nationSpawn '$rawSpawn' in ${file.name}."
+                )
+            }
             val nation = Nation(
                 uuid,
                 name,
@@ -559,6 +576,7 @@ object TownyFlatfileMigrator {
         }.getOrDefault(PlotType.DEFAULT)
     }
 
+    /** Parses Towny's Position format: `world,x,y,z,pitch,yaw` (pitch comes before yaw). */
     private fun parseLocation(value: String?): FlatLocation? {
         if (value.isNullOrBlank()) return null
         val parts = value.split(',', ';', ' ').map { it.trim() }.filter { it.isNotEmpty() }
@@ -568,8 +586,8 @@ object TownyFlatfileMigrator {
             parts[1].toDoubleOrNull() ?: return null,
             parts[2].toDoubleOrNull() ?: return null,
             parts[3].toDoubleOrNull() ?: return null,
-            parts.getOrNull(4)?.toFloatOrNull() ?: 0f,
-            parts.getOrNull(5)?.toFloatOrNull() ?: 0f
+            yaw = parts.getOrNull(5)?.toFloatOrNull() ?: 0f,
+            pitch = parts.getOrNull(4)?.toFloatOrNull() ?: 0f
         )
     }
 

@@ -302,10 +302,24 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         val filteredParts = parts - setOf("api", "flatfile")
 
         val flatfileDir = net.azisaba.townia.migration.TownyFlatfileMigrator.findTownyDataDir(plugin)
-        if (!forceApi && (forceFlatfile || flatfileDir != null)) {
+        val townyEnabled = plugin.server.pluginManager.isPluginEnabled("Towny")
+        // A server that moved Towny to MySQL keeps its old flatfile folder. Reading
+        // that folder migrates stale data (e.g. nations without their current spawn).
+        val townyLoadType = net.azisaba.townia.migration.TownyFlatfileMigrator.findTownyDatabaseLoadType(plugin)
+        val flatfileIsCurrent = townyLoadType == null || townyLoadType.equals("flatfile", ignoreCase = true)
+        if (!forceApi && (forceFlatfile || (flatfileDir != null && flatfileIsCurrent))) {
             net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, filteredParts)
-        } else if (plugin.server.pluginManager.isPluginEnabled("Towny")) {
+        } else if (townyEnabled) {
+            if (!flatfileIsCurrent && !forceApi) {
+                plugin.logger.info("Towny loads its data from '$townyLoadType'; migrating through the Towny API instead of the flatfile folder.")
+            }
             net.azisaba.townia.migration.TownyMigrator.migrate(plugin, sender, filteredParts)
+        } else if (!flatfileIsCurrent) {
+            plugin.logger.warning(
+                "Towny loads its data from '$townyLoadType', so the flatfile folder is out of date. " +
+                    "Enable Towny to migrate through its API, or add 'flatfile' to migrate the folder anyway."
+            )
+            plugin.messageManager.sendMessage(sender, "admin.migration_failed")
         } else {
             net.azisaba.townia.migration.TownyFlatfileMigrator.migrate(plugin, sender, filteredParts)
         }
