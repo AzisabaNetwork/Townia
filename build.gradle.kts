@@ -27,6 +27,7 @@ java {
 tasks {
     shadowJar {
         archiveClassifier.set("")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
         relocate("or.xerial.sqlite-jdbc", "net.azisaba.townia.libs.sqlite")
         relocate("com.zaxxer.hikari", "net.azisaba.townia.libs.hikari")
     }
