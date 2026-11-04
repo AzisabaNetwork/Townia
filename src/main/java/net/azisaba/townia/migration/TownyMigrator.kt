@@ -214,9 +214,9 @@ object TownyMigrator {
                     var rank: TownRank = TownRank.RESIDENT
                     if (rankByResident[tRes.uuid] == TownRank.MAYOR || tRes.isMayor) {
                         rank = TownRank.MAYOR
-                    } else if (rankByResident[tRes.uuid] == TownRank.CO_MAYOR ||
+                    } else if (rankByResident[tRes.uuid] == TownRank.SUB_MAYOR ||
                         tRes.hasTownRank("co-mayor") || tRes.hasTownRank("comayor") || tRes.hasTownRank("submayor")) {
-                        rank = TownRank.CO_MAYOR
+                        rank = TownRank.SUB_MAYOR
                     } else if (rankByResident[tRes.uuid] == TownRank.ASSISTANT || tRes.hasTownRank("assistant")) {
                         rank = TownRank.ASSISTANT
                     }
@@ -405,7 +405,7 @@ object TownyMigrator {
                 townByResident[resident.uuid] = tTown.uuid
                 val rank = when {
                     tTown.mayor.uuid == resident.uuid -> TownRank.MAYOR
-                    resident.hasTownRank("co-mayor") || resident.hasTownRank("comayor") || resident.hasTownRank("submayor") -> TownRank.CO_MAYOR
+                    resident.hasTownRank("co-mayor") || resident.hasTownRank("comayor") || resident.hasTownRank("submayor") -> TownRank.SUB_MAYOR
                     resident.hasTownRank("assistant") -> TownRank.ASSISTANT
                     else -> TownRank.RESIDENT
                 }

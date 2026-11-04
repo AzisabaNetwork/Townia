@@ -385,8 +385,8 @@ object TownyFlatfileMigrator {
             val rank = when {
                 values.boolean("mayor") -> TownRank.MAYOR
                 hasAnyRank(values, "co-mayor", "comayor", "submayor") ||
-                    townMemberships.rankByResident[residentKey] == TownRank.CO_MAYOR ||
-                    townMemberships.rankByResident[uuidKey] == TownRank.CO_MAYOR -> TownRank.CO_MAYOR
+                    townMemberships.rankByResident[residentKey] == TownRank.SUB_MAYOR ||
+                    townMemberships.rankByResident[uuidKey] == TownRank.SUB_MAYOR -> TownRank.SUB_MAYOR
                 hasAnyRank(values, "assistant") ||
                     townMemberships.rankByResident[residentKey] == TownRank.ASSISTANT ||
                     townMemberships.rankByResident[uuidKey] == TownRank.ASSISTANT -> TownRank.ASSISTANT
@@ -452,7 +452,7 @@ object TownyFlatfileMigrator {
             values.list("comayors", "co_mayors", "co-mayors", "submayors", "sub_mayors").forEach {
                 val key = it.lowercase(Locale.getDefault())
                 townByResident[key] = townUuid
-                rankByResident[key] = maxRank(rankByResident[key], TownRank.CO_MAYOR)
+                rankByResident[key] = maxRank(rankByResident[key], TownRank.SUB_MAYOR)
             }
         }
         return TownMemberships(townByResident, rankByResident)

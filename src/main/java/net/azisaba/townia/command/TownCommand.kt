@@ -1700,7 +1700,7 @@ class TownCommand
             if (r.uuid == town.mayorUuid || r.rank === TownRank.MAYOR) {
                 continue
             }
-            if (r.rank === TownRank.CO_MAYOR) {
+            if (r.rank === TownRank.SUB_MAYOR) {
                 submayors.add(name)
                 continue
             }

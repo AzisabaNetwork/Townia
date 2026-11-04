@@ -58,8 +58,8 @@ class TowniaPlayer {
         get() = townUuid != null
     val isMayor: Boolean
         get() = rank == TownRank.MAYOR
-    val isCoMayor: Boolean
-        get() = rank == TownRank.CO_MAYOR
+    val isSubMayor: Boolean
+        get() = rank == TownRank.SUB_MAYOR
     val isAssistant: Boolean
         get() = rank.isAtLeast(TownRank.ASSISTANT)
     val isAssistantOrHigher: Boolean

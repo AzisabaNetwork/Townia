@@ -5,7 +5,7 @@ import java.util.*
 enum class TownRank(val level: Int) {
     RESIDENT(0),
     ASSISTANT(1),
-    CO_MAYOR(2),
+    SUB_MAYOR(2),
     MAYOR(3);
 
     fun isAtLeast(other: TownRank): Boolean {

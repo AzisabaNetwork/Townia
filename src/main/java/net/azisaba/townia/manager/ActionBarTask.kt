@@ -54,7 +54,7 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                             val owner = ownerOpt.get()
                             val rankStr = when (owner.rank) {
                                 net.azisaba.townia.data.TownRank.MAYOR -> plugin.messageManager.getRawMessage(player, "town.actionbar-mayor")
-                                net.azisaba.townia.data.TownRank.CO_MAYOR -> plugin.messageManager.getRawMessage(player, "town.actionbar-comayor")
+                                net.azisaba.townia.data.TownRank.SUB_MAYOR -> plugin.messageManager.getRawMessage(player, "town.actionbar-submayor")
                                 net.azisaba.townia.data.TownRank.ASSISTANT -> plugin.messageManager.getRawMessage(player, "town.actionbar-assistant")
                                 net.azisaba.townia.data.TownRank.RESIDENT -> ""
                             }

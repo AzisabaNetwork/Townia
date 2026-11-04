@@ -222,8 +222,8 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
 
                 if (town.mayorUuid == res.uuid) {
                     title = "Mayor "
-                } else if (res.rank == net.azisaba.townia.data.TownRank.CO_MAYOR) {
-                    title = "Co-Mayor "
+                } else if (res.rank == net.azisaba.townia.data.TownRank.SUB_MAYOR) {
+                    title = "SubMayor "
                 } else if (res.rank == net.azisaba.townia.data.TownRank.ASSISTANT) {
                     title = "Assistant "
                 }

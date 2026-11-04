@@ -130,7 +130,7 @@ town:
   actionbar-unowned: "未所有"
   actionbar-forsale: "<yellow>[売出中: {price}]"
   actionbar-mayor: "町長 "
-  actionbar-comayor: "副町長 "
+  actionbar-submayor: "副町長 "
   actionbar-assistant: "Assistant "
   actionbar-outlaw: "<red>[Outlaw]"
   actionbar-wilderness: "<dark_green>~ 未開拓地 ~"
