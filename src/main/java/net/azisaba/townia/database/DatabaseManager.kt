@@ -950,7 +950,7 @@ class DatabaseManager(private val plugin: Townia) {
             connection.prepareStatement("SELECT * FROM residents WHERE uuid = ?").use { ps ->
                 ps.setString(1, uuid.toString())
                 ps.executeQuery().use { rs ->
-                    if (rs.next()) return Optional.of<TowniaPlayer?>(mapResident(rs))
+                    if (rs.next()) return Optional.of<TowniaPlayer?>(mapResident(rs, residentColumns(rs)) { getFriends(connection, it) })
                 }
             }
         }
@@ -964,7 +964,7 @@ class DatabaseManager(private val plugin: Townia) {
             connection.prepareStatement("SELECT * FROM residents WHERE LOWER(name) = LOWER(?)").use { ps ->
                 ps.setString(1, name)
                 ps.executeQuery().use { rs ->
-                    if (rs.next()) return Optional.of<TowniaPlayer?>(mapResident(rs))
+                    if (rs.next()) return Optional.of<TowniaPlayer?>(mapResident(rs, residentColumns(rs)) { getFriends(connection, it) })
                 }
             }
         }
@@ -977,9 +977,14 @@ class DatabaseManager(private val plugin: Townia) {
         get() {
             val list: MutableList<TowniaPlayer?> = ArrayList<TowniaPlayer?>()
             dataSource!!.getConnection().use { connection ->
+                // One query for every friendship instead of one connection + query per resident (N+1).
+                val friendsByResident = getAllFriends(connection)
                 connection.createStatement().use { stmt ->
                     stmt.executeQuery("SELECT * FROM residents ORDER BY name").use { rs ->
-                        while (rs.next()) list.add(mapResident(rs))
+                        val columns = residentColumns(rs)
+                        while (rs.next()) {
+                            list.add(mapResident(rs, columns) { friendsByResident.remove(it.toString()) ?: ArrayList() })
+                        }
                     }
                 }
             }
@@ -994,21 +999,25 @@ class DatabaseManager(private val plugin: Townia) {
             connection.prepareStatement("SELECT * FROM residents WHERE town_uuid = ? ORDER BY name").use { ps ->
                 ps.setString(1, townUuid.toString())
                 ps.executeQuery().use { rs ->
-                    while (rs.next()) list.add(mapResident(rs))
+                    val columns = residentColumns(rs)
+                    while (rs.next()) list.add(mapResident(rs, columns) { getFriends(connection, it) })
                 }
             }
         }
         return list
     }
 
+    /** Lower-cased column labels of [rs], so optional (newer) columns are checked once instead of per row via exceptions. */
     @Throws(SQLException::class)
-    private fun mapResident(rs: ResultSet): TowniaPlayer {
+    private fun residentColumns(rs: ResultSet): Set<String> {
+        val meta = rs.metaData
+        return (1..meta.columnCount).mapTo(HashSet()) { meta.getColumnLabel(it).lowercase(Locale.ROOT) }
+    }
+
+    @Throws(SQLException::class)
+    private fun mapResident(rs: ResultSet, columns: Set<String>, friendsOf: (UUID) -> MutableList<String?>): TowniaPlayer {
         val townStr = rs.getString("town_uuid")
-        val jailedTownStr = try {
-            rs.getString("jailed_town_uuid")
-        } catch (_: Exception) {
-            null
-        }
+        val jailedTownStr = if ("jailed_town_uuid" in columns) rs.getString("jailed_town_uuid") else null
         val player = TowniaPlayer(
             UUID.fromString(rs.getString("uuid")),
             rs.getString("name"),
@@ -1017,12 +1026,8 @@ class DatabaseManager(private val plugin: Townia) {
             rs.getLong("last_seen"),
             rs.getString("preferred_lang")
         )
-        player.friends = getFriends(player.uuid!!)
-        try {
-            player.registeredAt = rs.getLong("registered_at")
-        } catch (_: Exception) {
-            player.registeredAt = player.lastSeen
-        }
+        player.friends = friendsOf(player.uuid!!)
+        player.registeredAt = if ("registered_at" in columns) rs.getLong("registered_at") else player.lastSeen
         player.isToggleMap = rs.getInt("toggle_map") == 1
         player.isToggleTownClaim = rs.getInt("toggle_town_claim") == 1
         player.isTogglePlotBorder = rs.getInt("toggle_plot_border") == 1
@@ -1035,27 +1040,40 @@ class DatabaseManager(private val plugin: Townia) {
         val dpr = rs.getString("default_perms_resident")
         if (dpr != null) player.defaultPermsResident = dpr
         if (jailedTownStr != null) player.jailedTownUuid = UUID.fromString(jailedTownStr)
-        try {
-            player.jailReleaseAt = rs.getLong("jail_release_at")
-            player.jailBail = rs.getDouble("jail_bail")
-        } catch (_: Exception) {
-        }
+        if ("jail_release_at" in columns) player.jailReleaseAt = rs.getLong("jail_release_at")
+        if ("jail_bail" in columns) player.jailBail = rs.getDouble("jail_bail")
         return player
     }
 
     @Synchronized
     @Throws(SQLException::class)
-    fun getFriends(residentUuid: UUID): MutableList<String?> {
+    fun getFriends(residentUuid: UUID): MutableList<String?> =
+        dataSource!!.getConnection().use { connection -> getFriends(connection, residentUuid) }
+
+    @Throws(SQLException::class)
+    private fun getFriends(connection: java.sql.Connection, residentUuid: UUID): MutableList<String?> {
         val friends: MutableList<String?> = ArrayList<String?>()
-        dataSource!!.getConnection().use { connection ->
-            connection.prepareStatement("SELECT friend_uuid FROM resident_friends WHERE resident_uuid = ?").use { ps ->
-                ps.setString(1, residentUuid.toString())
-                ps.executeQuery().use { rs ->
-                    while (rs.next()) friends.add(rs.getString("friend_uuid"))
-                }
+        connection.prepareStatement("SELECT friend_uuid FROM resident_friends WHERE resident_uuid = ?").use { ps ->
+            ps.setString(1, residentUuid.toString())
+            ps.executeQuery().use { rs ->
+                while (rs.next()) friends.add(rs.getString("friend_uuid"))
             }
         }
         return friends
+    }
+
+    /** All friendships keyed by resident UUID string, read in a single query. */
+    @Throws(SQLException::class)
+    private fun getAllFriends(connection: java.sql.Connection): MutableMap<String, MutableList<String?>> {
+        val map = HashMap<String, MutableList<String?>>()
+        connection.createStatement().use { stmt ->
+            stmt.executeQuery("SELECT resident_uuid, friend_uuid FROM resident_friends").use { rs ->
+                while (rs.next()) {
+                    map.getOrPut(rs.getString("resident_uuid")) { ArrayList() }.add(rs.getString("friend_uuid"))
+                }
+            }
+        }
+        return map
     }
 
     @Synchronized
