@@ -292,6 +292,7 @@ permissions:
       townia.admin.deletenation: true
       townia.admin.bypass: true
       townia.admin.world: true
+      townia.outlaw.bypass: true
   townia.admin.reload:
     description: Reload Townia configuration
     default: op
@@ -315,4 +316,7 @@ permissions:
     default: op
   townia.admin.world:
     description: Manage world settings
+    default: op
+  townia.outlaw.bypass:
+    description: Enter or teleport into towns that have outlawed you
     default: op
