@@ -444,8 +444,15 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     companion object {
         private val bypassSet: MutableSet<UUID> = Collections.synchronizedSet(HashSet())
 
+        const val BYPASS_PERMISSION = "townia.admin.bypass"
+
         fun isBypassing(uuid: UUID): Boolean {
             return bypassSet.contains(uuid)
+        }
+
+        /** Staff holding [BYPASS_PERMISSION] always bypass; the `/ta bypass` toggle still works for anyone else. */
+        fun isBypassing(player: org.bukkit.entity.Player): Boolean {
+            return bypassSet.contains(player.uniqueId) || player.hasPermission(BYPASS_PERMISSION)
         }
     }
 }

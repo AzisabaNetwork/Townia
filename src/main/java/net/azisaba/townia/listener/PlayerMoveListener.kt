@@ -101,7 +101,7 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         if (resident?.townUuid == town.id) return null
         // A town may still put its outlaws in its own jail.
         if (resident?.jailedTownUuid == town.id) return null
-        if (TowniaAdminCommand.isBypassing(player.uniqueId) || player.hasPermission(OUTLAW_BYPASS_PERMISSION)) return null
+        if (TowniaAdminCommand.isBypassing(player) || player.hasPermission(OUTLAW_BYPASS_PERMISSION)) return null
         return town
     }
 

@@ -47,6 +47,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
 
         when (args[0].lowercase(Locale.getDefault())) {
             "list" -> showList(sender, args)
+            "plotlist" -> handlePlotList(sender, args)
             "set" -> {
                 if (args.size >= 3 && args[1].equals("mode", ignoreCase = true) && args[2].equals(
                         "map",
@@ -367,6 +368,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             1 -> {
                 val options: MutableList<String> = ArrayList()
                 options.add("list")
+                options.add("plotlist")
                 options.add("friend")
                 options.add("set")
                 options.add("toggle")
@@ -421,6 +423,31 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             }
         }
         return completions
+    }
+
+    /** /resident plotlist [player]: plots owned by the player (Towny's "/resident plotlist"). */
+    private fun handlePlotList(sender: CommandSender, args: Array<out String>) {
+        val target: TowniaPlayer = if (args.size >= 2) {
+            residentManager.getResidentByName(args[1]).orElse(null) ?: run {
+                plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[1])
+                return
+            }
+        } else {
+            val player = requirePlayer(sender) ?: return
+            residentManager.getOrCreate(player)
+        }
+        val plots = plugin.plotManager.getPlotsByOwner(target.uuid!!)
+            .sortedWith(compareBy({ it.worldName }, { it.chunkX }, { it.chunkZ }))
+        plugin.messageManager.sendMessageWithoutPrefix(sender, "plot.list-header", "player", (target.name ?: "Unknown"), "count", plots.size.toString())
+        for (plot in plots) {
+            val townName = plugin.townManager.getTown(plot.townUuid).map { it.name }.orElse("Unknown")
+            plugin.messageManager.sendMessageWithoutPrefix(
+                sender, "plot.list-entry",
+                "world", (plot.worldName ?: "?"), "x", (plot.chunkX * 16).toString(), "z", (plot.chunkZ * 16).toString(),
+                "town", (townName ?: "Unknown"), "name", (plot.name ?: ""),
+                "for_sale", if (plot.isForSale) "Yes" else "No"
+            )
+        }
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {

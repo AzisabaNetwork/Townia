@@ -221,7 +221,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
         val defender = entity
         val damager = damagerPlayer ?: return
-        if (TowniaAdminCommand.isBypassing(damager.uniqueId)) return
+        if (TowniaAdminCommand.isBypassing(damager)) return
 
         // Like Towny, PvP must be allowed both where the victim stands and where the attacker stands.
         if (!isPvpAllowedAt(defender.location, defender, damager) ||
@@ -449,7 +449,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         if (plot == null) {
             // Nothing to protect: resolve the cheap checks before the bypass lookup.
             if (!plugin.towniaConfig.isWorldAllowed(world.name)) return false
-            if (TowniaAdminCommand.isBypassing(player.uniqueId)) return false
+            if (TowniaAdminCommand.isBypassing(player)) return false
             return !plugin.towniaConfig.isWildernessActionAllowed(
                 when (type) {
                     ActionType.BUILD -> "build"
@@ -459,7 +459,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
                 }
             )
         }
-        if (TowniaAdminCommand.isBypassing(player.uniqueId)) return false
+        if (TowniaAdminCommand.isBypassing(player)) return false
         val town = townManager.getTown(plot.townUuid).orElse(null) ?: return false
 
         if (town.mayorUuid == player.uniqueId) return false

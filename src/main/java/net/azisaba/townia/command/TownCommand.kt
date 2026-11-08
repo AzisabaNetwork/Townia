@@ -130,6 +130,14 @@ class TownCommand
                 this.handleResList(sender, args)
             }
 
+            "online" -> {
+                this.handleOnline(sender, args)
+            }
+
+            "ranklist" -> {
+                this.handleRankList(sender, args)
+            }
+
             "spawn" -> {
                 this.handleSpawn(sender, args)
             }
@@ -735,6 +743,49 @@ class TownCommand
         res.townUuid = town.id
         this.plugin.residentManager.saveResident(res)
         this.plugin.messageManager.sendMessage(sender, "town.joined", "town", (town.name ?: ""))
+    }
+
+    private fun resolveTargetTown(sender: CommandSender, args: Array<out String>): Town? {
+        if (args.size >= 2) {
+            val town = this.townManager.getTownByName(args[1]).orElse(null)
+            if (town == null) {
+                this.plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+            }
+            return town
+        }
+        val player: Player = this.requirePlayer(sender) ?: return null
+        val res: TowniaPlayer = this.requireInTown(sender, player) ?: return null
+        return this.townManager.getTown(res.townUuid).orElse(null)
+    }
+
+    /** /town online [town]: residents of the town who are currently online. */
+    private fun handleOnline(sender: CommandSender, args: Array<out String>) {
+        val town = resolveTargetTown(sender, args) ?: return
+        val names = this.residentManager.getResidentsByTown(town.id!!)
+            .mapNotNull { r -> r.uuid?.let { this.plugin.server.getPlayer(it) } }
+            .filter { it.isOnline }
+            .map { it.name }
+        this.plugin.messageManager.sendMessage(
+            sender, "town.online",
+            "town", (town.name ?: ""),
+            "count", names.size.toString(),
+            "players", if (names.isEmpty()) this.plugin.messageManager.getPlainMessage(sender, "common.none") else names.joinToString(", ")
+        )
+    }
+
+    /** /town ranklist [town]: residents grouped by their town rank. */
+    private fun handleRankList(sender: CommandSender, args: Array<out String>) {
+        val town = resolveTargetTown(sender, args) ?: return
+        val residents = this.residentManager.getResidentsByTown(town.id!!)
+        this.plugin.messageManager.sendMessageWithoutPrefix(sender, "town.ranklist-header", "town", (town.name ?: ""))
+        for (rank in TownRank.entries.sortedByDescending { it.level }) {
+            val names = residents.filter { it.rank == rank }.mapNotNull { it.name }
+            if (names.isEmpty()) continue
+            this.plugin.messageManager.sendMessageWithoutPrefix(
+                sender, "town.ranklist-entry",
+                "rank", rank.name, "players", names.joinToString(", ")
+            )
+        }
     }
 
     private fun handleResList(sender: CommandSender, args: Array<out String>) {
@@ -2196,6 +2247,11 @@ class TownCommand
                     "withdraw",
                     "bankhistory",
                     "rank",
+                    "online",
+                    "ranklist",
+                    "reslist",
+                    "here",
+                    "map",
                     "info",
                     "list",
                     "delete",
