@@ -56,12 +56,9 @@ class Town(
 
     val totalClaimLimit: Int
         get() {
+            val config = Townia.instance.towniaConfig
             val resCount = Townia.instance.residentManager.countResidentsByTown(id!!)
-            val townLevel = Townia.instance.towniaConfig.getTownLevel(resCount)
-            val levelLimit = townLevel?.townBlockLimit ?: Townia.instance.towniaConfig.defaultClaimLimit
-            val baseLimit = maxOf(levelLimit, claimLimit)
-            val residentBonus = Townia.instance.towniaConfig.claimsPerResident * resCount
-            
+
             var nationBonus = 0
             if (isInNation) {
                 val nationOpt = Townia.instance.nationManager.getNation(nationUuid!!)
@@ -69,8 +66,18 @@ class Town(
                     nationBonus = nationOpt.get().getTownBlockLimitBonus()
                 }
             }
-            
-            return baseLimit + bonusClaims + residentBonus + nationBonus
+
+            val limit = if (config.townBlockRatio > 0) {
+                // Towny semantics: residents x ratio, plus bought/bonus blocks; town levels are ignored.
+                resCount * config.townBlockRatio + bonusClaims + nationBonus
+            } else {
+                val townLevel = config.getTownLevel(resCount)
+                val levelLimit = townLevel?.townBlockLimit ?: config.defaultClaimLimit
+                val baseLimit = maxOf(levelLimit, claimLimit)
+                val residentBonus = config.claimsPerResident * resCount
+                baseLimit + bonusClaims + residentBonus + nationBonus
+            }
+            return if (config.townBlockLimit > 0) minOf(limit, config.townBlockLimit) else limit
         }
 
     fun getFormattedName(sender: org.bukkit.command.CommandSender? = null): String {

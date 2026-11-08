@@ -80,6 +80,23 @@ Towny をアンロードする予定がある場合は、**Towny が有効なう
 /towniaadmin migrate data all skip-profiles
 ```
 
+移行処理は Mojang へのプロフィール照会を行いません。名前しか分からないプレイヤーは、オンライン中のプレイヤー、Townia の既存住民、サーバーのキャッシュの順に UUID を探し、見つからなければオフライン UUID で保存します(本人のログイン時に正規 UUID へ統合されます)。進捗と結果はサーバーログにも出力されます。
+
+区画だけを Towny の最新データに合わせ直す場合は、次のオプションが使えます。
+- `missing-only` - Townia に既にある区画は上書きせず、足りない区画だけを追加します
+- `prune` - Towny のデータに存在しない区画を削除します(Towny のデータがあるワールドのみ。半数以上が対象になる場合は誤ったデータとみなして中止します)
+
+```text
+/towniaadmin migrate data townblocks flatfile missing-only prune
+```
+
+過去の移行で作られたオフライン UUID の重複住民は、次のコマンドで正規 UUID のレコードに統合できます。`confirm` を付けずに実行すると件数だけを表示します。
+```text
+/towniaadmin dedupe [confirm]
+```
+
+町の土地上限を Towny と同じ「住民数 × `town-block-ratio`」で計算するには、`config.yml` の `town-block-ratio` に Towny の `town_block_ratio` の値を設定します(`town-block-limit` は上限の最大値で、0 は無制限です)。
+
 所属に問題がある場合は、次の診断コマンドで Minecraft UUID、Towny API、Townia の各解決結果を比較できます。
 ```text
 /towniaadmin migrate diagnose [player]

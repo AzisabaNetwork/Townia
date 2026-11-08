@@ -890,21 +890,28 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
     private fun handleList(sender: CommandSender, args: Array<out String>) {
         val nations: MutableList<Nation> = nationManager.allNations
-        val sort = if (args.size >= 3 && args[1].equals("by", ignoreCase = true)) {
-            args[2].lowercase(Locale.getDefault())
-        } else {
-            "name"
+        // Same forms as /town list: "/nation list [page]" and "/nation list by <sort> [page]".
+        var page = args.getOrNull(1)?.toIntOrNull() ?: 1
+        var sort = "name"
+        if (args.size >= 3 && args[1].equals("by", ignoreCase = true)) {
+            sort = args[2].lowercase(Locale.getDefault())
+            page = args.getOrNull(3)?.toIntOrNull() ?: 1
         }
         when (sort) {
             "town", "towns" -> nations.sortByDescending { nationManager.getTownsInNation(it.id!!).size }
             "balance", "bank" -> nations.sortByDescending { it.balance }
             else -> nations.sortBy { it.name?.lowercase(Locale.getDefault()) ?: "" }
         }
+        val pageSize = 10
+        val maxPage = if (nations.isEmpty()) 1 else (nations.size + pageSize - 1) / pageSize
+        page = page.coerceIn(1, maxPage)
         plugin.messageManager.sendMessageWithoutPrefix(
             sender, "nation.list-header",
             "count", nations.size.toString()
         )
-        for (nation in nations) {
+        if (nations.isEmpty()) return
+        val start = (page - 1) * pageSize
+        for (nation in nations.subList(start, (start + pageSize).coerceAtMost(nations.size))) {
             val townCount: Int = nationManager.getTownsInNation(nation.id!!).size
             val leaderOpt: Optional<TowniaPlayer> = residentManager.getResident(nation.leaderUuid)
             val leaderName: String = leaderOpt.map { it.name }.orElse("Unknown") ?: "Unknown"
@@ -915,6 +922,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 "towns", clickableCount(townCount, "nation info ${nation.id}", "Click to view nation information")
             )
         }
+        plugin.messageManager.sendMessageWithoutPrefix(sender, "nation.list-page", "page", page.toString(), "max", maxPage.toString())
     }
 
     private fun clickableCount(count: Int, command: String, hover: String): String {

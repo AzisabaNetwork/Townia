@@ -29,6 +29,8 @@ class  Townia : JavaPlugin() {
         private set
     lateinit var residentManager: ResidentManager
         private set
+    lateinit var nameHistory: NameHistory
+        private set
     lateinit var townManager: TownManager
         private set
     lateinit var nationManager: NationManager
@@ -57,10 +59,12 @@ class  Townia : JavaPlugin() {
 
         messageManager = MessageManager(this)
 
+        nameHistory = NameHistory(this)
         residentManager = ResidentManager(this, databaseManager)
         townManager = TownManager(this, databaseManager, residentManager)
         nationManager = NationManager(this, databaseManager, townManager)
         plotManager = PlotManager(this, databaseManager, townManager)
+        residentManager.repairMayors().takeIf { it > 0 }?.let { logger.info("Repaired $it mayor record(s).") }
         server.servicesManager.register(TowniaAPI::class.java, TowniaApiImpl(this), this, ServicePriority.Normal)
 
         hookVault()

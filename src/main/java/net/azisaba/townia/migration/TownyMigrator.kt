@@ -7,6 +7,7 @@ import com.palmergames.bukkit.towny.`object`.TownyPermission.ActionType
 import com.palmergames.bukkit.towny.`object`.TownyPermission.PermLevel
 import com.palmergames.bukkit.towny.`object`.TownBlock as TownyTownBlock
 import net.azisaba.townia.Townia
+import net.azisaba.townia.util.ChunkKey
 import net.azisaba.townia.data.Nation
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.PlotType
@@ -65,7 +66,7 @@ object TownyMigrator {
                 }
 
                 if (parts.contains("towns")) {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", "0")
+                MigrationSupport.progress(plugin, sender, "towns", "0")
                 for (tTown in TownyUniverse.getInstance().towns) {
                     val nationUuid = if (tTown.hasNation()) tTown.nation.uuid else null
                     val balance = resolveTownBalance(plugin, tTown)
@@ -138,17 +139,17 @@ object TownyMigrator {
                     plugin.townManager.cacheTown(ourTown)
                     towns++
                 }
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", towns.toString())
+                MigrationSupport.progress(plugin, sender, "towns", towns.toString())
                 }
 
                 if (parts.contains("outlaws")) {
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", "0")
+                    MigrationSupport.progress(plugin, sender, "outlaws", "0")
                     val outlaws = migrateTownOutlaws(plugin, currentUuidByTownyUuid)
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", outlaws.toString())
+                    MigrationSupport.progress(plugin, sender, "outlaws", outlaws.toString())
                 }
 
                 if (parts.contains("nations")) {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "nations", "count", "0")
+                MigrationSupport.progress(plugin, sender, "nations", "0")
                 for (tNation in TownyUniverse.getInstance().nations) {
                     val balance = resolveNationBalance(plugin, tNation)
 
@@ -193,17 +194,17 @@ object TownyMigrator {
                     plugin.nationManager.cacheNation(ourNation)
                     nations++
                 }
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "nations", "count", nations.toString())
+                MigrationSupport.progress(plugin, sender, "nations", nations.toString())
                 }
 
                 if (parts.contains("relations")) {
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", "0")
+                    MigrationSupport.progress(plugin, sender, "relations", "0")
                     val relations = migrateNationRelations(plugin)
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", relations.toString())
+                    MigrationSupport.progress(plugin, sender, "relations", relations.toString())
                 }
 
                 if (parts.contains("residents")) {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", "0")
+                MigrationSupport.progress(plugin, sender, "residents", "0")
                 val residentsToMigrate = pickOneResidentPerPlayer(plugin, currentUuidByTownyUuid, townByResident, rankByResident)
                 for (tRes in residentsToMigrate) {
                     // Towny's resident pointer can be stale while a town is being loaded or
@@ -265,28 +266,38 @@ object TownyMigrator {
                     plugin.residentManager.cacheResident(player)
                     residents++
                 }
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", residents.toString())
+                MigrationSupport.progress(plugin, sender, "residents", residents.toString())
                 }
 
                 if (parts.contains("townblocks")) {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", "0")
+                MigrationSupport.progress(plugin, sender, "townblocks", "0")
+                val missingOnly = requestedParts.contains(MigrationSupport.MISSING_ONLY)
+                val seenChunks = HashSet<ChunkKey>()
                 for (tb in collectTownBlocks()) {
+                    val key = runCatching { ChunkKey(tb.world.name, tb.x, tb.z) }.getOrNull() ?: continue
+                    seenChunks.add(key)
+                    if (missingOnly && plugin.plotManager.isClaimed(key.world, key.x, key.z)) continue
                     if (migrateTownBlock(plugin, tb, currentUuidByTownyUuid)) plots++
                 }
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", plots.toString())
+                if (requestedParts.contains(MigrationSupport.PRUNE)) {
+                    val pruned = PlotPruner.prune(plugin, seenChunks)
+                    MigrationSupport.progress(plugin, sender, "pruned plots", pruned.toString())
+                }
+                MigrationSupport.progress(plugin, sender, "townblocks", plots.toString())
                 }
 
                 if (parts.contains("towns") || parts.contains("townblocks")) {
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outposts", "count", "0")
+                    MigrationSupport.progress(plugin, sender, "outposts", "0")
                     outposts = migrateTownOutposts(plugin)
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outposts", "count", outposts.toString())
+                    MigrationSupport.progress(plugin, sender, "outposts", outposts.toString())
                 }
 
                 if (parts.contains("jails")) {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "jails", "count", "0")
+                MigrationSupport.progress(plugin, sender, "jails", "0")
                 val jails = migrateTownJails(plugin)
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "jails", "count", jails.toString())
+                MigrationSupport.progress(plugin, sender, "jails", jails.toString())
                 }
+                plugin.residentManager.repairMayors()
                 sendValidation(plugin, sender)
 
                 plugin.messageManager.sendMessage(
@@ -623,7 +634,8 @@ object TownyMigrator {
      */
     private fun resolveCurrentMinecraftUuid(name: String, townyUuid: UUID): UUID {
         Bukkit.getPlayerExact(name)?.let { return it.uniqueId }
-        val knownPlayer = Bukkit.getOfflinePlayer(name)
+        // getOfflinePlayerIfCached never asks Mojang; getOfflinePlayer(name) did, once per resident.
+        val knownPlayer = Bukkit.getOfflinePlayerIfCached(name) ?: return townyUuid
         return if (knownPlayer.hasPlayedBefore()) knownPlayer.uniqueId else townyUuid
     }
 

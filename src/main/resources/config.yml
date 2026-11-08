@@ -29,6 +29,14 @@ default-claim-limit: 8
 # Bonus claims granted per resident (0 to disable)
 claims-per-resident: 1
 
+# Towny-style claim limit: residents x town-block-ratio (+ bonus/purchased and nation bonus).
+# When above 0 it replaces the town-level limit, default-claim-limit and claims-per-resident.
+# Towny's town_block_ratio (config.yml -> town.town_block_ratio). 0 disables it.
+town-block-ratio: 0
+
+# Hard cap on any town's claim limit (Towny's town_block_limit). 0 means no cap.
+town-block-limit: 0
+
 # Maximum bonus claims a town can have from admin bonus
 max-bonus-claims: 100
 

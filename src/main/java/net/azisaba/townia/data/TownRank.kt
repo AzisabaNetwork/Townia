@@ -14,10 +14,16 @@ enum class TownRank(val level: Int) {
 
     companion object {
         fun fromString(s: String): TownRank {
-            try {
-                return valueOf(s.uppercase(Locale.getDefault()))
-            } catch (e: IllegalArgumentException) {
-                return TownRank.RESIDENT
+            // Ranks stored before CO_MAYOR was renamed to SUB_MAYOR must keep their meaning,
+            // otherwise those residents silently drop to RESIDENT.
+            val normalized = s.trim().uppercase(Locale.ROOT).replace('-', '_').replace(' ', '_')
+            return when (normalized) {
+                "CO_MAYOR", "COMAYOR", "SUBMAYOR" -> SUB_MAYOR
+                else -> try {
+                    valueOf(normalized)
+                } catch (e: IllegalArgumentException) {
+                    RESIDENT
+                }
             }
         }
     }
