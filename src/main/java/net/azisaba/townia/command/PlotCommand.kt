@@ -194,7 +194,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
-        if (isAssistantOrHigherInPlotTown(player, chunk)) {
+        if (isAssistantOrHigherInPlotTown(player, chunk, allowOwner = true)) {
             plugin.messageManager.sendMessage(player, "town.not-assistant")
             return
         }
@@ -231,7 +231,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
 
-        if (isAssistantOrHigherInPlotTown(player, chunk)) {
+        if (isAssistantOrHigherInPlotTown(player, chunk, allowOwner = true)) {
             plugin.messageManager.sendMessage(player, "town.not-assistant")
             return
         }
@@ -263,7 +263,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         var changed = 0
         var failed = 0
         for (chunk in chunks) {
-            if (!plotManager.isClaimed(chunk) || isAssistantOrHigherInPlotTown(player, chunk)) {
+            if (!plotManager.isClaimed(chunk) || isAssistantOrHigherInPlotTown(player, chunk, allowOwner = true)) {
                 failed++
                 continue
             }
@@ -453,10 +453,19 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
     }
 
-    private fun isAssistantOrHigherInPlotTown(player: Player, chunk: Chunk?): Boolean {
+    /**
+     * Despite the name this returns true when the player is NOT allowed to manage the plot:
+     * they must belong to the plot's town and be assistant or higher, the town's mayor, or
+     * (with [allowOwner]) the plot's own owner, who may sell their land as in Towny.
+     */
+    private fun isAssistantOrHigherInPlotTown(player: Player, chunk: Chunk?, allowOwner: Boolean = false): Boolean {
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
         if (plotOpt.isEmpty) return true
         val plotTownId: UUID = plotOpt.get().townUuid!!
+        if (allowOwner && plotOpt.get().ownerUuid == player.uniqueId &&
+            residentManager.getResident(player.uniqueId).map { it.townUuid == plotTownId }.orElse(false)
+        ) return false
+        if (townManager.getTown(plotTownId).map { it.mayorUuid == player.uniqueId }.orElse(false)) return false
 
         val resOpt: Optional<TowniaPlayer> = residentManager.getResident(player.uniqueId)
         if (resOpt.isEmpty) return true

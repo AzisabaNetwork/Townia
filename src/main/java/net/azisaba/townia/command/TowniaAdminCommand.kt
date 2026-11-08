@@ -46,6 +46,8 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "deletenation" -> handleDeleteNation(sender, args)
             "givebonus" -> handleGiveBonus(sender, args)
             "migrate" -> handleMigrate(sender, args)
+            "dedupe" -> handleDedupe(sender, args)
+            "mergeresident" -> handleMergeResident(sender, args)
             else -> sendHelp(sender)
         }
         return true
@@ -211,6 +213,41 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         }
     }
 
+    /** `/ta mergeresident <from> <into>`: from/into are a name or a UUID. */
+    private fun handleMergeResident(sender: CommandSender, args: Array<out String>) {
+        if (args.size < 3) {
+            plugin.messageManager.sendMessage(sender, "admin.merge-usage")
+            return
+        }
+        fun find(key: String) = runCatching { UUID.fromString(key) }.getOrNull()
+            ?.let { residentManager.getResident(it).orElse(null) }
+            ?: residentManager.getResidentByName(key).orElse(null)
+        val from = find(args[1])
+        val into = find(args[2])
+        if (from == null || into == null) {
+            plugin.messageManager.sendMessage(sender, "admin.merge-not-found", "player", if (from == null) args[1] else args[2])
+            return
+        }
+        if (!residentManager.mergeResidents(from, into)) {
+            plugin.messageManager.sendMessage(sender, "admin.merge-not-found", "player", args[1])
+            return
+        }
+        plugin.messageManager.sendMessage(sender, "admin.merge-done", "from", args[1], "into", into.name ?: args[2])
+    }
+
+    /** `/ta dedupe` previews, `/ta dedupe confirm` merges offline-UUID duplicate residents. */
+    private fun handleDedupe(sender: CommandSender, args: Array<out String>) {
+        if (args.getOrNull(1)?.equals("confirm", ignoreCase = true) != true) {
+            val count = residentManager.findOfflineDuplicates().size
+            plugin.messageManager.sendMessage(sender, "admin.dedupe-preview", "count", count.toString())
+            return
+        }
+        val started = residentManager.mergeOfflineDuplicates { merged, failed ->
+            plugin.messageManager.sendMessage(sender, "admin.dedupe-done", "merged", merged.toString(), "failed", failed.toString())
+        }
+        plugin.messageManager.sendMessage(sender, "admin.dedupe-started", "count", started.toString())
+    }
+
     private fun handleMigrate(sender: CommandSender, args: Array<out String>) {
         if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "config") {
             net.azisaba.townia.migration.TownyConfigMigrator.migrate(plugin, sender)
@@ -224,7 +261,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 migrateTownyData(sender, emptySet())
             } else {
                 val candidateParts = parseMigrationParts(args.drop(1))
-                val validParts = setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles")
+                val validParts = setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles", "missing-only", "prune", "include-deleted")
                 if (candidateParts.isNotEmpty() && candidateParts.any { it in validParts }) {
                     migrateTownyData(sender, candidateParts)
                 } else {
@@ -364,7 +401,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     "deletetown",
                     "deletenation",
                     "givebonus",
-                    "migrate"
+                    "migrate",
+                    "dedupe",
+                    "mergeresident"
                 ),
                 completions
             )
@@ -374,12 +413,14 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 mutableListOf("data", "config", "diagnose", "all", "towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations", "flatfile", "api"),
                 completions
             )
+        } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "dedupe") {
+            StringUtil.copyPartialMatches(args[1], mutableListOf("confirm"), completions)
         } else if (args.size == 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
             StringUtil.copyPartialMatches(args[2], plugin.server.onlinePlayers.map { it.name }, completions)
         } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && (args[1].lowercase(Locale.getDefault()) == "data" || args[1].lowercase(Locale.getDefault()) in setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api"))) {
             StringUtil.copyPartialMatches(
                 args.last(),
-                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles"),
+                mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles", "missing-only", "prune", "include-deleted"),
                 completions
             )
         } else if (args.size == 2) {

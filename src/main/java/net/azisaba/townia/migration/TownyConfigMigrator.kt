@@ -26,8 +26,11 @@ object TownyConfigMigrator {
         copyDouble(source, target, changed, "town-upkeep", "economy.daily_taxes.price_town_upkeep", "daily_taxes.price_town_upkeep", "town_upkeep")
         copyDouble(source, target, changed, "default-town-tax", "economy.daily_taxes.town_tax", "daily_taxes.town_tax", "town_tax")
         copyDouble(source, target, changed, "default-nation-tax", "economy.daily_taxes.nation_tax", "daily_taxes.nation_tax", "nation_tax")
-        copyInt(source, target, changed, "default-claim-limit", "global_town_settings.town_block_limit", "global_town_settings.default_town_block_limit", "default_town_block_limit", "town_block_limit")
-        copyInt(source, target, changed, "claims-per-resident", "global_town_settings.town_block_ratio", "town_block_ratio", "town_block_ratio_bonus")
+        // Towny's town_block_limit is a hard cap and town_block_ratio replaces the level limit;
+        // neither is a default limit or a per-resident bonus on top of the levels.
+        copyInt(source, target, changed, "default-claim-limit", "global_town_settings.default_town_block_limit", "default_town_block_limit")
+        copyInt(source, target, changed, "town-block-ratio", "town.town_block_ratio", "global_town_settings.town_block_ratio", "town_block_ratio")
+        copyInt(source, target, changed, "town-block-limit", "town.town_block_limit", "global_town_settings.town_block_limit", "town_block_limit")
         copyInt(source, target, changed, "max-bonus-claims", "global_town_settings.max_purchased_blocks", "max_purchased_blocks", "townBlockBuyBonusLimit")
         copyInt(source, target, changed, "invite-timeout", "invite_system.invite_timeout", "invite_timeout", "invite_timeout_time", "global_town_settings.invite_timeout")
         copyBoolean(source, target, changed, "wilderness.pvp", "new_world_settings.pvp.force_pvp_on", "wilderness_pvp", "pvp")

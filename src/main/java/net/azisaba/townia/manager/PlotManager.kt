@@ -210,6 +210,24 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         }
     }
 
+    val allPlots: List<Plot>
+        get() = ArrayList(cache.values)
+
+    /** Deletes a plot whatever town owns it (used by migration pruning). Returns false if there was none. */
+    fun removePlot(worldName: String, chunkX: Int, chunkZ: Int): Boolean {
+        val key = ChunkKey.of(worldName, chunkX, chunkZ)
+        val plot = cache[key] ?: return false
+        try {
+            db.deletePlot(worldName, chunkX, chunkZ)
+        } catch (e: SQLException) {
+            plugin.logger.log(Level.SEVERE, "Failed to delete plot $worldName ($chunkX, $chunkZ)", e)
+            return false
+        }
+        cache.remove(key)
+        cleanupTownReferences(plot.townUuid, worldName, chunkX, chunkZ)
+        return true
+    }
+
     fun removeTownPlots(townId: UUID) {
         cache.values.removeIf { it.townUuid == townId }
     }

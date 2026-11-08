@@ -9,6 +9,7 @@ import java.sql.ResultSet
 import java.sql.SQLException
 import java.sql.Types
 import java.util.*
+import java.util.logging.Level
 
 class DatabaseManager(private val plugin: Townia) {
     private var dataSource: HikariDataSource? = null
@@ -28,6 +29,11 @@ class DatabaseManager(private val plugin: Townia) {
             config.setJdbcUrl("jdbc:mysql://$host:$port/$db")
             config.username = plugin.getConfig().getString("database.username", "root")
             config.password = plugin.getConfig().getString("database.password", "password")
+            // Without an explicit encoding the driver can follow a latin1 server default and
+            // store Japanese town/nation names as '?', which also makes distinct names collide
+            // on the UNIQUE name columns.
+            config.addDataSourceProperty("characterEncoding", "UTF-8")
+            config.addDataSourceProperty("connectionCollation", "utf8mb4_bin")
             config.addDataSourceProperty("cachePrepStmts", "true")
             config.addDataSourceProperty("prepStmtCacheSize", "250")
             config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
@@ -134,7 +140,7 @@ class DatabaseManager(private val plugin: Townia) {
                 stmt.execute(
                     "CREATE TABLE IF NOT EXISTS residents (" +
                             "uuid VARCHAR(36) PRIMARY KEY, " +
-                            "name VARCHAR(16) NOT NULL, " +
+                            "name VARCHAR(64) NOT NULL, " +
                             "town_uuid VARCHAR(36), " +
                             "rank VARCHAR(16) NOT NULL DEFAULT 'RESIDENT', " +
                             "last_seen BIGINT NOT NULL DEFAULT 0, " +
@@ -334,6 +340,32 @@ class DatabaseManager(private val plugin: Townia) {
                     try {
                         stmt.execute(ddl)
                     } catch (_: Exception) {
+                    }
+                }
+                // Bedrock (Floodgate) names carry a prefix and can exceed Java's 16 characters.
+                // SQLite does not enforce VARCHAR lengths, so only MySQL needs widening.
+                if (isMySQL) {
+                    try {
+                        stmt.execute("ALTER TABLE residents MODIFY name VARCHAR(64) NOT NULL")
+                    } catch (e: Exception) {
+                        plugin.logger.log(Level.WARNING, "Could not widen residents.name", e)
+                    }
+                    // Town and nation names are UNIQUE. Under the server's default *_ci collation
+                    // names differing only in case, accents, kana or width count as equal, and
+                    // the upsert then overwrites another town instead of inserting a new one.
+                    for (table in listOf("towns", "nations")) {
+                        try {
+                            val collation = stmt.executeQuery(
+                                "SELECT COLLATION_NAME FROM information_schema.COLUMNS " +
+                                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '$table' AND COLUMN_NAME = 'name'"
+                            ).use { rs -> if (rs.next()) rs.getString(1) else null }
+                            if (collation != null && collation != "utf8mb4_bin") {
+                                stmt.execute("ALTER TABLE $table MODIFY name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL")
+                                plugin.logger.info("Changed $table.name collation from $collation to utf8mb4_bin")
+                            }
+                        } catch (e: Exception) {
+                            plugin.logger.log(Level.WARNING, "Could not change $table.name collation", e)
+                        }
                     }
                 }
 

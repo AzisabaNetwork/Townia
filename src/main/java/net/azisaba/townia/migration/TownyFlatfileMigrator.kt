@@ -9,6 +9,7 @@ import net.azisaba.townia.data.TowniaJailCell
 import net.azisaba.townia.data.TownRank
 import net.azisaba.townia.data.TowniaOutpost
 import net.azisaba.townia.data.TowniaPlayer
+import net.azisaba.townia.util.ChunkKey
 import org.bukkit.Bukkit
 import org.bukkit.command.CommandSender
 import java.io.File
@@ -20,6 +21,17 @@ import java.util.logging.Level
 
 object TownyFlatfileMigrator {
     private val allParts = setOf("towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations")
+
+    /** Names Townia already has a resident for; set at the start of each run. */
+    @Volatile
+    private var knownUuids: Map<String, UUID> = emptyMap()
+
+    /** Town / nation files to migrate, chosen once per run (see [selectGovernmentFiles]). */
+    @Volatile
+    private var townFiles: List<File> = emptyList()
+
+    @Volatile
+    private var nationFiles: List<File> = emptyList()
 
     fun migrate(plugin: Townia, sender: CommandSender, requestedParts: Set<String> = emptySet()) {
         val dataDir = findTownyDataDir(plugin)
@@ -34,43 +46,52 @@ object TownyFlatfileMigrator {
             plugin.messageManager.sendMessage(sender, "admin.migration_start")
             plugin.messageManager.sendMessage(sender, "admin.migration-source", "source", "Towny flatfile: ${dataDir.path} (${parts.joinToString(",")})")
             try {
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "resident UUID map", "count", "0")
+                knownUuids = MigrationSupport.knownUuidsByName(plugin)
+                selectGovernmentFiles(plugin, dataDir, requestedParts.contains(MigrationSupport.INCLUDE_DELETED))
+                MigrationSupport.progress(plugin, sender, "resident UUID map", "0")
                 val residentsByName = loadResidentIds(dataDir)
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "resident UUID map", "count", residentsByName.size.toString())
+                MigrationSupport.progress(plugin, sender, "resident UUID map", residentsByName.size.toString())
 
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "nations", "count", "0")
+                MigrationSupport.progress(plugin, sender, "nations", "0")
                 val nationsByName = loadNations(plugin, dataDir, residentsByName, parts.contains("nations"))
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "nations", "count", if (parts.contains("nations")) nationsByName.size.toString() else "0")
+                MigrationSupport.progress(plugin, sender, "nations", if (parts.contains("nations")) nationsByName.size.toString() else "0")
 
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", "0")
+                MigrationSupport.progress(plugin, sender, "towns", "0")
                 val townsByName = loadTowns(plugin, dataDir, residentsByName, nationsByName, parts.contains("towns"))
                 if (parts.contains("nations")) repairNationCapitals(plugin, dataDir, townsByName, nationsByName)
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "towns", "count", if (parts.contains("towns")) townsByName.size.toString() else "0")
+                MigrationSupport.progress(plugin, sender, "towns", if (parts.contains("towns")) townsByName.size.toString() else "0")
 
                 if (parts.contains("outlaws")) {
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", "0")
+                    MigrationSupport.progress(plugin, sender, "outlaws", "0")
                     val outlaws = loadTownOutlaws(plugin, dataDir, townsByName, residentsByName)
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "outlaws", "count", outlaws.toString())
+                    MigrationSupport.progress(plugin, sender, "outlaws", outlaws.toString())
                 }
 
                 if (parts.contains("relations")) {
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", "0")
+                    MigrationSupport.progress(plugin, sender, "relations", "0")
                     val relations = loadNationRelations(plugin, dataDir, nationsByName)
-                    plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "relations", "count", relations.toString())
+                    MigrationSupport.progress(plugin, sender, "relations", relations.toString())
                 }
 
                 val townMemberships = loadTownMemberships(dataDir, townsByName)
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", "0")
+                MigrationSupport.progress(plugin, sender, "residents", "0")
                 val residents = if (parts.contains("residents")) loadResidents(plugin, dataDir, residentsByName, townsByName, townMemberships) else 0
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "residents", "count", residents.toString())
+                MigrationSupport.progress(plugin, sender, "residents", residents.toString())
 
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", "0")
-                val plots = if (parts.contains("townblocks")) loadTownBlocks(plugin, dataDir, townsByName, residentsByName) else 0
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "townblocks", "count", plots.toString())
+                MigrationSupport.progress(plugin, sender, "townblocks", "0")
+                val missingOnly = requestedParts.contains(MigrationSupport.MISSING_ONLY)
+                val seenChunks = HashSet<ChunkKey>()
+                val plots = if (parts.contains("townblocks")) loadTownBlocks(plugin, dataDir, townsByName, residentsByName, missingOnly, seenChunks) else 0
+                MigrationSupport.progress(plugin, sender, "townblocks", plots.toString())
+                if (parts.contains("townblocks") && requestedParts.contains(MigrationSupport.PRUNE)) {
+                    val pruned = PlotPruner.prune(plugin, seenChunks)
+                    MigrationSupport.progress(plugin, sender, "pruned plots", pruned.toString())
+                }
 
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "jails", "count", "0")
+                MigrationSupport.progress(plugin, sender, "jails", "0")
                 val jails = if (parts.contains("jails")) loadJails(plugin, dataDir) else 0
-                plugin.messageManager.sendMessage(sender, "admin.migration-progress", "stage", "jails", "count", jails.toString())
+                MigrationSupport.progress(plugin, sender, "jails", jails.toString())
+                plugin.residentManager.repairMayors()
                 sendValidation(plugin, sender)
 
                 plugin.messageManager.sendMessage(
@@ -130,13 +151,114 @@ object TownyFlatfileMigrator {
         }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
     }
 
+    private class GovernmentFile(val file: File, val name: String, val uuid: UUID?, val live: Boolean)
+
+    /**
+     * Picks the town and nation files to migrate. Towny moves files into
+     * `deleted/` not only when a town is disbanded but also when it rewrites
+     * its flatfile layout (name-named files -> UUID-named files); a rewrite
+     * that never finished leaves most living towns only in `deleted/`.
+     * A deleted town file is therefore used when a resident file still names
+     * that town (a disbanded town has no residents left), and a deleted nation
+     * when a chosen town still belongs to it. Per UUID and per name, a live
+     * file wins over a deleted one, then the newest file wins.
+     */
+    private fun selectGovernmentFiles(plugin: Townia, dataDir: File, includeDeleted: Boolean) {
+        if (!includeDeleted) {
+            // deleted/ can hold files that are years old; only use it when explicitly asked.
+            townFiles = pickGovernmentFiles(plugin, File(dataDir, "towns"), "town") { false }
+            nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation") { false }
+            return
+        }
+        val townsWithResidents = HashSet<String>()
+        File(dataDir, "residents").listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+            val values = readValues(file)
+            listOfNotNull(values.first("town", "townuuid", "town_uuid"), values.first("townname", "town_name"))
+                .forEach { townsWithResidents.add(it.lowercase(Locale.getDefault())) }
+        }
+        // Resident files can be missing too (the same unfinished rewrite), so land
+        // still claimed in a town's name also counts as that town being alive.
+        File(dataDir, "townblocks").takeIf { it.isDirectory }?.walkTopDown()?.filter { isTownyDataFile(it) }?.forEach { file ->
+            readValues(file).first("town")?.let { townsWithResidents.add(it.lowercase(Locale.getDefault())) }
+        }
+        townFiles = pickGovernmentFiles(plugin, File(dataDir, "towns"), "town") { gov ->
+            gov.name.lowercase(Locale.getDefault()) in townsWithResidents ||
+                (gov.uuid != null && gov.uuid.toString() in townsWithResidents)
+        }
+
+        val nationRefs = HashSet<String>()
+        townFiles.forEach { file ->
+            val values = readValues(file)
+            listOfNotNull(values.first("nation", "nationuuid", "nation_uuid"), values.first("nationname", "nation_name"))
+                .forEach { nationRefs.add(it.lowercase(Locale.getDefault())) }
+        }
+        nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation") { gov ->
+            gov.name.lowercase(Locale.getDefault()) in nationRefs ||
+                (gov.uuid != null && gov.uuid.toString() in nationRefs)
+        }
+    }
+
+    private fun pickGovernmentFiles(
+        plugin: Townia,
+        dir: File,
+        kind: String,
+        keepDeleted: (GovernmentFile) -> Boolean
+    ): List<File> {
+        fun read(folder: File, live: Boolean): List<GovernmentFile> =
+            folder.listFiles { file -> isTownyDataFile(file) }.orEmpty().map { file ->
+                val values = readValues(file)
+                GovernmentFile(
+                    file,
+                    values.first("name", kind) ?: fileDisplayName(file),
+                    values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull(),
+                    live
+                )
+            }
+
+        val live = read(dir, true)
+        val restored = read(File(dir, "deleted"), false).filter(keepDeleted)
+        val seenUuids = HashSet<UUID>()
+        val seenNames = HashSet<String>()
+        val chosen = (live + restored)
+            .sortedWith(compareByDescending<GovernmentFile> { it.live }.thenByDescending { it.file.lastModified() })
+            .filter { gov ->
+                val newUuid = gov.uuid == null || seenUuids.add(gov.uuid)
+                newUuid && seenNames.add(gov.name.lowercase(Locale.getDefault()))
+            }
+        val restoredCount = chosen.count { !it.live }
+        plugin.logger.info(
+            "Towny flatfile: using ${chosen.size} $kind files (${chosen.size - restoredCount} live, " +
+                "$restoredCount restored from ${dir.name}/deleted)."
+        )
+        return chosen.map { it.file }
+    }
+
+    /**
+     * Name and UUID of a resident file. Newer Towny names resident files by UUID
+     * and may leave out `name=`; using the file name as the name then showed
+     * UUIDs in every member list. Such names are looked up instead (EssentialsX
+     * userdata, then the server's own player data, neither of which asks Mojang).
+     */
+    private fun residentIdentity(values: FlatValues, file: File): Pair<String, UUID> {
+        val fileUuid = file.nameWithoutExtension.toUuidOrNull()
+        val uuid = values.uuid("uuid", "player_uuid") ?: fileUuid
+        val explicitName = values.first("name", "resident")
+        if (explicitName != null && explicitName.toUuidOrNull() == null) {
+            return explicitName to (uuid ?: MigrationSupport.resolveUuidByName(explicitName, knownUuids))
+        }
+        if (uuid != null) {
+            return (MigrationSupport.nameForUuid(uuid) ?: uuid.toString()) to uuid
+        }
+        val name = fileDisplayName(file)
+        return name to MigrationSupport.resolveUuidByName(name, knownUuids)
+    }
+
     private fun loadResidentIds(dataDir: File): MutableMap<String, UUID> {
         val result = LinkedHashMap<String, UUID>()
         val dir = File(dataDir, "residents")
         dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
             val values = readValues(file)
-            val name = values.first("name", "resident") ?: file.nameWithoutExtension
-            val uuid = values.uuid("uuid", "player_uuid") ?: Bukkit.getOfflinePlayer(name).uniqueId
+            val (name, uuid) = residentIdentity(values, file)
             result[name.lowercase(Locale.getDefault())] = uuid
         }
         return result
@@ -144,10 +266,9 @@ object TownyFlatfileMigrator {
 
     private fun loadNations(plugin: Townia, dataDir: File, residentsByName: Map<String, UUID>, save: Boolean): MutableMap<String, UUID> {
         val result = LinkedHashMap<String, UUID>()
-        val dir = File(dataDir, "nations")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        nationFiles.forEach { file ->
             val values = readValues(file)
-            val name = values.first("name", "nation") ?: file.nameWithoutExtension
+            val name = values.first("name", "nation") ?: fileDisplayName(file)
             val uuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull() ?: stableUuid("towny-nation", name)
             // Only player keys: "capital" holds a town name, which must never be
             // looked up as a player. repairNationCapitals() sets the leader from
@@ -194,10 +315,9 @@ object TownyFlatfileMigrator {
         townsByName: Map<String, UUID>,
         nationsByName: Map<String, UUID>
     ) {
-        val dir = File(dataDir, "nations")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        nationFiles.forEach { file ->
             val values = readValues(file)
-            val nationName = values.first("name", "nation") ?: file.nameWithoutExtension
+            val nationName = values.first("name", "nation") ?: fileDisplayName(file)
             val nationUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
                 ?: nationsByName[nationName.lowercase(Locale.getDefault())]
                 ?: return@forEach
@@ -225,10 +345,9 @@ object TownyFlatfileMigrator {
         residentsByName: Map<String, UUID>
     ): Int {
         var count = 0
-        val dir = File(dataDir, "towns")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        townFiles.forEach { file ->
             val values = readValues(file)
-            val townName = values.first("name", "town") ?: file.nameWithoutExtension
+            val townName = values.first("name", "town") ?: fileDisplayName(file)
             val townUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
                 ?: townsByName[townName.lowercase(Locale.getDefault())]
                 ?: return@forEach
@@ -252,10 +371,9 @@ object TownyFlatfileMigrator {
         nationsByName: Map<String, UUID>
     ): Int {
         var count = 0
-        val dir = File(dataDir, "nations")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        nationFiles.forEach { file ->
             val values = readValues(file)
-            val nationName = values.first("name", "nation") ?: file.nameWithoutExtension
+            val nationName = values.first("name", "nation") ?: fileDisplayName(file)
             val nationUuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
                 ?: nationsByName[nationName.lowercase(Locale.getDefault())]
                 ?: return@forEach
@@ -291,10 +409,9 @@ object TownyFlatfileMigrator {
         save: Boolean
     ): MutableMap<String, UUID> {
         val result = LinkedHashMap<String, UUID>()
-        val dir = File(dataDir, "towns")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        townFiles.forEach { file ->
             val values = readValues(file)
-            val name = values.first("name", "town") ?: file.nameWithoutExtension
+            val name = values.first("name", "town") ?: fileDisplayName(file)
             val uuid = values.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull() ?: stableUuid("towny-town", name)
             val mayorValue = values.first("mayor", "mayorname", "king", "kingname") ?: ""
             val mayorUuid = resolveGovernmentPlayerUuid(plugin, mayorValue, residentsByName, "town $name mayor")
@@ -371,11 +488,13 @@ object TownyFlatfileMigrator {
         townMemberships: TownMemberships
     ): Int {
         var count = 0
+        val migratedNames = HashSet<String>()
         val dir = File(dataDir, "residents")
         dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+            try {
             val values = readValues(file)
-            val name = values.first("name", "resident") ?: file.nameWithoutExtension
-            val uuid = residentsByName[name.lowercase(Locale.getDefault())] ?: Bukkit.getOfflinePlayer(name).uniqueId
+            val (name, fileUuid) = residentIdentity(values, file)
+            val uuid = residentsByName[name.lowercase(Locale.getDefault())] ?: fileUuid
             val residentKey = name.lowercase(Locale.getDefault())
             val uuidKey = uuid.toString().lowercase(Locale.getDefault())
             val townUuid = resolveGovernmentUuid(values.first("town", "townuuid", "town_uuid"), townsByName)
@@ -383,8 +502,11 @@ object TownyFlatfileMigrator {
                 ?: townMemberships.townByResident[residentKey]
                 ?: townMemberships.townByResident[uuidKey]
             val rank = when {
-                values.boolean("mayor") -> TownRank.MAYOR
-                hasAnyRank(values, "co-mayor", "comayor", "submayor") ||
+                // Towny resident files have no "mayor" flag: the mayor is named in the town file.
+                values.boolean("mayor") ||
+                    townMemberships.rankByResident[residentKey] == TownRank.MAYOR ||
+                    townMemberships.rankByResident[uuidKey] == TownRank.MAYOR -> TownRank.MAYOR
+                hasAnyRank(values, "co-mayor", "co_mayor", "comayor", "submayor", "sub_mayor", "sub-mayor") ||
                     townMemberships.rankByResident[residentKey] == TownRank.SUB_MAYOR ||
                     townMemberships.rankByResident[uuidKey] == TownRank.SUB_MAYOR -> TownRank.SUB_MAYOR
                 hasAnyRank(values, "assistant") ||
@@ -422,7 +544,41 @@ object TownyFlatfileMigrator {
 
             plugin.databaseManager.saveResident(resident)
             plugin.residentManager.cacheResident(resident)
+            migratedNames.add(residentKey)
             count++
+            } catch (e: Exception) {
+                // One bad record must not abort the whole migration (and leave every later stage unrun).
+                plugin.logger.log(Level.WARNING, "Towny flatfile: skipped resident ${file.name}: ${e.message}")
+            }
+        }
+
+        // Members a town file lists but who have no resident file would otherwise
+        // silently drop out of their town.
+        var fromTownLists = 0
+        townMemberships.townByResident.forEach { (key, townUuid) ->
+            if (key in migratedNames || key.toUuidOrNull() != null) return@forEach
+            val displayName = townMemberships.displayNames[key] ?: return@forEach
+            try {
+                val uuid = residentsByName[key] ?: MigrationSupport.resolveUuidByName(displayName, knownUuids)
+                val resident = TowniaPlayer(
+                    uuid,
+                    displayName,
+                    townUuid,
+                    townMemberships.rankByResident[key] ?: TownRank.RESIDENT,
+                    0L,
+                    null
+                )
+                resident.registeredAt = System.currentTimeMillis()
+                plugin.databaseManager.saveResident(resident)
+                plugin.residentManager.cacheResident(resident)
+                fromTownLists++
+                count++
+            } catch (e: Exception) {
+                plugin.logger.log(Level.WARNING, "Towny flatfile: skipped town member $displayName: ${e.message}")
+            }
+        }
+        if (fromTownLists > 0) {
+            plugin.logger.info("Towny flatfile: created $fromTownLists residents listed by a town but without a resident file.")
         }
         return count
     }
@@ -430,19 +586,22 @@ object TownyFlatfileMigrator {
     private fun loadTownMemberships(dataDir: File, townsByName: Map<String, UUID>): TownMemberships {
         val townByResident = LinkedHashMap<String, UUID>()
         val rankByResident = LinkedHashMap<String, TownRank>()
-        val dir = File(dataDir, "towns")
-        dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        val displayNames = LinkedHashMap<String, String>()
+        townFiles.forEach { file ->
             val values = readValues(file)
-            val townName = values.first("name", "town") ?: file.nameWithoutExtension
+            val townName = values.first("name", "town") ?: fileDisplayName(file)
             val townUuid = townsByName[townName.lowercase(Locale.getDefault())] ?: return@forEach
             val mayor = values.first("mayor", "mayorname", "king", "kingname")
             for (keyValue in listOfNotNull(mayor, values.first("mayorname", "kingname")).distinct()) {
                 val key = keyValue.lowercase(Locale.getDefault())
                 townByResident[key] = townUuid
                 rankByResident[key] = TownRank.MAYOR
+                displayNames.putIfAbsent(key, keyValue)
             }
-            values.list("residents", "resident", "members", "trusted").forEach {
+            // "trusted" residents are outsiders the town trusts, not members.
+            values.list("residents", "resident", "members").forEach {
                 townByResident.putIfAbsent(it.lowercase(Locale.getDefault()), townUuid)
+                displayNames.putIfAbsent(it.lowercase(Locale.getDefault()), it)
             }
             values.list("assistants", "assistant").forEach {
                 val key = it.lowercase(Locale.getDefault())
@@ -455,18 +614,28 @@ object TownyFlatfileMigrator {
                 rankByResident[key] = maxRank(rankByResident[key], TownRank.SUB_MAYOR)
             }
         }
-        return TownMemberships(townByResident, rankByResident)
+        return TownMemberships(townByResident, rankByResident, displayNames)
     }
 
-    private fun loadTownBlocks(plugin: Townia, dataDir: File, townsByName: Map<String, UUID>, residentsByName: Map<String, UUID>): Int {
+    private fun loadTownBlocks(
+        plugin: Townia,
+        dataDir: File,
+        townsByName: Map<String, UUID>,
+        residentsByName: Map<String, UUID>,
+        missingOnly: Boolean,
+        seenChunks: MutableSet<ChunkKey>
+    ): Int {
         var count = 0
-        count += loadTownBlocksFromDirectory(plugin, File(dataDir, "townblocks"), townsByName, residentsByName)
-        val townDir = File(dataDir, "towns")
-        townDir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+        count += loadTownBlocksFromDirectory(plugin, File(dataDir, "townblocks"), townsByName, residentsByName, missingOnly, seenChunks)
+        townFiles.forEach { file ->
             val values = readValues(file)
-            val townName = values.first("name", "town") ?: file.nameWithoutExtension
+            val townName = values.first("name", "town") ?: fileDisplayName(file)
             val townUuid = townsByName[townName.lowercase(Locale.getDefault())] ?: return@forEach
             values.list("townblocks", "town_blocks", "plots").mapNotNull { parseChunk(it) }.forEach { chunk ->
+                seenChunks.add(ChunkKey(chunk.world, chunk.x, chunk.z))
+                // The townblocks folder was loaded first and carries the owner, type, price and
+                // permissions; the town file only lists coordinates, so never overwrite a plot.
+                if (plugin.plotManager.isClaimed(chunk.world, chunk.x, chunk.z)) return@forEach
                 savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, null, PlotType.DEFAULT, false, 0.0, null)
                 count++
             }
@@ -474,21 +643,36 @@ object TownyFlatfileMigrator {
         return count
     }
 
-    private fun loadTownBlocksFromDirectory(plugin: Townia, dir: File, townsByName: Map<String, UUID>, residentsByName: Map<String, UUID>): Int {
+    private fun loadTownBlocksFromDirectory(
+        plugin: Townia,
+        dir: File,
+        townsByName: Map<String, UUID>,
+        residentsByName: Map<String, UUID>,
+        missingOnly: Boolean,
+        seenChunks: MutableSet<ChunkKey>
+    ): Int {
         if (!dir.isDirectory) return 0
         var count = 0
         dir.walkTopDown().filter { isTownyDataFile(it) }.forEach { file ->
+            try {
             val values = readValues(file)
             val townName = values.first("town") ?: return@forEach
-            val townUuid = resolveGovernmentUuid(townName, townsByName) ?: return@forEach
-            if (plugin.townManager.getTown(townUuid).isEmpty) return@forEach
             val chunk = parseTownBlockChunk(values, file)
                 ?: return@forEach
+            // Recorded before the town is resolved: prune must never delete a chunk Towny still claims.
+            seenChunks.add(ChunkKey(chunk.world, chunk.x, chunk.z))
+            if (missingOnly && plugin.plotManager.isClaimed(chunk.world, chunk.x, chunk.z)) return@forEach
+            val townUuid = resolveGovernmentUuid(townName, townsByName) ?: return@forEach
+            if (plugin.townManager.getTown(townUuid).isEmpty) return@forEach
             val ownerUuid = resolveResidentUuid(values.first("resident", "residentuuid", "resident_uuid", "owner", "owneruuid", "owner_uuid"), residentsByName)
             val type = parsePlotType(values.first("type"))
             val price = values.double("plotprice", "price")
             savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, ownerUuid, type, price > 0.0, price, values.first("name"))
             count++
+            } catch (e: Exception) {
+                // One bad record must not abort the whole migration (and leave every later stage unrun).
+                plugin.logger.log(Level.WARNING, "Towny flatfile: skipped town block ${file.name}: ${e.message}")
+            }
         }
         return count
     }
@@ -615,6 +799,26 @@ object TownyFlatfileMigrator {
         return FlatChunk(world, x, z)
     }
 
+    /**
+     * The file name, used as the name when a Towny file has no `name=` line
+     * (nation files, for one). Towny's backup zips store UTF-8 names without the
+     * UTF-8 flag, so a plain `unzip` writes them as CP866 text: "式王国" becomes
+     * "х╝ПчОЛхЫ╜". Undo that when the reverse decoding gives valid UTF-8.
+     */
+    private fun fileDisplayName(file: File): String {
+        val raw = file.nameWithoutExtension
+        if (raw.all { it.code < 0x80 }) return raw
+        return runCatching {
+            val bytes = raw.toByteArray(Charset.forName("IBM866"))
+            val decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            // Only a name made entirely of CP866-encodable characters can be such mojibake.
+            if (String(bytes, Charset.forName("IBM866")) != raw) return raw
+            decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+        }.getOrDefault(raw)
+    }
+
     private fun stableUuid(prefix: String, value: String): UUID {
         return UUID.nameUUIDFromBytes("$prefix:${value.lowercase(Locale.getDefault())}".toByteArray(StandardCharsets.UTF_8))
     }
@@ -642,7 +846,7 @@ object TownyFlatfileMigrator {
     ): UUID? {
         if (value.isBlank()) return null
         resolveResidentUuid(value, residentsByName)?.let { return it }
-        val uuid = Bukkit.getOfflinePlayer(value).uniqueId
+        val uuid = MigrationSupport.resolveUuidByName(value, knownUuids)
         plugin.logger.warning("Towny flatfile: $role '$value' has no resident file; using UUID $uuid from the server's name lookup.")
         return uuid
     }
@@ -696,7 +900,11 @@ object TownyFlatfileMigrator {
 
     private data class FlatLocation(val world: String, val x: Double, val y: Double, val z: Double, val yaw: Float, val pitch: Float)
     private data class FlatChunk(val world: String, val x: Int, val z: Int)
-    private data class TownMemberships(val townByResident: Map<String, UUID>, val rankByResident: Map<String, TownRank>)
+    private data class TownMemberships(
+        val townByResident: Map<String, UUID>,
+        val rankByResident: Map<String, TownRank>,
+        val displayNames: Map<String, String>
+    )
 
     private class FlatValues(private val values: Map<String, List<String>>) {
         fun first(vararg keys: String): String? = keys.firstNotNullOfOrNull { values[it.lowercase(Locale.getDefault()).replace("-", "_")]?.firstOrNull() }?.takeIf { it.isNotBlank() }

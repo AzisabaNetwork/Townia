@@ -14,6 +14,12 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var claimsPerResident: Int = 0
         private set
+    /** Towny's town_block_ratio: claims per resident that replace the town-level limit. 0 disables it. */
+    var townBlockRatio: Int = 0
+        private set
+    /** Towny's town_block_limit: hard cap on a town's claim limit. 0 means no cap. */
+    var townBlockLimit: Int = 0
+        private set
     var maxBonusClaims: Int = 0
         private set
     var inviteTimeout: Int = 0
@@ -114,6 +120,8 @@ class TowniaConfig(private val plugin: Townia) {
         allowedWorlds      = config.getStringList("allowed-worlds")
         defaultClaimLimit  = config.getInt("default-claim-limit", 8)
         claimsPerResident  = config.getInt("claims-per-resident", 1)
+        townBlockRatio     = config.getInt("town-block-ratio", 0)
+        townBlockLimit     = config.getInt("town-block-limit", 0)
         maxBonusClaims     = config.getInt("max-bonus-claims", 100)
         inviteTimeout      = config.getInt("invite-timeout", 120)
         nationBonusClaims  = config.getInt("nation-bonus-claims", 10)
