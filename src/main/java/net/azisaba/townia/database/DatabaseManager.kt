@@ -133,6 +133,7 @@ class DatabaseManager(private val plugin: Townia) {
                             "perms_ally VARCHAR(16), " +
                             "perms_outsider VARCHAR(16), " +
                             "perms_nation VARCHAR(16), " +
+                            "perms_friend VARCHAR(16), " +
                             "PRIMARY KEY (world_name, chunk_x, chunk_z), " +
                             "FOREIGN KEY (town_uuid) REFERENCES towns(id) ON DELETE CASCADE)"
                 )
@@ -403,6 +404,10 @@ class DatabaseManager(private val plugin: Townia) {
                 }
                 try {
                     stmt.execute("ALTER TABLE plots ADD COLUMN perms_ally VARCHAR(16)")
+                } catch (_: Exception) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE plots ADD COLUMN perms_friend VARCHAR(16)")
                 } catch (_: Exception) {
                 }
                 try {
@@ -1224,9 +1229,10 @@ class DatabaseManager(private val plugin: Townia) {
     fun savePlot(plot: Plot) {
         val sql = if (isMySQL) """
             INSERT INTO plots (world_name, chunk_x, chunk_z, town_uuid, owner_uuid, plot_type, for_sale, price,
-                               name, pvp, mobs, explosions, fire, is_outpost, perms_resident, perms_ally, perms_outsider, perms_nation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               name, pvp, mobs, explosions, fire, is_outpost, perms_resident, perms_ally, perms_outsider, perms_nation, perms_friend)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
+                perms_friend=VALUES(perms_friend),
                 town_uuid=VALUES(town_uuid), owner_uuid=VALUES(owner_uuid),
                 plot_type=VALUES(plot_type), for_sale=VALUES(for_sale), price=VALUES(price),
                 name=VALUES(name), pvp=VALUES(pvp), mobs=VALUES(mobs), explosions=VALUES(explosions), fire=VALUES(fire),
@@ -1235,9 +1241,10 @@ class DatabaseManager(private val plugin: Townia) {
         
         """.trimIndent() else """
             INSERT INTO plots (world_name, chunk_x, chunk_z, town_uuid, owner_uuid, plot_type, for_sale, price,
-                               name, pvp, mobs, explosions, fire, is_outpost, perms_resident, perms_ally, perms_outsider, perms_nation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               name, pvp, mobs, explosions, fire, is_outpost, perms_resident, perms_ally, perms_outsider, perms_nation, perms_friend)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(world_name, chunk_x, chunk_z) DO UPDATE SET
+                perms_friend=excluded.perms_friend,
                 town_uuid=excluded.town_uuid, owner_uuid=excluded.owner_uuid,
                 plot_type=excluded.plot_type, for_sale=excluded.for_sale, price=excluded.price,
                 name=excluded.name, pvp=excluded.pvp, mobs=excluded.mobs, explosions=excluded.explosions, fire=excluded.fire,
@@ -1265,6 +1272,7 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setString(16, plot.permsAlly)
                 ps.setString(17, plot.permsOutsider)
                 ps.setString(18, plot.permsNation)
+                ps.setString(19, plot.permsFriend)
                 ps.executeUpdate()
             }
         }
@@ -1368,7 +1376,8 @@ class DatabaseManager(private val plugin: Townia) {
             rs.getString("perms_resident"),
             rs.getString("perms_ally"),
             rs.getString("perms_outsider"),
-            rs.getString("perms_nation")
+            rs.getString("perms_nation"),
+            rs.getString("perms_friend")
         )
     }
 

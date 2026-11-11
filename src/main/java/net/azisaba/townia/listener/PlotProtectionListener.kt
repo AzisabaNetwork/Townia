@@ -59,7 +59,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     }
 
     enum class Relationship {
-        RESIDENT, ALLY, NATION, OUTSIDER
+        FRIEND, RESIDENT, ALLY, NATION, OUTSIDER
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -471,6 +471,9 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         // Plot-level perms (set via /plot set perm) override the town defaults for both
         // player-owned and town-owned plots; unset (null) groups fall back to the town.
         val perms: String = when (rel) {
+            // A friend's unset plot perms use the owner's personal friend defaults.
+            Relationship.FRIEND -> plot.permsFriend
+                ?: residentManager.getResident(plot.ownerUuid).orElse(null)?.defaultPermsFriend
             Relationship.RESIDENT -> plot.permsResident
             Relationship.ALLY -> plot.permsAlly
             Relationship.NATION -> plot.permsNation
@@ -481,6 +484,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
     private fun getTownPerms(town: Town, rel: Relationship): String? {
         return when (rel) {
+            Relationship.FRIEND -> town.permsResident
             Relationship.RESIDENT -> town.permsResident
             Relationship.ALLY -> town.permsAlly
             Relationship.NATION -> town.permsNation
@@ -496,7 +500,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
         if (plot.ownerUuid != null) {
             val owner = residentManager.getResident(plot.ownerUuid).orElse(null)
             if (owner?.friends?.contains(player.uniqueId.toString()) == true) {
-                return Relationship.ALLY
+                return Relationship.FRIEND
             }
 
             if (town.id == resident.townUuid) return Relationship.RESIDENT

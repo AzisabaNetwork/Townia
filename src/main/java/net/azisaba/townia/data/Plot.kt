@@ -8,8 +8,11 @@ class Plot(
     var ownerUuid: UUID?,
     var plotType: PlotType?, forSale: Boolean, var price: Double,
     var name: String?, pvp: Boolean, mobs: Boolean, explosions: Boolean, fire: Boolean,
-    isOutpost: Boolean, permsResident: String?, permsAlly: String?, permsOutsider: String?, permsNation: String?
+    isOutpost: Boolean, permsResident: String?, permsAlly: String?, permsOutsider: String?, permsNation: String?,
+    permsFriend: String? = null
 ) {
+    /** Permissions for the owner's friends (only meaningful for resident-owned plots). */
+    var permsFriend: String? = permsFriend
     var isForSale: Boolean = forSale
 
     private var pvp: Boolean

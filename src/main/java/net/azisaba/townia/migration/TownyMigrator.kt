@@ -205,6 +205,7 @@ object TownyMigrator {
 
                 if (parts.contains("residents")) {
                 MigrationSupport.progress(plugin, sender, "residents", "0")
+                val friendPairs = LinkedHashMap<UUID, List<UUID>>()
                 val residentsToMigrate = pickOneResidentPerPlayer(plugin, currentUuidByTownyUuid, townByResident, rankByResident)
                 for (tRes in residentsToMigrate) {
                     // Towny's resident pointer can be stale while a town is being loaded or
@@ -264,8 +265,26 @@ object TownyMigrator {
 
                     plugin.databaseManager.saveResident(player)
                     plugin.residentManager.cacheResident(player)
+                    runCatching {
+                        friendPairs[playerUuid] = tRes.friends.map { currentUuidByTownyUuid[it.uuid] ?: it.uuid }
+                    }
                     residents++
                 }
+                // Friends reference other residents (foreign key), so link them once every resident exists.
+                var friendLinks = 0
+                friendPairs.forEach { (ownerUuid, friendUuids) ->
+                    val owner = plugin.residentManager.getResident(ownerUuid).orElse(null) ?: return@forEach
+                    friendUuids.distinct().forEach { friendUuid ->
+                        if (friendUuid == ownerUuid) return@forEach
+                        if (plugin.residentManager.getResident(friendUuid).isEmpty) return@forEach
+                        runCatching {
+                            plugin.databaseManager.addFriend(ownerUuid, friendUuid)
+                            if (owner.friends?.contains(friendUuid.toString()) != true) owner.friends?.add(friendUuid.toString())
+                            friendLinks++
+                        }
+                    }
+                }
+                MigrationSupport.progress(plugin, sender, "friends", friendLinks.toString())
                 MigrationSupport.progress(plugin, sender, "residents", residents.toString())
                 }
 
@@ -613,6 +632,8 @@ object TownyMigrator {
 
     private fun applyTownyPlotPermissions(permission: TownyPermission, plot: Plot) {
         plot.permsResident = permissionString(permission, PermLevel.RESIDENT)
+        // On resident-owned plots Towny's "resident" level is what the owner's friends get.
+        if (plot.ownerUuid != null) plot.permsFriend = permissionString(permission, PermLevel.RESIDENT)
         plot.permsNation = permissionString(permission, PermLevel.NATION)
         plot.permsAlly = permissionString(permission, PermLevel.ALLY)
         plot.permsOutsider = permissionString(permission, PermLevel.OUTSIDER)

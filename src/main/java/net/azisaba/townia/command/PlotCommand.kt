@@ -125,12 +125,15 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     /**
-     * Effective perms per group (R=resident, A=ally/friend, N=nation, O=outsider), using the
-     * plot's own setting when present and the town's otherwise, as PlotProtectionListener does.
+     * Effective perms per group (F=owner's friends, R=resident, A=ally, N=nation, O=outsider), using
+     * the plot's own setting when present and the fallback otherwise, as PlotProtectionListener does.
+     * Friends only exist on resident-owned plots and fall back to the owner's friend defaults.
      */
     private fun formatPlotPerm(plot: Plot, town: Town?, action: Char): String {
         fun has(plotPerms: String?, townPerms: String?) = ((plotPerms ?: townPerms)?.indexOf(action) ?: -1) >= 0
         val sb = StringBuilder()
+        val ownerFriendDefaults = plot.ownerUuid?.let { residentManager.getResident(it).orElse(null)?.defaultPermsFriend }
+        sb.append(if (plot.ownerUuid != null && has(plot.permsFriend, ownerFriendDefaults)) "F" else "-")
         sb.append(if (has(plot.permsResident, town?.permsResident)) "R" else "-")
         sb.append(if (has(plot.permsAlly, town?.permsAlly)) "A" else "-")
         sb.append(if (has(plot.permsNation, town?.permsNation)) "N" else "-")
@@ -577,6 +580,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             StringUtil.copyPartialMatches(
                 args[2],
                 mutableListOf(
+                    "friend",
                     "resident",
                     "ally",
                     "outsider",
@@ -702,7 +706,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             stateStr = args[0]
         } else if (args.size == 2) {
             val first = args[0].lowercase(Locale.getDefault())
-            if (first == "resident" || first == "ally" || first == "outsider" || first == "nation") {
+            if (first == "friend" || first == "resident" || first == "ally" || first == "outsider" || first == "nation") {
                 groupStr = args[0]
             } else {
                 actionStr = args[0]
@@ -718,9 +722,10 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         val groups: MutableList<String> = ArrayList<String>()
         if (groupStr == null) {
-            groups.addAll(mutableListOf("resident", "ally", "outsider", "nation"))
+            groups.addAll(mutableListOf("friend", "resident", "ally", "outsider", "nation"))
         } else {
-            if (groupStr.equals("resident", ignoreCase = true)) groups.add("resident")
+            if (groupStr.equals("friend", ignoreCase = true)) groups.add("friend")
+            else if (groupStr.equals("resident", ignoreCase = true)) groups.add("resident")
             else if (groupStr.equals("ally", ignoreCase = true)) groups.add("ally")
             else if (groupStr.equals("outsider", ignoreCase = true)) groups.add("outsider")
             else if (groupStr.equals("nation", ignoreCase = true)) groups.add("nation")
@@ -753,6 +758,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             // Unset plot perms inherit the town's; start from those so toggling one action
             // doesn't silently revoke the others.
             var current: String? = when (group) {
+                "friend" -> plot.permsFriend ?: plot.ownerUuid?.let { residentManager.getResident(it).orElse(null)?.defaultPermsFriend }
                 "resident" -> plot.permsResident ?: town?.permsResident
                 "ally" -> plot.permsAlly ?: town?.permsAlly
                 "outsider" -> plot.permsOutsider ?: town?.permsOutsider
@@ -763,7 +769,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action!!, state)
             }
 
-            if (group == "resident") plot.permsResident = current
+            if (group == "friend") plot.permsFriend = current
+            else if (group == "resident") plot.permsResident = current
             else if (group == "ally") plot.permsAlly = current
             else if (group == "outsider") plot.permsOutsider = current
             else if (group == "nation") plot.permsNation = current
@@ -841,6 +848,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         plot.setMobs(false)
         plot.setExplosions(false)
         plot.setFire(false)
+        plot.permsFriend = null
         plot.permsResident = null
         plot.permsAlly = null
         plot.permsOutsider = null

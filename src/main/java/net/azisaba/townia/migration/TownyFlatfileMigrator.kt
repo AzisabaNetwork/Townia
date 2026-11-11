@@ -489,6 +489,7 @@ object TownyFlatfileMigrator {
     ): Int {
         var count = 0
         val migratedNames = HashSet<String>()
+        val friendHolders = ArrayList<TowniaPlayer>()
         val dir = File(dataDir, "residents")
         dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
             try {
@@ -544,6 +545,7 @@ object TownyFlatfileMigrator {
 
             plugin.databaseManager.saveResident(resident)
             plugin.residentManager.cacheResident(resident)
+            if (!resident.friends.isNullOrEmpty()) friendHolders.add(resident)
             migratedNames.add(residentKey)
             count++
             } catch (e: Exception) {
@@ -580,6 +582,27 @@ object TownyFlatfileMigrator {
         if (fromTownLists > 0) {
             plugin.logger.info("Towny flatfile: created $fromTownLists residents listed by a town but without a resident file.")
         }
+
+        // saveResident does not write friends, and the friend table has a foreign key to residents,
+        // so persist the links only now that every resident exists.
+        var friendLinks = 0
+        friendHolders.forEach { holder ->
+            val ownerUuid = holder.uuid ?: return@forEach
+            val valid = ArrayList<String?>()
+            holder.friends?.filterNotNull()?.distinct()?.forEach { friend ->
+                val friendUuid = friend.toUuidOrNull() ?: return@forEach
+                if (friendUuid == ownerUuid || plugin.residentManager.getResident(friendUuid).isEmpty) return@forEach
+                try {
+                    plugin.databaseManager.addFriend(ownerUuid, friendUuid)
+                    valid.add(friend)
+                    friendLinks++
+                } catch (e: Exception) {
+                    plugin.logger.log(Level.WARNING, "Towny flatfile: skipped friend $friend of ${holder.name}: ${e.message}")
+                }
+            }
+            holder.friends = valid
+        }
+        if (friendLinks > 0) plugin.logger.info("Towny flatfile: migrated $friendLinks friend links.")
         return count
     }
 
@@ -667,7 +690,7 @@ object TownyFlatfileMigrator {
             val ownerUuid = resolveResidentUuid(values.first("resident", "residentuuid", "resident_uuid", "owner", "owneruuid", "owner_uuid"), residentsByName)
             val type = parsePlotType(values.first("type"))
             val price = values.double("plotprice", "price")
-            savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, ownerUuid, type, price > 0.0, price, values.first("name"))
+            savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, ownerUuid, type, price > 0.0, price, values.first("name"), values)
             count++
             } catch (e: Exception) {
                 // One bad record must not abort the whole migration (and leave every later stage unrun).
@@ -687,9 +710,11 @@ object TownyFlatfileMigrator {
         type: PlotType?,
         forSale: Boolean,
         price: Double,
-        name: String?
+        name: String?,
+        values: FlatValues? = null
     ) {
         val plot = Plot(world, x, z, townUuid, ownerUuid, type, forSale, price, name, false, false, false, false)
+        applyPlotProtection(values, plot)
         plugin.databaseManager.savePlot(plot)
         plugin.plotManager.cachePlot(plot)
     }
@@ -875,6 +900,19 @@ object TownyFlatfileMigrator {
         resident.defaultPermsResident = permissionString(status, "nation")
         resident.defaultPermsAlly = permissionString(status, "ally")
         resident.defaultPermsOutsider = permissionString(status, "outsider")
+    }
+
+    private fun applyPlotProtection(values: FlatValues?, plot: Plot) {
+        val status = values?.list("permissions", "protectionstatus", "protection_status")
+            ?.map { it.lowercase(Locale.getDefault()) }?.toSet() ?: return
+        val hasFlags = status.any { it.endsWith("build") || it.endsWith("destroy") || it.endsWith("switch") || it.endsWith("itemuse") }
+        if (!hasFlags) return
+        plot.permsResident = permissionString(status, "resident")
+        // On resident-owned plots Towny's "resident" level is what the owner's friends get.
+        if (plot.ownerUuid != null) plot.permsFriend = permissionString(status, "resident")
+        plot.permsNation = permissionString(status, "nation")
+        plot.permsAlly = permissionString(status, "ally")
+        plot.permsOutsider = permissionString(status, "outsider")
     }
 
     private fun applyTownProtection(values: FlatValues, town: Town) {

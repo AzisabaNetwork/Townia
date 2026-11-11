@@ -602,6 +602,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     private fun applyDefaultPermsToOwnedPlots(res: TowniaPlayer) {
         val uuid = res.uuid ?: return
         for (plot in plugin.plotManager.getPlotsByOwner(uuid)) {
+            plot.permsFriend = res.defaultPermsFriend
             plot.permsResident = res.defaultPermsResident
             plot.permsAlly = res.defaultPermsAlly
             plot.permsOutsider = res.defaultPermsOutsider
