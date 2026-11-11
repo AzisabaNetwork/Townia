@@ -45,7 +45,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         when (args[0].lowercase(Locale.getDefault())) {
-            "info", "perm" -> handleInfo(player)
+            "info", "perm", "here" -> handleInfo(player)
             "set" -> {
                 if (args.size < 2) {
                     sendHelp(player)
@@ -88,6 +88,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         return true
     }
 
+    /** /plot info | perm | here: Towny-style status of the plot the player stands in. */
     private fun handleInfo(player: Player) {
         val chunk = player.location.chunk
         val plotOpt: Optional<Plot> = plotManager.getPlot(chunk)
@@ -96,21 +97,48 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return
         }
         val plot: Plot = plotOpt.get()
-        val townOpt: Optional<Town> = townManager.getTown(plot.townUuid)
-        val townName = townOpt.map { it.name }.orElse("Unknown")
-        val owner: String? = if (plot.isTownOwned) townName else resolveOwnerName(plot.ownerUuid)
-        val forSale = if (plot.isForSale) "Yes (" + formatMoney(plot.price) + ")" else "No"
-        plugin.messageManager.sendMessage(
+        val town: Town? = townManager.getTown(plot.townUuid).orElse(null)
+        val townName = town?.name ?: "Unknown"
+        val owner: String = if (plot.isTownOwned) townName else resolveOwnerName(plot.ownerUuid)
+        val forSale = if (plot.isForSale) formatMoney(plot.price) else "No"
+        val plotName = plot.name?.takeIf { it.isNotBlank() } ?: "(${chunk.x}, ${chunk.z})"
+        plugin.messageManager.sendMessageWithoutPrefix(
             player, "plot.info",
+            "name", plotName,
             "world", chunk.world.name,
-            "town", (townName ?: "Unknown"),
-            "type", (plot.plotType?.name ?: "Unknown"),
-            "owner", (owner ?: "Unknown"),
+            "town", townName,
+            "type", (plot.plotType?.name ?: "DEFAULT"),
+            "owner", owner,
             "for_sale", forSale,
+            "outpost", onOff(plot.isOutpost),
             "x", chunk.x.toString(),
-            "z", chunk.z.toString()
+            "z", chunk.z.toString(),
+            "perms_build", formatPlotPerm(plot, town, 'B'),
+            "perms_destroy", formatPlotPerm(plot, town, 'D'),
+            "perms_switch", formatPlotPerm(plot, town, 'S'),
+            "perms_item", formatPlotPerm(plot, town, 'I'),
+            "pvp", onOff(plot.hasPvp()),
+            "explosions", onOff(plot.hasExplosions()),
+            "fire", onOff(plot.hasFire()),
+            "mobs", onOff(plot.hasMobs())
         )
     }
+
+    /**
+     * Effective perms per group (R=resident, A=ally/friend, N=nation, O=outsider), using the
+     * plot's own setting when present and the town's otherwise, as PlotProtectionListener does.
+     */
+    private fun formatPlotPerm(plot: Plot, town: Town?, action: Char): String {
+        fun has(plotPerms: String?, townPerms: String?) = ((plotPerms ?: townPerms)?.indexOf(action) ?: -1) >= 0
+        val sb = StringBuilder()
+        sb.append(if (has(plot.permsResident, town?.permsResident)) "R" else "-")
+        sb.append(if (has(plot.permsAlly, town?.permsAlly)) "A" else "-")
+        sb.append(if (has(plot.permsNation, town?.permsNation)) "N" else "-")
+        sb.append(if (has(plot.permsOutsider, town?.permsOutsider)) "O" else "-")
+        return sb.toString()
+    }
+
+    private fun onOff(value: Boolean): String = if (value) "ON" else "OFF"
 
     private fun resolveOwnerName(ownerUuid: UUID?): String {
         if (ownerUuid == null) return "Town"
@@ -511,7 +539,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
                 args[0],
-                mutableListOf("info", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "toggle", "clear", "evict", "perm"), completions
+                mutableListOf("info", "here", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "toggle", "clear", "evict", "perm"), completions
             )
         } else if (args.size == 2 && args[0].equals("set", ignoreCase = true)) {
             StringUtil.copyPartialMatches(
@@ -720,12 +748,16 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             }
         }
 
+        val town = townManager.getTown(plot.townUuid).orElse(null)
         for (group in groups) {
-            var current: String? = ""
-            if (group == "resident") current = if (plot.permsResident != null) plot.permsResident else ""
-            else if (group == "ally") current = if (plot.permsAlly != null) plot.permsAlly else ""
-            else if (group == "outsider") current = if (plot.permsOutsider != null) plot.permsOutsider else ""
-            else if (group == "nation") current = if (plot.permsNation != null) plot.permsNation else ""
+            // Unset plot perms inherit the town's; start from those so toggling one action
+            // doesn't silently revoke the others.
+            var current: String? = when (group) {
+                "resident" -> plot.permsResident ?: town?.permsResident
+                "ally" -> plot.permsAlly ?: town?.permsAlly
+                "outsider" -> plot.permsOutsider ?: town?.permsOutsider
+                else -> plot.permsNation ?: town?.permsNation
+            } ?: ""
 
             for (action in actions) {
                 current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action!!, state)

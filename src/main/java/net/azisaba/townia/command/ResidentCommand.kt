@@ -375,10 +375,12 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                 options.add("spawn")
                 options.add("tax")
                 options.add("jail")
-                for (p in plugin.server.onlinePlayers) {
-                    options.add(p.name)
-                }
-                StringUtil.copyPartialMatches(args[0], options, completions)
+                options.addAll(playerNameCandidates(args[0]))
+                StringUtil.copyPartialMatches(args[0], options.distinct(), completions)
+            }
+
+            2 if args[0].equals("plotlist", ignoreCase = true) -> {
+                StringUtil.copyPartialMatches(args[1], playerNameCandidates(args[1]), completions)
             }
 
             2 if args[0].equals("friend", ignoreCase = true) -> {
@@ -423,6 +425,19 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             }
         }
         return completions
+    }
+
+    /**
+     * Online player names, plus every known resident (including offline ones) once at
+     * least one character has been typed, so the list stays short on an empty prefix.
+     */
+    private fun playerNameCandidates(prefix: String): List<String> {
+        val names = LinkedHashSet<String>()
+        plugin.server.onlinePlayers.mapTo(names) { it.name }
+        if (prefix.isNotEmpty()) {
+            residentManager.allResidents.mapNotNullTo(names) { it.name }
+        }
+        return names.toList()
     }
 
     /** /resident plotlist [player]: plots owned by the player (Towny's "/resident plotlist"). */

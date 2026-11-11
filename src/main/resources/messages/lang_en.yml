@@ -1,6 +1,6 @@
 # Townia - English Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 17
+version: 18
 
 common:
   none: "None"
@@ -224,14 +224,13 @@ plot:
   already-town-owned: "<yellow>This plot is already town-owned."
   evicted: "<green>Plot owner evicted."
   info:
-    - "<gold>Plot Info"
-    - "<gray>Location: <white>{world} ({x}, {z})"
-    - "<gray>Town: <white>{town}"
-    - "<gray>Owner: <white>{owner}"
-    - "<gray>Type: <white>{type}"
-    - "<gray>For Sale: <white>{for_sale}"
+    - "<gold>.oOo._______________.<yellow>[ {name} ]</yellow><gold>._______________.oOo."
+    - "<dark_green>Town: <green>{town} <dark_green>Owner: <green>{owner} <dark_green>Type: <green>{type}"
+    - "<dark_green>Location: <green>{world} ({x}, {z}) <dark_green>For Sale: <green>{for_sale} <dark_green>Outpost: <green>{outpost}"
+    - "<dark_green>Perms: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
+    - "<dark_green>PvP: <green>{pvp} <dark_green>Explosions: <green>{explosions} <dark_green>Fire: <green>{fire} <dark_green>Mobs: <green>{mobs}"
   help:
-    - "<gold>Plot commands: <gray>/plot info, set, forsale, notforsale, buy, clear, evict"
+    - "<gold>Plot commands: <gray>/plot info|here, set, forsale, notforsale, buy, clear, evict"
 
 resident:
   info:

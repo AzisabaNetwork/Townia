@@ -468,20 +468,14 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
         val rel = getRelationship(player, plot, town)
 
-        var perms: String?
-        if (plot.ownerUuid != null) {
-            perms = when (rel) {
-                Relationship.RESIDENT -> plot.permsResident
-                Relationship.ALLY -> plot.permsAlly
-                Relationship.NATION -> plot.permsNation
-                else -> plot.permsOutsider
-            }
-            if (perms == null) perms = getTownPerms(town, rel)
-        } else {
-            perms = getTownPerms(town, rel)
-        }
-
-        if (perms == null) perms = ""
+        // Plot-level perms (set via /plot set perm) override the town defaults for both
+        // player-owned and town-owned plots; unset (null) groups fall back to the town.
+        val perms: String = when (rel) {
+            Relationship.RESIDENT -> plot.permsResident
+            Relationship.ALLY -> plot.permsAlly
+            Relationship.NATION -> plot.permsNation
+            else -> plot.permsOutsider
+        } ?: getTownPerms(town, rel) ?: ""
         return !hasPerm(perms, type.id)
     }
 

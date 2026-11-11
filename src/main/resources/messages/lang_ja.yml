@@ -1,6 +1,6 @@
 # Townia - Japanese Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 17
+version: 18
 
 common:
   none: "なし"
@@ -224,14 +224,13 @@ plot:
   already-town-owned: "<yellow>この区画は既に町所有です。"
   evicted: "<green>区画の所有者を退去させました。"
   info:
-    - "<gold>区画情報"
-    - "<gray>場所: <white>{world} ({x}, {z})"
-    - "<gray>町: <white>{town}"
-    - "<gray>所有者: <white>{owner}"
-    - "<gray>タイプ: <white>{type}"
-    - "<gray>売出中: <white>{for_sale}"
+    - "<gold>.oOo._______________.<yellow>[ {name} ]</yellow><gold>._______________.oOo."
+    - "<dark_green>町: <green>{town} <dark_green>所有者: <green>{owner} <dark_green>タイプ: <green>{type}"
+    - "<dark_green>場所: <green>{world} ({x}, {z}) <dark_green>売出: <green>{for_sale} <dark_green>アウトポスト: <green>{outpost}"
+    - "<dark_green>権限: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
+    - "<dark_green>PVP: <green>{pvp} <dark_green>爆発: <green>{explosions} <dark_green>火: <green>{fire} <dark_green>Mob: <green>{mobs}"
   help:
-    - "<gold>区画コマンド: <gray>/plot info, set, forsale, notforsale, buy, clear, evict"
+    - "<gold>区画コマンド: <gray>/plot info|here, set, forsale, notforsale, buy, clear, evict"
 
 resident:
   info:
