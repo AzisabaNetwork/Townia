@@ -853,6 +853,12 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         plot.permsAlly = null
         plot.permsOutsider = null
         plot.permsNation = null
+        // Like Towny's /plot clear: remove every sign (standing, wall, hanging) in the plot.
+        // Signs are tile entities, so scanning the chunk's tile entities covers all heights cheaply.
+        player.location.chunk.tileEntities
+            .filterIsInstance<org.bukkit.block.Sign>()
+            .map { it.block }
+            .forEach { it.setType(org.bukkit.Material.AIR, false) }
         try {
             plugin.databaseManager.savePlot(plot)
             plugin.messageManager.sendMessage(player, "plot.reset")
