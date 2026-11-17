@@ -15,7 +15,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
-    compileOnly("com.palmergames.bukkit.towny:towny:0.103.1.1")
+    compileOnly("com.palmergames.bukkit.towny:towny:0.103.2.15")
     compileOnly("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
     implementation("org.xerial:sqlite-jdbc:3.54.1.0")
     implementation("com.zaxxer:HikariCP:7.1.0")
