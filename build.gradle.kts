@@ -15,7 +15,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
-    compileOnly("com.palmergames.bukkit.towny:towny:0.103.1.1")
+    compileOnly("com.palmergames.bukkit.towny:towny:0.103.2.15")
     compileOnly("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
     implementation("org.xerial:sqlite-jdbc:3.54.1.0")
     implementation("com.zaxxer:HikariCP:7.1.0")
@@ -23,10 +23,10 @@ dependencies {
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.mockito:mockito-core:5.14.2")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("org.mockito:mockito-core:5.24.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:6.4.0")
 }
 
 java {
