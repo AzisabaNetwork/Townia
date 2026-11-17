@@ -165,7 +165,7 @@ class NationManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     private fun requireNation(nationId: UUID?): Nation {
-        val n: Nation = cache[nationId] ?: throw TowniaException("error.nation-not-found")
+        val n: Nation = cache[nationId] ?: throw TowniaException("error.nation-not-found", "nation", "Unknown")
         return n
     }
 

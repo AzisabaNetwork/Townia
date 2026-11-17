@@ -122,7 +122,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val name = args[1]
         try {
             nationManager.createNation(name, townUuid, player.uniqueId)
-            plugin.messageManager.sendMessage(sender, "nation.created", "nation", "{nation}", name)
+            plugin.messageManager.sendMessage(sender, "nation.created", "nation", name)
         } catch (e: TowniaException) {
             if (cost > 0 && plugin.hasEconomy()) plugin.economy!!.depositPlayer(player, cost)
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
@@ -222,7 +222,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         try {
             nationManager.addTownToNation(nation.id, townUuid)
             pendingNationInvites.remove(townUuid)
-            plugin.messageManager.sendMessage(sender, "nation.joined", "nation", "{nation}", (nation.name ?: "Unknown"))
+            plugin.messageManager.sendMessage(sender, "nation.joined", "nation", (nation.name ?: "Unknown"))
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }
@@ -251,7 +251,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         try {
             nationManager.removeTownFromNation(nationUuid!!, townUuid!!)
             val nationName = nationOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
-            plugin.messageManager.sendMessage(sender, "nation.left", "nation", "{nation}", nationName)
+            plugin.messageManager.sendMessage(sender, "nation.left", "nation", nationName)
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.unknown", *(e.replacements.filterNotNull().toTypedArray()))
         }

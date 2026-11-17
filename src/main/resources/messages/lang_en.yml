@@ -1,6 +1,6 @@
 # Townia - English Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 18
+version: 20
 
 common:
   none: "None"
@@ -310,6 +310,7 @@ protection:
   destroy-denied: "<red>You do not have permission to destroy blocks here."
   pvp-denied: "<red>PvP is disabled in this plot."
   item-denied: "<red>You do not have permission to use items here."
+  shop-plot-required: "<red>You can only create shops in SHOP plots."
 
 world:
   list-header: "<dark_gray>[ <aqua>Allowed Worlds <dark_gray>(<yellow>{count}</yellow>) ]"
@@ -328,6 +329,8 @@ admin:
   town-deleted: "<green>Town <yellow>{town}</yellow> has been force-deleted."
   nation-deleted: "<green>Nation <yellow>{nation}</yellow> has been force-deleted."
   bonus-given: "<green>Gave <yellow>{amount}</yellow> bonus blocks to <yellow>{town}</yellow>."
+  mayor-set: "<green>Set <yellow>{player}</yellow> as mayor of <yellow>{town}</yellow>."
+  resident-added: "<green>Added <yellow>{player}</yellow> to <yellow>{town}</yellow>."
   migration_start: "<yellow>Starting Towny data migration..."
   migration-source: "<gray>Migration source: <white>{source}"
   migration-progress: "<yellow>Migration stage: <white>{stage}</white> <gray>- imported <aqua>{count}</aqua>"

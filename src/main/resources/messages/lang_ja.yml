@@ -1,6 +1,6 @@
 # Townia - Japanese Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 18
+version: 20
 
 common:
   none: "なし"
@@ -310,6 +310,7 @@ protection:
   destroy-denied: "<red>ここでブロックを破壊する権限がありません。"
   pvp-denied: "<red>この区画ではPvPが無効です。"
   item-denied: "<red>ここでアイテムを使用する権限がありません。"
+  shop-plot-required: "<red>ショップは SHOP 区画内でのみ作成できます。"
 
 world:
   list-header: "<dark_gray>[ <aqua>許可ワールド <dark_gray>(<yellow>{count}</yellow>) ]"
@@ -328,6 +329,8 @@ admin:
   town-deleted: "<green>町 <yellow>{town}</yellow> を強制削除しました。"
   nation-deleted: "<green>国 <yellow>{nation}</yellow> を強制削除しました。"
   bonus-given: "<green>町 <yellow>{town}</yellow> にボーナス区画 <yellow>{amount}</yellow> を付与しました。"
+  mayor-set: "<green>町 <yellow>{town}</yellow> の町長を <yellow>{player}</yellow> に設定しました。"
+  resident-added: "<green><yellow>{player}</yellow> を町 <yellow>{town}</yellow> に住民として追加しました。"
   migration_start: "<yellow>Townyからのデータ移行を開始します..."
   migration-source: "<gray>移行元: <white>{source}"
   migration-progress: "<yellow>移行中: <white>{stage}</white> <gray>- 取り込み済み <aqua>{count}</aqua>"

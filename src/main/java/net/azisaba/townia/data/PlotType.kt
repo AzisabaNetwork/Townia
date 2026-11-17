@@ -11,12 +11,14 @@ enum class PlotType {
     INN;
 
     companion object {
-        fun fromString(s: String): PlotType {
-            return try {
-                valueOf(s.uppercase(Locale.getDefault()))
-            } catch (_: IllegalArgumentException) {
-                DEFAULT
+        fun parseOrNull(s: String): PlotType? {
+            return when (val upper = s.uppercase(Locale.getDefault())) {
+                "COMMERCIAL" -> SHOP
+                "RESIDENTIAL" -> DEFAULT
+                else -> entries.firstOrNull { it.name == upper }
             }
         }
+
+        fun fromString(s: String): PlotType = parseOrNull(s) ?: DEFAULT
     }
 }

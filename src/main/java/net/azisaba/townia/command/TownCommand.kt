@@ -819,7 +819,7 @@ class TownCommand
             offlineNames.add((("<gray>" + r.name + "</gray>")))
         }
         this.plugin.messageManager
-            .sendMessageWithoutPrefix(sender, "town.reslist", "town", (targetTown.name ?: ""), "count", residents.size.toString())
+            .sendMessageWithoutPrefix(sender, "town.reslist-header", "town", (targetTown.name ?: ""), "count", residents.size.toString())
         if (!onlineNames.isEmpty()) {
             this.plugin.messageManager.sendMessageWithoutPrefix(player, "town.reslist-online", "players", java.lang.String.join(", " as CharSequence, onlineNames))
         }
@@ -840,7 +840,13 @@ class TownCommand
             return
         }
         val targetName = args[1]
-        val targetOpt: Optional<TowniaPlayer> = this.residentManager.getResidentByName(targetName)
+        var targetOpt: Optional<TowniaPlayer> = this.residentManager.getResidentByName(targetName)
+        if (targetOpt.isEmpty) {
+            val onlineTarget = Bukkit.getPlayerExact(targetName)
+            if (onlineTarget != null) {
+                targetOpt = Optional.of(this.residentManager.getOrCreate(onlineTarget))
+            }
+        }
         if (targetOpt.isEmpty) {
             this.plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", targetName)
             return
@@ -854,9 +860,7 @@ class TownCommand
         try {
             val existingOpt: Optional<Invite> = this.databaseManager.getInvite(target.uuid!!, townUuid!!)
             if (existingOpt.isPresent) {
-                this.plugin.messageManager
-                    .sendMessage(sender, "town.invite-sent", "player", "Unknown", "town", "Unknown")
-                return
+                this.databaseManager.deleteInvite(existingOpt.get().id)
             }
             val invite = Invite(0, target.uuid, townUuid, player.uniqueId, System.currentTimeMillis())
             this.databaseManager.addInvite(invite)
@@ -1020,7 +1024,7 @@ class TownCommand
 
     private fun handleSet(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
-        if (args.isEmpty()) {
+        if (args.size < 2) {
             this.handleInfo(sender, arrayOf("info"))
             return
         }
@@ -1275,6 +1279,7 @@ class TownCommand
                 }
                 this.townManager.getTown(res.townUuid).ifPresent({ t ->
                     t.taxes = amount
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager
                         .sendMessage(sender, "town.taxes-set", "amount", (this.formatMoney(amount) ?: "0"))
                 })
@@ -1361,12 +1366,14 @@ class TownCommand
             when (args[1].lowercase(Locale.getDefault())) {
                 "pvp" -> {
                     t.setPvp(!t.hasPvp())
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager
                         .sendMessage(sender, "town.toggled", "setting", "PvP", "state", if (t.hasPvp()) "ON" else "OFF")
                 }
 
                 "mobs" -> {
                     t.setMobs(!t.hasMobs())
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -1379,6 +1386,7 @@ class TownCommand
 
                 "explosions" -> {
                     t.setExplosions(!t.hasExplosions())
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -1391,6 +1399,7 @@ class TownCommand
 
                 "fire" -> {
                     t.setFire(!t.hasFire())
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -1403,6 +1412,7 @@ class TownCommand
 
                 "open" -> {
                     t.isOpen = !t.isOpen
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -1415,6 +1425,7 @@ class TownCommand
 
                 "public" -> {
                     t.isPublic = !t.isPublic
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -1427,6 +1438,7 @@ class TownCommand
 
                 "taxpercent" -> {
                     t.isTaxPercent = !t.isTaxPercent
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
                         "town.toggled",
@@ -2010,6 +2022,9 @@ class TownCommand
                 "add" -> {
                     townManager.addOutlaw(town.id, target.uuid!!)
                     plugin.messageManager.sendMessage(sender, "outlaw.added", "player", target.name ?: "Unknown")
+                    Bukkit.getPlayer(target.uuid!!)?.let { targetPlayer ->
+                        net.azisaba.townia.listener.PlayerMoveListener.evictIfOutlawed(plugin, targetPlayer, town.id)
+                    }
                 }
                 "remove" -> {
                     townManager.removeOutlaw(town.id, target.uuid!!)
@@ -2031,7 +2046,7 @@ class TownCommand
             townManager.getTown(res.townUuid).orElse(null)
         }
         if (town == null) {
-            plugin.messageManager.sendMessage(sender, "error.town-not-found")
+            plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", if (args.size >= 2) args[1] else "Unknown")
             return
         }
         val names = town.outlaws.map { uuid ->

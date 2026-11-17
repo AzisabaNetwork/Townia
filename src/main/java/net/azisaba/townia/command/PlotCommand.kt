@@ -63,6 +63,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                     } else {
                         handleSetPerm(player, args.copyOfRange(2, args.size))
                     }
+                } else if (PlotType.parseOrNull(args[1]) != null) {
+                    handleSetType(player, args[1])
                 } else {
                     sendHelp(player)
                 }
@@ -150,10 +152,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun handleSetType(player: Player, typeName: String?) {
-        val plotType: PlotType = PlotType.fromString(typeName ?: "")
-        val validInput: Boolean = Arrays.stream(PlotType.entries.toTypedArray())
-            .anyMatch({ t -> t.name.equals(typeName, ignoreCase = true) })
-        if (!validInput) {
+        val plotType: PlotType? = typeName?.let { PlotType.parseOrNull(it) }
+        if (plotType == null) {
             plugin.messageManager.sendMessage(
                 player, "error.invalid-args",
                 "{usage}", "/plot set type <DEFAULT|SHOP|ARENA|EMBASSY|FARM|INN>"
@@ -633,7 +633,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     private fun requireMayorOrOwner(player: Player, plot: Plot): TowniaPlayer? {
         val res: TowniaPlayer? = residentManager.getResident(player.uniqueId).orElse(null)
         if (res == null) {
-            plugin.messageManager.sendMessage(player, "error.player-not-found")
+            plugin.messageManager.sendMessage(player, "error.player-not-found", "player", player.name)
             return null
         }
         if (plot.ownerUuid == player.uniqueId || TowniaAdminCommand.isBypassing(player)) {

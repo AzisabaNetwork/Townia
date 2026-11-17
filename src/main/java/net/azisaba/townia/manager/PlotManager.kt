@@ -106,7 +106,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
         }
 
         val town: Town = townManager.getTown(townId)
-            .orElseThrow { TowniaException("error.town-not-found") }
+            .orElseThrow { TowniaException("error.town-not-found", "town", townId.toString()) }
 
         // Towny requires a normal claim to touch the town's existing land; outposts and the first claim are exempt.
         if (!outpost && !isAdjacentToTown(townId, worldName, chunk.x, chunk.z) && countPlotsByTown(townId) > 0) {

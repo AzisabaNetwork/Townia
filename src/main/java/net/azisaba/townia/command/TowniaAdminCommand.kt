@@ -5,11 +5,13 @@ import net.azisaba.townia.Townia
 import net.azisaba.townia.TowniaException
 import net.azisaba.townia.data.Nation
 import net.azisaba.townia.data.Town
+import net.azisaba.townia.data.TownRank
 import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.manager.NationManager
 import net.azisaba.townia.manager.PlotManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
+import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -48,6 +50,8 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "migrate" -> handleMigrate(sender, args)
             "dedupe" -> handleDedupe(sender, args)
             "mergeresident" -> handleMergeResident(sender, args)
+            "setmayor" -> handleSetMayor(sender, args)
+            "addresident" -> handleAddResident(sender, args)
             else -> sendHelp(sender)
         }
         return true
@@ -209,6 +213,97 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         } catch (e: TowniaException) {
             plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
                 .toTypedArray()
+            )
+        }
+    }
+
+    private fun resolveTargetResident(key: String): TowniaPlayer? {
+        val uuid = runCatching { UUID.fromString(key) }.getOrNull()
+        if (uuid != null) {
+            return residentManager.getResident(uuid).orElse(null)
+        }
+        return residentManager.getResidentByName(key).orElse(null)
+            ?: Bukkit.getPlayerExact(key)?.let { residentManager.getOrCreate(it) }
+    }
+
+    /** `/ta setmayor <town> <player>`: assigns mayor and membership for [town] without touching DB directly. */
+    private fun handleSetMayor(sender: CommandSender, args: Array<out String>) {
+        if (args.size < 3) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val town = townManager.getTownByName(args[1]).orElse(null)
+        if (town == null) {
+            plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+            return
+        }
+        val target = resolveTargetResident(args[2])
+        if (target == null || target.uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
+            return
+        }
+        if (target.townUuid != null && target.townUuid != town.id) {
+            plugin.messageManager.sendMessage(sender, "error.already-in-town")
+            return
+        }
+        try {
+            if (town.outlaws.contains(target.uuid)) {
+                townManager.removeOutlaw(town.id, target.uuid!!)
+            }
+            if (target.townUuid != town.id) {
+                residentManager.setTown(target.uuid, town.id, TownRank.MAYOR)
+            }
+            townManager.setMayor(town.id, target.uuid)
+            plugin.messageManager.sendMessage(
+                sender, "admin.mayor-set",
+                "town", town.name ?: args[1],
+                "player", target.name ?: args[2]
+            )
+        } catch (e: TowniaException) {
+            plugin.messageManager.sendMessage(
+                sender, (e.messageKey ?: ""), *e.replacements.filterNotNull().toTypedArray()
+            )
+        }
+    }
+
+    /** `/ta addresident <town> <player>`: forces [player] into [town] as a resident. */
+    private fun handleAddResident(sender: CommandSender, args: Array<out String>) {
+        if (args.size < 3) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val town = townManager.getTownByName(args[1]).orElse(null)
+        if (town == null) {
+            plugin.messageManager.sendMessage(sender, "error.town-not-found", "town", args[1])
+            return
+        }
+        val target = resolveTargetResident(args[2])
+        if (target == null || target.uuid == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
+            return
+        }
+        if (target.townUuid != null && target.townUuid != town.id) {
+            plugin.messageManager.sendMessage(sender, "error.already-in-town")
+            return
+        }
+        try {
+            if (town.outlaws.contains(target.uuid)) {
+                townManager.removeOutlaw(town.id, target.uuid!!)
+            }
+            val rank = when {
+                town.mayorUuid == target.uuid -> TownRank.MAYOR
+                target.townUuid == town.id -> target.rank
+                else -> TownRank.RESIDENT
+            }
+            residentManager.setTown(target.uuid, town.id, rank)
+            plugin.messageManager.sendMessage(
+                sender, "admin.resident-added",
+                "town", town.name ?: args[1],
+                "player", target.name ?: args[2]
+            )
+        } catch (e: TowniaException) {
+            plugin.messageManager.sendMessage(
+                sender, (e.messageKey ?: ""), *e.replacements.filterNotNull().toTypedArray()
             )
         }
     }
@@ -403,7 +498,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     "givebonus",
                     "migrate",
                     "dedupe",
-                    "mergeresident"
+                    "mergeresident",
+                    "setmayor",
+                    "addresident"
                 ),
                 completions
             )
@@ -425,7 +522,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             )
         } else if (args.size == 2) {
             when (args[0].lowercase(Locale.getDefault())) {
-                "forceclaim", "deletetown", "givebonus" -> {
+                "forceclaim", "deletetown", "givebonus", "setmayor", "addresident" -> {
                     val townNames = townManager.allTowns.stream()
                         .map { it.name }.toList()
                     StringUtil.copyPartialMatches(args[1], townNames, completions)
@@ -437,6 +534,9 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     StringUtil.copyPartialMatches(args[1], nationNames, completions)
                 }
             }
+        } else if (args.size == 3 && args[0].lowercase(Locale.getDefault()) in setOf("setmayor", "addresident")) {
+            val names = residentManager.allResidents.mapNotNull { it.name }
+            StringUtil.copyPartialMatches(args[2], names, completions)
         }
         return completions
     }
@@ -451,7 +551,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         }
 
         /** Staff holding [BYPASS_PERMISSION] always bypass; the `/ta bypass` toggle still works for anyone else. */
-        fun isBypassing(player: org.bukkit.entity.Player): Boolean {
+        fun isBypassing(player: Player): Boolean {
             return bypassSet.contains(player.uniqueId) || player.hasPermission(BYPASS_PERMISSION)
         }
     }

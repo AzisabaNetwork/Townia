@@ -65,10 +65,15 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         }
 
         if (toPlotOpt.isPresent) {
-            val toTown = getOutlawedTown(player, toPlotOpt.get())
+            val toTown = getOutlawedTown(plugin, player, toPlotOpt.get())
             if (toTown != null) {
                 event.isCancelled = true
-                player.teleport(event.from)
+                val alreadyInsideTown = fromPlotOpt.isPresent && fromPlotOpt.get().townUuid == toTown.id
+                if (alreadyInsideTown) {
+                    player.teleport(player.world.spawnLocation)
+                } else {
+                    player.teleport(event.from)
+                }
                 plugin.messageManager.sendMessage(player, "outlaw.entry-denied", "town", toTown.name ?: "Unknown")
                 return
             }
@@ -88,24 +93,37 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         val to = event.to
         if (!plugin.towniaConfig.isWorldAllowed(to.world.name)) return
         val plot = plotManager.getPlot(to.world.name, to.blockX shr 4, to.blockZ shr 4).orElse(null) ?: return
-        val town = getOutlawedTown(event.player, plot) ?: return
+        val town = getOutlawedTown(plugin, event.player, plot) ?: return
         event.isCancelled = true
         plugin.messageManager.sendMessage(event.player, "outlaw.entry-denied", "town", town.name ?: "Unknown")
     }
 
-    /** The town owning [plot] if [player] is an outlaw there and may not enter it, otherwise null. */
-    private fun getOutlawedTown(player: Player, plot: Plot): Town? {
-        val town = townManager.getTown(plot.townUuid).orElse(null) ?: return null
-        if (!town.outlaws.contains(player.uniqueId)) return null
-        val resident = plugin.residentManager.getResident(player.uniqueId).orElse(null)
-        if (resident?.townUuid == town.id) return null
-        // A town may still put its outlaws in its own jail.
-        if (resident?.jailedTownUuid == town.id) return null
-        if (TowniaAdminCommand.isBypassing(player) || player.hasPermission(OUTLAW_BYPASS_PERMISSION)) return null
-        return town
-    }
-
     companion object {
         const val OUTLAW_BYPASS_PERMISSION = "townia.outlaw.bypass"
+
+        /** The town owning [plot] if [player] is an outlaw there and may not enter it, otherwise null. */
+        fun getOutlawedTown(plugin: Townia, player: Player, plot: Plot): Town? {
+            val town = plugin.townManager.getTown(plot.townUuid).orElse(null) ?: return null
+            if (!town.outlaws.contains(player.uniqueId)) return null
+            val resident = plugin.residentManager.getResident(player.uniqueId).orElse(null)
+            if (resident?.townUuid == town.id) return null
+            // A town may still put its outlaws in its own jail.
+            if (resident?.jailedTownUuid == town.id) return null
+            if (TowniaAdminCommand.isBypassing(player) || player.hasPermission(OUTLAW_BYPASS_PERMISSION)) return null
+            return town
+        }
+
+        /** Teleports [player] to their world spawn if they are currently standing inside an outlawed town. */
+        fun evictIfOutlawed(plugin: Townia, player: Player, targetTownId: UUID? = null): Boolean {
+            val loc = player.location
+            val world = loc.world ?: return false
+            if (!plugin.towniaConfig.isWorldAllowed(world.name)) return false
+            val plot = plugin.plotManager.getPlot(world.name, loc.blockX shr 4, loc.blockZ shr 4).orElse(null) ?: return false
+            if (targetTownId != null && plot.townUuid != targetTownId) return false
+            val town = getOutlawedTown(plugin, player, plot) ?: return false
+            player.teleport(world.spawnLocation)
+            plugin.messageManager.sendMessage(player, "outlaw.entry-denied", "town", town.name ?: "Unknown")
+            return true
+        }
     }
 }

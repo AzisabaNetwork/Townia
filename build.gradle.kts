@@ -9,15 +9,24 @@ repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
     maven("https://repo.glaremasters.me/repository/towny/")
+    maven("https://repo.azisaba.net/repository/maven-public/")
 }
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1")
     compileOnly("com.palmergames.bukkit.towny:towny:0.103.1.1")
+    compileOnly("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
     implementation("org.xerial:sqlite-jdbc:3.54.1.0")
     implementation("com.zaxxer:HikariCP:7.1.0")
     implementation(kotlin("stdlib"))
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
+    testImplementation("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
 java {
@@ -25,6 +34,10 @@ java {
 }
 
 tasks {
+    test {
+        useJUnitPlatform()
+    }
+
     shadowJar {
         archiveClassifier.set("")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE

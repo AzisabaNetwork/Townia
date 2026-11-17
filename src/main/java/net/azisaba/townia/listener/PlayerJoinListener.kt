@@ -8,7 +8,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import java.util.UUID
+import java.util.*
 
 class PlayerJoinListener(private val plugin: Townia) : Listener {
     private val residentManager: ResidentManager = plugin.residentManager
@@ -38,6 +38,7 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
                     }
                 }
             }
+            PlayerMoveListener.evictIfOutlawed(plugin, player)
         } catch (e: Exception) {
             plugin.logger.severe("Failed to load/create resident for $name: ${e.message}")
         }

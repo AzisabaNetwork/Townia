@@ -1,9 +1,12 @@
 package net.azisaba.townia.listener
 
+import io.papermc.paper.event.player.PlayerOpenSignEvent
 import net.azisaba.townia.Townia
 import net.azisaba.townia.command.TowniaAdminCommand
 import net.azisaba.townia.data.PermissionMatrix.hasPerm
 import net.azisaba.townia.data.Plot
+import net.azisaba.townia.data.PlotType
+import net.azisaba.townia.hook.ShopChestHook
 import net.azisaba.townia.data.Town
 import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.manager.NationManager
@@ -12,41 +15,29 @@ import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
 import net.azisaba.townia.util.ChunkKey
 import org.bukkit.Location
-import org.bukkit.World
 import org.bukkit.Material
 import org.bukkit.Tag
-import io.papermc.paper.event.player.PlayerOpenSignEvent
+import org.bukkit.World
 import org.bukkit.block.Block
-import org.bukkit.block.data.type.Lectern as LecternData
-import org.bukkit.event.player.PlayerTakeLecternBookEvent
-import net.azisaba.townia.data.PlotType
-import org.bukkit.entity.AbstractVillager
-import org.bukkit.entity.Animals
-import org.bukkit.entity.ArmorStand
-import org.bukkit.entity.WaterMob
-import org.bukkit.entity.Hanging
-import org.bukkit.entity.Monster
-import org.bukkit.entity.Player
-import org.bukkit.entity.Projectile
+import org.bukkit.block.data.Directional
+import org.bukkit.entity.*
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.*
 import org.bukkit.event.entity.CreatureSpawnEvent
-import org.bukkit.block.data.Directional
-import org.bukkit.event.inventory.InventoryMoveItemEvent
 import org.bukkit.event.entity.EntityChangeBlockEvent
-import org.bukkit.event.hanging.HangingPlaceEvent
-import org.bukkit.event.player.PlayerArmorStandManipulateEvent
-import org.bukkit.entity.EnderCrystal
-import org.bukkit.entity.FallingBlock
-import org.bukkit.entity.Vehicle
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityExplodeEvent
 import org.bukkit.event.hanging.HangingBreakByEntityEvent
+import org.bukkit.event.hanging.HangingPlaceEvent
+import org.bukkit.event.inventory.InventoryMoveItemEvent
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent
 import org.bukkit.event.player.PlayerInteractEntityEvent
 import org.bukkit.event.player.PlayerInteractEvent
+import org.bukkit.event.player.PlayerTakeLecternBookEvent
 import java.util.*
+import org.bukkit.block.data.type.Lectern as LecternData
 
 class PlotProtectionListener(private val plugin: Townia) : Listener {
     private val plotManager: PlotManager = plugin.plotManager
@@ -135,7 +126,7 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
         val type = block.type
         if (CONTAINER_MATERIALS.contains(type) || DOOR_MATERIALS.contains(type)) {
-            if (handleAction(event.getPlayer(), block, ActionType.SWITCH)) {
+            if (!isShopChestInteractionAllowed(event.getPlayer(), block) && handleAction(event.getPlayer(), block, ActionType.SWITCH)) {
                 event.setCancelled(true)
                 plugin.messageManager.sendMessage(event.getPlayer(), "protection.interact-denied")
             }
@@ -441,7 +432,15 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
     private fun handleAction(player: Player, block: Block, type: ActionType): Boolean =
         handleAction(player, block.world, block.x, block.z, type)
 
-    private fun handleAction(player: Player, location: Location, type: ActionType): Boolean =
+    private fun isShopChestInteractionAllowed(player: Player, block: Block): Boolean {
+        val plot = plotManager.getPlotAt(block.location) ?: return false
+        if (plot.plotType != PlotType.SHOP) return false
+        val town = townManager.getTown(plot.townUuid).orElse(null) ?: return false
+        if (town.outlaws.contains(player.uniqueId)) return false
+        return ShopChestHook.isShopChestBlock(block.location)
+    }
+
+    internal fun handleAction(player: Player, location: Location, type: ActionType): Boolean =
         handleAction(player, location.world, location.blockX, location.blockZ, type)
 
     private fun handleAction(player: Player, world: World, blockX: Int, blockZ: Int, type: ActionType): Boolean {

@@ -120,7 +120,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     fun deleteTown(townId: UUID) {
-        val town: Town = cache[townId] ?: throw TowniaException("error.town-not-found")
+        val town: Town = cache[townId] ?: throw TowniaException("error.town-not-found", "town", townId.toString())
 
         plugin.plotManager.removeTownPlots(townId)
         for (p in residentManager.getResidentsByTown(townId)) {
@@ -255,7 +255,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
     fun subtractBalance(townId: UUID?, amount: Double) {
         if (amount.isNaN() || amount < 0) throw TowniaException("error.invalid-args")
         val town: Town = requireTown(townId)
-        if (town.balance < amount) throw TowniaException("town.withdraw-insufficient")
+        if (town.balance < amount) throw TowniaException("town.withdraw-insufficient", "balance", String.format("%.2f", town.balance))
         town.balance -= amount
         persist(town)
     }
@@ -284,7 +284,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
 
     @Throws(TowniaException::class)
     private fun requireTown(townId: UUID?): Town {
-        return cache[townId] ?: throw TowniaException("error.town-not-found")
+        return cache[townId] ?: throw TowniaException("error.town-not-found", "town", townId?.toString() ?: "Unknown")
     }
 
     @Throws(TowniaException::class)

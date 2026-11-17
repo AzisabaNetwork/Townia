@@ -1,22 +1,17 @@
 package net.azisaba.townia
 
-import net.azisaba.townia.command.*
 import net.azisaba.townia.api.TowniaAPI
 import net.azisaba.townia.api.TowniaApiImpl
+import net.azisaba.townia.command.*
 import net.azisaba.townia.config.TowniaConfig
 import net.azisaba.townia.database.DatabaseManager
-import net.azisaba.townia.listener.PlayerJoinListener
-import net.azisaba.townia.listener.PlayerMoveListener
-import net.azisaba.townia.listener.PlotProtectionListener
-import net.azisaba.townia.listener.JailCommandListener
-import net.azisaba.townia.listener.TownMenuListener
+import net.azisaba.townia.listener.*
 import net.azisaba.townia.manager.*
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.TabCompleter
-import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.plugin.ServicePriority
-
+import org.bukkit.plugin.java.JavaPlugin
 import java.sql.SQLException
 import java.util.logging.Level
 
@@ -73,7 +68,9 @@ class  Townia : JavaPlugin() {
 
         server.pluginManager.registerEvents(PlayerJoinListener(this), this)
         server.pluginManager.registerEvents(PlayerMoveListener(this), this)
-        server.pluginManager.registerEvents(PlotProtectionListener(this), this)
+        val plotProtectionListener = PlotProtectionListener(this)
+        server.pluginManager.registerEvents(plotProtectionListener, this)
+        net.azisaba.townia.hook.ShopChestHook.register(this, plotProtectionListener)
         server.pluginManager.registerEvents(JailCommandListener(this), this)
         server.pluginManager.registerEvents(TownMenuListener(this), this)
 

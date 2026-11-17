@@ -9,6 +9,7 @@ softdepend:
   - CoreProtect
   - LuckPerms
   - PlaceholderAPI
+  - ShopChest
   - Towny
   - Vault
 commands:

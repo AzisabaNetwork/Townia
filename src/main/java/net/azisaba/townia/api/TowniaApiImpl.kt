@@ -60,7 +60,7 @@ internal class TowniaApiImpl(private val plugin: Townia) : TowniaAPI {
 
     override fun setResidentTown(residentId: UUID, townId: UUID, rank: TownRank) {
         requireResident(residentId)
-        plugin.townManager.getTown(townId).orElseThrow { net.azisaba.townia.TowniaException("error.town-not-found") }
+        plugin.townManager.getTown(townId).orElseThrow { net.azisaba.townia.TowniaException("error.town-not-found", "town", townId.toString()) }
         plugin.residentManager.setTown(residentId, townId, rank)
     }
     override fun clearResidentTown(residentId: UUID) {
@@ -70,7 +70,7 @@ internal class TowniaApiImpl(private val plugin: Townia) : TowniaAPI {
 
     private fun requireResident(residentId: UUID) {
         plugin.residentManager.getResident(residentId)
-            .orElseThrow { net.azisaba.townia.TowniaException("error.resident-not-found") }
+            .orElseThrow { net.azisaba.townia.TowniaException("error.player-not-found", "player", residentId.toString()) }
     }
 
     private fun requirePositiveAmount(amount: Double) {
