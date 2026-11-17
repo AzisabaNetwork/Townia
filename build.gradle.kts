@@ -23,7 +23,7 @@ dependencies {
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("com.github.MilkBowl:VaultAPI:1.7.1")
     testImplementation("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
