@@ -1,6 +1,6 @@
 # Townia - Japanese Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 20
+version: 21
 
 common:
   none: "なし"
@@ -30,7 +30,8 @@ error:
   not-implemented: "<yellow>この機能はまだ実装されていません。"
   outpost-not-found: "<red>アウトポストが見つかりません。"
   outpost-not-public: "<red>そのアウトポストは公開されていません。"
-  town-not-open: "<red>この町は公開参加を許可していません。"
+  town-not-open: "<red>この町は自由参加を許可していません。町長が <aqua>/t toggle open on</aqua> にするか、招待を受けてください。"
+  town-not-public: "<red><yellow>{town}</yellow> は非公開のため、スポーンへテレポートできません。<gray>(町長が <aqua>/t toggle public on</aqua> で公開できます)"
 
 town:
   level:
@@ -89,8 +90,8 @@ town:
   time-upkeep: "<gold>次の維持費徴収まで: <white>{time}"
   renamed: "<green>町名を <yellow>{old}</yellow> から <yellow>{new}</yellow> に変更しました。"
   info-perms: "<gold>権限: <gray>住民:<white>{resident} <gray>同盟:<white>{ally} <gray>外部:<white>{outsider} <gray>国:<white>{nation}"
-  set-public: "<green>町を公開にしました。誰でも参加できます。"
-  set-private: "<yellow>町を非公開にしました。参加には招待が必要です。"
+  set-public: "<green>町を公開にしました。誰でも <aqua>/t spawn</aqua> で訪問できます。<gray>(自由参加は <aqua>/t toggle open on</aqua>)"
+  set-private: "<yellow>町を非公開にしました。住民・同じ国・同盟国以外は <aqua>/t spawn</aqua> で訪問できません。"
   rank-set: "<green><yellow>{player}</yellow> の役職を <yellow>{rank}</yellow> にしました。"
   already-in-nation: "<red>この町は既に国に所属しています。"
   not-in-nation: "<red>この町は国に所属していません。"
@@ -147,6 +148,7 @@ town:
     - "<dark_green>規模: <green>{claims}/{max_claims} <dark_green>[国ボーナス: <green>{nation_bonus}<dark_green>] [ホーム: <green>{home_x}, {home_z}<dark_green>]"
     - "<dark_green>権限: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
     - "<dark_green>PVP: <green>{pvp} <dark_green>爆発: <green>{explosions} <dark_green>火: <green>{fire} <dark_green>Mob: <green>{mobs}"
+    - "<dark_green>公開(Public): <green>{public} <dark_green>自由参加(Open): <green>{open}"
     - "<dark_green>銀行: <green>{balance} <gray>| <dark_green>維持費: <green>{upkeep} <gray>| <dark_green>税: <green>{taxes}"
     - "<dark_green>国: <green>{nation}"
     - "<dark_green>Assistant: <green>{assistants}"

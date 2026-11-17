@@ -37,7 +37,7 @@ class TownPublicPrivatePersistenceTest {
 
                 // Private town denies outsider spawn
                 townCmd.onCommand(outsider, env.dummyCommand("town"), "town", arrayOf("spawn", "berry_town"))
-                assertTrue(env.sentMessages.any { it.recipient === outsider && it.key == "error.no-permission" })
+                assertTrue(env.sentMessages.any { it.recipient === outsider && it.key == "error.town-not-public" })
 
                 // Set public -> persists across reload
                 env.sentMessages.clear()
@@ -66,7 +66,7 @@ class TownPublicPrivatePersistenceTest {
 
                 env.sentMessages.clear()
                 townCmd.onCommand(outsider, env.dummyCommand("town"), "town", arrayOf("spawn", "berry_town"))
-                assertTrue(env.sentMessages.any { it.recipient === outsider && it.key == "error.no-permission" })
+                assertTrue(env.sentMessages.any { it.recipient === outsider && it.key == "error.town-not-public" })
             }
         }
     }

@@ -121,7 +121,11 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
             val plot = plugin.plotManager.getPlot(world.name, loc.blockX shr 4, loc.blockZ shr 4).orElse(null) ?: return false
             if (targetTownId != null && plot.townUuid != targetTownId) return false
             val town = getOutlawedTown(plugin, player, plot) ?: return false
-            player.teleport(world.spawnLocation)
+            // Paper refuses to teleport a player who is riding something (boat, horse, minecart).
+            if (player.isInsideVehicle) player.leaveVehicle()
+            if (!player.teleport(world.spawnLocation)) {
+                plugin.logger.warning("Could not evict outlaw ${player.name} from ${town.name}: teleport was cancelled")
+            }
             plugin.messageManager.sendMessage(player, "outlaw.entry-denied", "town", town.name ?: "Unknown")
             return true
         }

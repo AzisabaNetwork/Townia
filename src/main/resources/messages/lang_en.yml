@@ -1,6 +1,6 @@
 # Townia - English Messages
 # Format: MiniMessage. Placeholders use {curly_braces}.
-version: 20
+version: 21
 
 common:
   none: "None"
@@ -30,7 +30,8 @@ error:
   not-implemented: "<yellow>This feature is not implemented yet."
   outpost-not-found: "<red>Outpost not found."
   outpost-not-public: "<red>That outpost is not public."
-  town-not-open: "<red>This town is not open."
+  town-not-open: "<red>This town is not open. The mayor can use <aqua>/t toggle open on</aqua>, or you need an invite."
+  town-not-public: "<red><yellow>{town}</yellow> is not public, so you cannot teleport to its spawn. <gray>(The mayor can use <aqua>/t toggle public on</aqua>)"
 
 town:
   level:
@@ -89,8 +90,8 @@ town:
   time-upkeep: "<gold>Time until next upkeep: <white>{time}"
   renamed: "<green>Town renamed from <yellow>{old}</yellow> to <yellow>{new}</yellow>."
   info-perms: "<gold>Permissions: <gray>Resident:<white>{resident} <gray>Ally:<white>{ally} <gray>Outsider:<white>{outsider} <gray>Nation:<white>{nation}"
-  set-public: "<green>Town is now public. Anyone can join."
-  set-private: "<yellow>Town is now private. Invitations are required."
+  set-public: "<green>Town is now public. Anyone can visit with <aqua>/t spawn</aqua>. <gray>(Free joining: <aqua>/t toggle open on</aqua>)"
+  set-private: "<yellow>Town is now private. Only residents, nation members and allies can use <aqua>/t spawn</aqua> to visit."
   rank-set: "<green>Set <yellow>{player}</yellow>'s rank to <yellow>{rank}</yellow>."
   already-in-nation: "<red>This town is already in a nation."
   not-in-nation: "<red>This town is not in a nation."
@@ -147,6 +148,7 @@ town:
     - "<dark_green>Town Size: <green>{claims}/{max_claims} <dark_green>[NationBonus: <green>{nation_bonus}<dark_green>] [Home: <green>{home_x}, {home_z}<dark_green>]"
     - "<dark_green>Perm: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
     - "<dark_green>PVP: <green>{pvp} <dark_green>Explosions: <green>{explosions} <dark_green>Firespread: <green>{fire} <dark_green>Mob Spawns: <green>{mobs}"
+    - "<dark_green>Public: <green>{public} <dark_green>Open: <green>{open}"
     - "<dark_green>Bank: <green>{balance} <gray>| <dark_green>Daily upkeep: <green>{upkeep} <gray>| <dark_green>Tax: <green>{taxes}"
     - "<dark_green>Nation: <green>{nation}"
     - "<dark_green>SubMayors: <green>{submayors}"

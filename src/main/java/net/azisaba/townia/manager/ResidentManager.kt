@@ -30,8 +30,13 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         try {
             for (p in db.allResidents) {
                 if (p == null) continue
-                p.uuid?.let { cache.put(it, p) }
-                p.uuid?.let { nameIndex.put(p.name!!.lowercase(Locale.getDefault()), it) }
+                val uuid = p.uuid ?: continue
+                cache[uuid] = p
+                // Several rows can share a name (re-registered names, migration leftovers).
+                // Index the one seen most recently, which is the account currently using it.
+                val key = p.name!!.lowercase(Locale.getDefault())
+                val indexed = nameIndex[key]?.let { cache[it] }
+                if (indexed == null || p.lastSeen > indexed.lastSeen) nameIndex[key] = uuid
             }
             plugin.logger.info("Loaded " + cache.size + " residents.")
         } catch (e: SQLException) {
@@ -44,6 +49,14 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     }
 
     fun getResidentByName(name: String): Optional<TowniaPlayer> {
+        // The online player owns the name right now. The name index can still point at another
+        // record with the same name (an account whose name was re-registered, or a Towny
+        // migration leftover under an old UUID); using that record sent invites and outlaw
+        // entries to a UUID nobody is logged in with, so the target never noticed them.
+        val online = plugin.server.getPlayerExact(name)
+        if (online != null) {
+            return Optional.of(getOrCreate(online))
+        }
         val uuid = nameIndex[name.lowercase(Locale.getDefault())] ?: return Optional.empty<TowniaPlayer>()
         return Optional.ofNullable(cache[uuid])
     }
@@ -109,11 +122,13 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
                 mergeLegacyResident(legacyUuid, legacy, existing)
             }
             if (!existing.name.equals(name)) {
-                nameIndex.remove(existing.name!!.lowercase(Locale.getDefault()))
+                val oldKey = existing.name!!.lowercase(Locale.getDefault())
+                if (nameIndex[oldKey] == uuid) nameIndex.remove(oldKey)
                 existing.name = name
-                nameIndex[name.lowercase(Locale.getDefault())] = uuid
                 persist(existing)
             }
+            // Whoever is logged in with this name owns it, even if another record shares it.
+            nameIndex[name.lowercase(Locale.getDefault())] = uuid
             absorbRenamedRecords(existing)
             repairMayor(existing)
             return existing

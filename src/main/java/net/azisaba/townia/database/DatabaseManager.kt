@@ -333,6 +333,7 @@ class DatabaseManager(private val plugin: Townia) {
                     "ALTER TABLE towns ADD COLUMN jail_z DOUBLE DEFAULT 0",
                     "ALTER TABLE towns ADD COLUMN jail_yaw FLOAT DEFAULT 0",
                     "ALTER TABLE towns ADD COLUMN jail_pitch FLOAT DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN is_open BOOLEAN DEFAULT false",
                     "ALTER TABLE residents ADD COLUMN jailed_town_uuid VARCHAR(36)",
                     "ALTER TABLE residents ADD COLUMN jail_release_at BIGINT DEFAULT 0",
                     "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0",
@@ -513,8 +514,8 @@ class DatabaseManager(private val plugin: Townia) {
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
                                homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
                                allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger,
-                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch, is_open)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), mayor_uuid=VALUES(mayor_uuid), nation_uuid=VALUES(nation_uuid),
                 balance=VALUES(balance), claim_limit=VALUES(claim_limit), bonus_claims=VALUES(bonus_claims),
@@ -529,7 +530,8 @@ class DatabaseManager(private val plugin: Townia) {
                 allow_invisibility=VALUES(allow_invisibility), allow_sit=VALUES(allow_sit),
                 allow_pet_pickup=VALUES(allow_pet_pickup), allow_passenger=VALUES(allow_passenger),
                 jail_world=VALUES(jail_world), jail_x=VALUES(jail_x), jail_y=VALUES(jail_y),
-                jail_z=VALUES(jail_z), jail_yaw=VALUES(jail_yaw), jail_pitch=VALUES(jail_pitch)
+                jail_z=VALUES(jail_z), jail_yaw=VALUES(jail_yaw), jail_pitch=VALUES(jail_pitch),
+                is_open=VALUES(is_open)
         
         """.trimIndent() else """
             INSERT INTO towns (id, name, mayor_uuid, nation_uuid, balance, claim_limit, bonus_claims,
@@ -537,8 +539,8 @@ class DatabaseManager(private val plugin: Townia) {
                                spawn_world, spawn_x, spawn_y, spawn_z, spawn_yaw, spawn_pitch,
                                homeblock_world, homeblock_x, homeblock_z, perms_resident, perms_ally, perms_outsider, perms_nation, daily_upkeep,
                                allow_invisibility, allow_sit, allow_pet_pickup, allow_passenger,
-                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               jail_world, jail_x, jail_y, jail_z, jail_yaw, jail_pitch, is_open)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, mayor_uuid=excluded.mayor_uuid, nation_uuid=excluded.nation_uuid,
                 balance=excluded.balance, claim_limit=excluded.claim_limit, bonus_claims=excluded.bonus_claims,
@@ -553,7 +555,8 @@ class DatabaseManager(private val plugin: Townia) {
                 allow_invisibility=excluded.allow_invisibility, allow_sit=excluded.allow_sit,
                 allow_pet_pickup=excluded.allow_pet_pickup, allow_passenger=excluded.allow_passenger,
                 jail_world=excluded.jail_world, jail_x=excluded.jail_x, jail_y=excluded.jail_y,
-                jail_z=excluded.jail_z, jail_yaw=excluded.jail_yaw, jail_pitch=excluded.jail_pitch
+                jail_z=excluded.jail_z, jail_yaw=excluded.jail_yaw, jail_pitch=excluded.jail_pitch,
+                is_open=excluded.is_open
         
         """.trimIndent()
         dataSource!!.getConnection().use { connection ->
@@ -603,6 +606,7 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setDouble(38, town.jailZ)
                 ps.setFloat(39, town.jailYaw)
                 ps.setFloat(40, town.jailPitch)
+                ps.setInt(41, if (town.isOpen) 1 else 0)
                 ps.executeUpdate()
             }
         }
@@ -706,6 +710,10 @@ class DatabaseManager(private val plugin: Townia) {
             rs.getString("perms_nation"),
             rs.getDouble("daily_upkeep")
         )
+        try {
+            if (rs.getObject("is_open") != null) town.isOpen = rs.getInt("is_open") != 0
+        } catch (_: Exception) {
+        }
         try {
             if (rs.getObject("allow_invisibility") != null) town.isAllowInvisibility =
                 rs.getInt("allow_invisibility") != 0

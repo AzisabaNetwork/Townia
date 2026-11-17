@@ -984,12 +984,14 @@ class TownCommand
                 }
             }
 
-            if (!town.isPublic && !isMember && !isSameNationOrAlly && !player.hasPermission("townia.admin")) {
-                this.plugin.messageManager.sendMessage(sender, "error.no-permission")
-                return
-            }
             if (town.outlaws.contains(player.uniqueId) && !isMember && !player.hasPermission("townia.admin")) {
                 this.plugin.messageManager.sendMessage(sender, "outlaw.entry-denied", "town", town.name ?: "Unknown")
+                return
+            }
+            // Checked after the outlaw check so that an outlaw is told why, and so that a
+            // private town is not mistaken for a leftover outlaw entry once it is removed.
+            if (!town.isPublic && !isMember && !isSameNationOrAlly && !player.hasPermission("townia.admin")) {
+                this.plugin.messageManager.sendMessage(sender, "error.town-not-public", "town", town.name ?: "Unknown")
                 return
             }
         } else {
@@ -1317,6 +1319,7 @@ class TownCommand
                 val board = java.lang.String.join(" " as CharSequence, *args.copyOfRange(2, args.size))
                 this.townManager.getTown(res.townUuid).ifPresent { t ->
                     t.board = board
+                    this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(sender, "town.board-set", "board", board)
                 }
             }
@@ -1336,6 +1339,7 @@ class TownCommand
                     val price = args[2].toDouble()
                     this.townManager.getTown(res.townUuid).ifPresent({ t ->
                         t.plotPrice = price
+                        this.townManager.saveTown(t)
                         this.plugin.messageManager
                             .sendMessage(sender, "town.plotprice-set", "amount", price.toString())
                     })
@@ -1362,17 +1366,27 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return
         }
+        // Towny syntax: "/t toggle public on|off". Without a state the setting is flipped.
+        val explicitState: Boolean? = when (args.getOrNull(2)?.lowercase(Locale.getDefault())) {
+            null -> null
+            "on", "true", "yes" -> true
+            "off", "false", "no" -> false
+            else -> {
+                this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                return
+            }
+        }
         this.townManager.getTown(res.townUuid).ifPresent({ t ->
             when (args[1].lowercase(Locale.getDefault())) {
                 "pvp" -> {
-                    t.setPvp(!t.hasPvp())
+                    t.setPvp(explicitState ?: !t.hasPvp())
                     this.townManager.saveTown(t)
                     this.plugin.messageManager
                         .sendMessage(sender, "town.toggled", "setting", "PvP", "state", if (t.hasPvp()) "ON" else "OFF")
                 }
 
                 "mobs" -> {
-                    t.setMobs(!t.hasMobs())
+                    t.setMobs(explicitState ?: !t.hasMobs())
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1385,7 +1399,7 @@ class TownCommand
                 }
 
                 "explosions" -> {
-                    t.setExplosions(!t.hasExplosions())
+                    t.setExplosions(explicitState ?: !t.hasExplosions())
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1398,7 +1412,7 @@ class TownCommand
                 }
 
                 "fire" -> {
-                    t.setFire(!t.hasFire())
+                    t.setFire(explicitState ?: !t.hasFire())
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1411,7 +1425,7 @@ class TownCommand
                 }
 
                 "open" -> {
-                    t.isOpen = !t.isOpen
+                    t.isOpen = explicitState ?: !t.isOpen
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1424,7 +1438,7 @@ class TownCommand
                 }
 
                 "public" -> {
-                    t.isPublic = !t.isPublic
+                    t.isPublic = explicitState ?: !t.isPublic
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1437,7 +1451,7 @@ class TownCommand
                 }
 
                 "taxpercent" -> {
-                    t.isTaxPercent = !t.isTaxPercent
+                    t.isTaxPercent = explicitState ?: !t.isTaxPercent
                     this.townManager.saveTown(t)
                     this.plugin.messageManager.sendMessage(
                         sender,
@@ -1813,6 +1827,10 @@ class TownCommand
             if (town.hasFire()) "ON" else "OFF",
             "mobs",
             if (town.hasMobs()) "ON" else "OFF",
+            "public",
+            if (town.isPublic) "ON" else "OFF",
+            "open",
+            if (town.isOpen) "ON" else "OFF",
             "balance",
             balance,
             "upkeep",

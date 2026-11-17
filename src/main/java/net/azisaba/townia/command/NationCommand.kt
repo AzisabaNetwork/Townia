@@ -757,12 +757,12 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
                 val ownNation = nation != null && targetNation.id == nation.id
                 val allied = nation != null && nation.allies.contains(targetNation.id)
                 val publicCapital = capital?.isPublic == true
-                if (!ownNation && !allied && !publicCapital && !isAdmin) {
-                    plugin.messageManager.sendMessage(sender, "error.no-permission")
-                    return
-                }
                 if (!ownNation && capital != null && capital.outlaws.contains(player.uniqueId) && !isAdmin) {
                     plugin.messageManager.sendMessage(sender, "outlaw.entry-denied", "town", capital.name ?: "Unknown")
+                    return
+                }
+                if (!ownNation && !allied && !publicCapital && !isAdmin) {
+                    plugin.messageManager.sendMessage(sender, "error.town-not-public", "town", capital?.name ?: (targetNation.name ?: "Unknown"))
                     return
                 }
                 val nationLoc = resolveNationSpawn(targetNation)
@@ -786,12 +786,12 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
 
             val isSameNation = nation != null && targetTown.nationUuid != null && targetTown.nationUuid == nation.id
             val isAlly = nation != null && targetTown.nationUuid != null && nation.allies.contains(targetTown.nationUuid)
-            if (!isSameNation && !isAlly && !targetTown.isPublic && !isAdmin) {
-                plugin.messageManager.sendMessage(sender, "error.no-permission")
-                return
-            }
             if (targetTown.outlaws.contains(player.uniqueId) && !isAdmin) {
                 plugin.messageManager.sendMessage(sender, "outlaw.entry-denied", "town", targetTown.name ?: "Unknown")
+                return
+            }
+            if (!isSameNation && !isAlly && !targetTown.isPublic && !isAdmin) {
+                plugin.messageManager.sendMessage(sender, "error.town-not-public", "town", targetTown.name ?: "Unknown")
                 return
             }
             if (!targetTown.hasSpawn()) {
