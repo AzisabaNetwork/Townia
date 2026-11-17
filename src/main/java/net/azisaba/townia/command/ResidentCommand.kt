@@ -367,6 +367,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         when (args.size) {
             1 -> {
                 val options: MutableList<String> = ArrayList()
+                options.add("help")
                 options.add("list")
                 options.add("plotlist")
                 options.add("friend")

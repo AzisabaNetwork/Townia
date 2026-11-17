@@ -5,13 +5,14 @@ version: 20
 common:
   none: "None"
   not-set: "Not set"
-  yes: "Yes"
-  no: "No"
+  "yes": "Yes"
+  "no": "No"
 
 error:
   invalid-name: "<red>Names may only contain letters, numbers, underscores and hyphens (2-32 characters)."
   no-permission: "<red>You do not have permission."
   player-only: "<red>This command can only be used by a player."
+  unknown: "<red>An unknown error occurred."
   invalid-args: "<red>Invalid arguments. Use <yellow>/town help</yellow>."
   player-not-found: "<red>Player <yellow>{player}</yellow> was not found."
   town-not-found: "<red>Town <yellow>{town}</yellow> was not found."

@@ -45,6 +45,37 @@ class MessageAuditTest {
     }
 
     @Test
+    fun `no message key is parsed as a YAML boolean`() {
+        // Unquoted yes/no/on/off/true/false keys become "true"/"false" under YAML 1.1
+        for (lang in listOf("en", "ja")) {
+            val keys = flattenKeys(File("src/main/resources/messages/lang_$lang.yml")).keys
+            val bad = keys.filter { it.substringAfterLast('.') in setOf("true", "false") }
+            assertTrue(bad.isEmpty(), "Boolean-parsed keys in lang_$lang.yml (quote them): $bad")
+        }
+    }
+
+    @Test
+    fun `every message key referenced in code is defined`() {
+        val keyLiteral = Regex("\"([a-z][a-z0-9_-]*\\.[a-z0-9_.-]+)\"")
+        val referenced = File("src/main/java").walkTopDown()
+            .filter { it.isFile && (it.extension == "kt" || it.extension == "java") }
+            .flatMap { it.readLines().asSequence() }
+            .filter { "messageManager." in it || "TowniaException(" in it }
+            .flatMap { line -> keyLiteral.findAll(line).map { it.groupValues[1] } }
+            .toSet()
+
+        for (lang in listOf("en", "ja")) {
+            val defined = flattenKeys(File("src/main/resources/messages/lang_$lang.yml")).keys
+            val sections = defined.map { it.substringBefore('.') }.toSet()
+            val missing = referenced
+                .filter { it.substringBefore('.') in sections }
+                .filter { key -> key !in defined && defined.none { it.startsWith("$key.") } }
+                .sorted()
+            assertTrue(missing.isEmpty(), "Keys missing from lang_$lang.yml: $missing")
+        }
+    }
+
+    @Test
     fun `MessageManager replaces placeholders cleanly in both languages`(@TempDir tempDir: Path) {
         TowniaTestEnv(tempDir).use { env ->
             whenever(env.plugin.getResource("messages/lang_en.yml"))
@@ -63,7 +94,10 @@ class MessageAuditTest {
                 Triple("admin.mayor-set", arrayOf("town", "berry_town", "player", "Alice"), "Alice"),
                 Triple("admin.resident-added", arrayOf("town", "berry_town", "player", "Bob"), "Bob"),
                 Triple("error.town-not-found", arrayOf("town", "berry_town"), "berry_town"),
-                Triple("error.player-not-found", arrayOf("player", "Bob"), "Bob")
+                Triple("error.player-not-found", arrayOf("player", "Bob"), "Bob"),
+                Triple("common.yes", arrayOf<String>(), ""),
+                Triple("common.no", arrayOf<String>(), ""),
+                Triple("error.unknown", arrayOf<String>(), "")
             )
 
             for ((key, args, expectedSubstring) in checks) {

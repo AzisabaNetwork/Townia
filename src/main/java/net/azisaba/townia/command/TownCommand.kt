@@ -2250,6 +2250,7 @@ class TownCommand
             StringUtil.copyPartialMatches(
                 args[0],
                 mutableListOf<String?>(
+                    "help",
                     "new",
                     "claim",
                     "unclaim",

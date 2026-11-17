@@ -27,7 +27,7 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "time" -> handleTime(sender)
             "top" -> handleTop(sender, args)
             "debug" -> handleDebug(sender)
-            "?" -> sendHelp(sender)
+            "?", "help" -> sendHelp(sender)
             else -> sendHelp(sender)
         }
         return true
@@ -41,7 +41,7 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     ): MutableList<String> {
         val completions = mutableListOf<String>()
         if (args.size == 1) {
-            val options = mutableListOf("map", "price", "time", "top", "?", "info")
+            val options = mutableListOf("help", "map", "price", "time", "top", "info")
             if (sender.hasPermission("townia.admin.reload")) options.add("reload")
             if (sender.hasPermission("townia.admin.debug")) options.add("debug")
             StringUtil.copyPartialMatches(args[0], options, completions)

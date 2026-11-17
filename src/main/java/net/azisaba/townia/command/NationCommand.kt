@@ -1032,7 +1032,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             StringUtil.copyPartialMatches(
                 args[0],
                 mutableListOf(
-                    "new", "invite", "join", "leave", "kick", "deposit", "withdraw",
+                    "help", "new", "invite", "join", "leave", "kick", "deposit", "withdraw",
                     "bankhistory", "info", "list", "delete", "set", "online", "toggle", "spawn", "setspawn"
                 ),
                 completions

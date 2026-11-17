@@ -542,7 +542,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
                 args[0],
-                mutableListOf("info", "here", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "toggle", "clear", "evict", "perm"), completions
+                mutableListOf("help", "info", "here", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "toggle", "clear", "evict", "perm"), completions
             )
         } else if (args.size == 2 && args[0].equals("set", ignoreCase = true)) {
             StringUtil.copyPartialMatches(

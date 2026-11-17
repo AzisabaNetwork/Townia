@@ -5,13 +5,14 @@ version: 20
 common:
   none: "なし"
   not-set: "未設定"
-  yes: "はい"
-  no: "いいえ"
+  "yes": "はい"
+  "no": "いいえ"
 
 error:
   invalid-name: "<red>名前には文字・数字・アンダースコア・ハイフンのみ使用でき、2〜32文字にしてください。"
   no-permission: "<red>権限がありません。"
   player-only: "<red>このコマンドはプレイヤーのみ実行できます。"
+  unknown: "<red>不明なエラーが発生しました。"
   invalid-args: "<red>引数が正しくありません。<yellow>/town help</yellow> を確認してください。"
   player-not-found: "<red>プレイヤー <yellow>{player}</yellow> が見つかりません。"
   town-not-found: "<red>町 <yellow>{town}</yellow> が見つかりません。"
