@@ -157,7 +157,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         }
         val targetTown: Town = targetTownOpt.get()
         if (targetTown.isInNation) {
-            plugin.messageManager.sendMessage(sender, "town.already-in-nation")
+            plugin.messageManager.sendMessage(sender, "nation.town-already-in-nation", "town", (targetTown.name ?: "Unknown"))
             return
         }
 
@@ -285,12 +285,12 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         }
         val targetTown: Town = targetOpt.get()
         if (nationUuid != targetTown.nationUuid) {
-            plugin.messageManager.sendMessage(sender, "error.not-same-town")
+            plugin.messageManager.sendMessage(sender, "nation.town-not-member", "town", (targetTown.name ?: "Unknown"))
             return
         }
         val nationOpt: Optional<Nation> = nationManager.getNation(nationUuid)
         if (nationOpt.isPresent && nationOpt.get().capitalTownUuid!! == targetTown.id) {
-            plugin.messageManager.sendMessage(sender, "error.cannot-kick-mayor")
+            plugin.messageManager.sendMessage(sender, "nation.cannot-kick-capital", "town", (targetTown.name ?: "Unknown"))
             return
         }
 

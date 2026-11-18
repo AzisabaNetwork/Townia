@@ -42,7 +42,8 @@ object CommandHelp {
         "townia" to listOf("info", "map", "price", "time", "top", "reload", "debug"),
         "towniaadmin" to listOf(
             "reload", "bypass", "forceclaim", "forceunclaim", "deletetown", "deletenation", "givebonus",
-            "setmayor", "addresident", "mergeresident", "dedupe", "migrate"
+            "setmayor", "addresident", "setsubmayor", "setassistant", "setrank", "moveresident", "kickresident",
+            "mergeresident", "dedupe", "migrate"
         ),
         "towniaworld" to listOf("list", "add", "remove"),
         "invite" to listOf("list", "accept", "decline"),

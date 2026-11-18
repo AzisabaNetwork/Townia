@@ -26,6 +26,10 @@ error:
   database: "<red>A database error occurred. Please contact an administrator."
   cannot-kick-mayor: "<red>You cannot kick the mayor."
   not-same-town: "<red>That player is not in your town."
+  player-already-in-town: "<red><yellow>{player}</yellow> is already a member of <yellow>{town}</yellow>."
+  player-not-in-town: "<red><yellow>{player}</yellow> is not a member of any town."
+  player-not-same-town: "<red><yellow>{player}</yellow> is not a resident of your town."
+  cannot-kick-mayor-player: "<red><yellow>{player}</yellow> is the mayor and cannot be kicked."
   rank-not-found: "<red>Unknown rank: <yellow>{rank}</yellow>"
   not-implemented: "<yellow>This feature is not implemented yet."
   outpost-not-found: "<red>Outpost not found."
@@ -192,6 +196,9 @@ nation:
   neutral-set: "<green>Nation neutrality: <aqua>{state}</aqua>"
   title-set: "<green>Updated title for <yellow>{player}</yellow>."
   not-in-nation: "<red>Your town is not in a nation."
+  town-already-in-nation: "<red><yellow>{town}</yellow> is already in a nation."
+  town-not-member: "<red><yellow>{town}</yellow> is not a member of your nation."
+  cannot-kick-capital: "<red><yellow>{town}</yellow> is the capital and cannot be kicked."
   info:
     - "<gold>.oOo._______________.<yellow>[ {nation} ]</yellow><gold>._______________.oOo."
     - "<dark_green>Board: <green>{board} <dark_green>Founded: <green>{founded}"
@@ -290,6 +297,7 @@ jail:
   cell-not-found: "<red>Jail cell not found."
   jailed: "<green><yellow>{player}</yellow> has been jailed for <yellow>{hours}</yellow> hours."
   not-jailed-by-town: "<red>That resident is not jailed by your town."
+  player-not-jailed: "<red><yellow>{player}</yellow> is not jailed by your town."
   no-cells: "<yellow>No jail cells are configured."
   cell-entry: "<gray>{id}: <yellow>{name}</yellow> <gray>{world} ({x}, {y}, {z})"
   cell-added: "<green>Added jail cell <yellow>{cell}</yellow>."
@@ -335,8 +343,14 @@ admin:
   town-deleted: "<green>Town <yellow>{town}</yellow> has been force-deleted."
   nation-deleted: "<green>Nation <yellow>{nation}</yellow> has been force-deleted."
   bonus-given: "<green>Gave <yellow>{amount}</yellow> bonus blocks to <yellow>{town}</yellow>."
-  mayor-set: "<green>Set <yellow>{player}</yellow> as mayor of <yellow>{town}</yellow>."
   resident-added: "<green>Added <yellow>{player}</yellow> to <yellow>{town}</yellow>."
+  player-in-other-town: "<red><yellow>{player}</yellow> is already a member of <yellow>{town}</yellow>. Use <aqua>/towniaadmin moveresident</aqua> to move them."
+  target-is-mayor: "<red><yellow>{player}</yellow> is the mayor of <yellow>{town}</yellow>. Set another mayor with <aqua>/towniaadmin setmayor</aqua> first."
+  rank-set: "<green>Set the rank of <yellow>{player}</yellow> in <yellow>{town}</yellow> to <aqua>{rank}</aqua>."
+  resident-moved: "<green>Moved <yellow>{player}</yellow> from <yellow>{from}</yellow> to <yellow>{town}</yellow>."
+  resident-kicked: "<green>Removed <yellow>{player}</yellow> from <yellow>{town}</yellow>."
+  notify-added: "<green>An administrator added you to <yellow>{town}</yellow>."
+  notify-removed: "<yellow>An administrator removed you from <yellow>{town}</yellow>."
   migration_start: "<yellow>Starting Towny data migration..."
   migration-source: "<gray>Migration source: <white>{source}"
   migration-progress: "<yellow>Migration stage: <white>{stage}</white> <gray>- imported <aqua>{count}</aqua>"
@@ -861,13 +875,44 @@ cmdhelp:
       desc: "Sets bonus claims for a town."
     setmayor:
       usage: "/towniaadmin setmayor <town> <player|UUID>"
-      desc: "Force-changes the mayor. Adds the player to the town if needed."
+      desc: "Makes a player the mayor of a town; the old mayor becomes a resident. A townless player is added to the town."
+      detail:
+        - "Same as /towniaadmin setrank <town> <player> mayor."
     addresident:
       usage: "/towniaadmin addresident <town> <player|UUID>"
-      desc: "Force-adds a player to a town as a resident (no invite needed)."
+      desc: "Force-adds a townless player to a town as a resident (no invite needed)."
       detail:
-        - "Players already in another town cannot be added."
+        - "Players in another town are refused; use /towniaadmin moveresident to move them."
         - "If the player is an outlaw of that town, the outlaw entry is removed."
+    setsubmayor:
+      usage: "/towniaadmin setsubmayor <town> <player|UUID>"
+      desc: "Makes a player a sub-mayor of a town. A townless player is added to the town."
+      detail:
+        - "Same as /towniaadmin setrank <town> <player> sub_mayor."
+    setassistant:
+      usage: "/towniaadmin setassistant <town> <player|UUID>"
+      desc: "Makes a player an assistant of a town. A townless player is added to the town."
+      detail:
+        - "Same as /towniaadmin setrank <town> <player> assistant."
+    setrank:
+      usage: "/towniaadmin setrank <town> <player|UUID> <resident|assistant|sub_mayor|mayor>"
+      desc: "Sets a player's rank in a town; resident demotes them. A townless player is added to the town."
+      detail:
+        - "setmayor, setsubmayor and setassistant are shortcuts of this command and follow the same rules."
+        - "Members of another town are refused; move them first with /towniaadmin moveresident."
+        - "mayor makes the player the mayor and the old mayor a resident. The current mayor cannot be given a lower rank; make someone else mayor first."
+    moveresident:
+      usage: "/towniaadmin moveresident <town> <player|UUID>"
+      desc: "Moves a player into a town as a resident, even out of another town."
+      detail:
+        - "The player leaves their old town first and loses the plots they owned there."
+        - "A mayor cannot be moved; set another mayor of their town first."
+        - "The player is notified if online."
+    kickresident:
+      usage: "/towniaadmin kickresident <player|UUID>"
+      desc: "Removes a player from their town. They lose the plots they owned there."
+      detail:
+        - "A mayor cannot be removed; set another mayor of their town first."
     mergeresident:
       usage: "/towniaadmin mergeresident <from name|UUID> <into name|UUID>"
       desc: "Merges duplicate resident records into one."

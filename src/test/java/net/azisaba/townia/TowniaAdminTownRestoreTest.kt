@@ -46,7 +46,7 @@ class TowniaAdminTownRestoreTest {
                 bukkit.`when`<Any> { Bukkit.getPlayerExact("ResidentTwo") }.thenReturn(res2)
 
                 adminCmd.onCommand(console, env.dummyCommand("towniaadmin"), "ta", arrayOf("setmayor", "berry_town", "BerryMayor"))
-                assertTrue(env.sentMessages.any { it.recipient === console && it.key == "admin.mayor-set" })
+                assertTrue(env.sentMessages.any { it.recipient === console && it.key == "admin.rank-set" })
 
                 adminCmd.onCommand(console, env.dummyCommand("towniaadmin"), "ta", arrayOf("addresident", "berry_town", "ResidentOne"))
                 adminCmd.onCommand(console, env.dummyCommand("towniaadmin"), "ta", arrayOf("addresident", "berry_town", "ResidentTwo"))
@@ -81,11 +81,11 @@ class TowniaAdminTownRestoreTest {
             val adminCmd = TowniaAdminCommand(env.plugin)
 
             adminCmd.onCommand(console, env.dummyCommand("towniaadmin"), "ta", arrayOf("addresident", "berry_town", "MayorB"))
-            assertTrue(env.sentMessages.any { it.recipient === console && it.key == "error.already-in-town" })
+            assertTrue(env.sentMessages.any { it.recipient === console && it.key == "admin.player-in-other-town" })
 
             env.sentMessages.clear()
             adminCmd.onCommand(console, env.dummyCommand("towniaadmin"), "ta", arrayOf("setmayor", "berry_town", "MayorB"))
-            assertTrue(env.sentMessages.any { it.recipient === console && it.key == "error.already-in-town" })
+            assertTrue(env.sentMessages.any { it.recipient === console && it.key == "admin.player-in-other-town" })
         }
     }
 

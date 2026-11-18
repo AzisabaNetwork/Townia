@@ -855,7 +855,7 @@ class TownCommand
         }
         val target: TowniaPlayer = targetOpt.get()
         if (target.isInTown) {
-            this.plugin.messageManager.sendMessage(sender, "error.already-in-town")
+            this.plugin.messageManager.sendMessage(sender, "error.player-already-in-town", "player", (target.name ?: "Unknown"), "town", this.townManager.getTown(target.townUuid).map { it.name ?: "Unknown" }.orElse("Unknown"))
             return
         }
         val townUuid: UUID? = res.townUuid
@@ -906,12 +906,12 @@ class TownCommand
         }
         val target: TowniaPlayer = targetOpt.get()
         if (res.townUuid != target.townUuid) {
-            this.plugin.messageManager.sendMessage(sender, "error.not-same-town")
+            this.plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", (target.name ?: "Unknown"))
             return
         }
         if (target.isMayor) {
             this.plugin.messageManager
-                .sendMessage(sender, "error.cannot-kick-mayor")
+                .sendMessage(sender, "error.cannot-kick-mayor-player", "player", (target.name ?: "Unknown"))
             return
         }
         val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
@@ -1657,7 +1657,7 @@ class TownCommand
         }
         val target: TowniaPlayer = targetOpt.get()
         if (res.townUuid != target.townUuid) {
-            this.plugin.messageManager.sendMessage(sender, "error.not-same-town")
+            this.plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", (target.name ?: "Unknown"))
             return
         }
         when (subAction) {
@@ -2106,7 +2106,7 @@ class TownCommand
             return
         }
         if (target.townUuid != town.id) {
-            plugin.messageManager.sendMessage(sender, "error.not-same-town")
+            plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", (target.name ?: "Unknown"))
             return
         }
         val cellSelector = args.getOrNull(4)
@@ -2134,7 +2134,7 @@ class TownCommand
         val town = townManager.getTown(res.townUuid).orElse(null) ?: return
         val target = residentManager.getResidentByName(args[1]).orElse(null)
         if (target == null || target.jailedTownUuid != town.id) {
-            plugin.messageManager.sendMessage(sender, "jail.not-jailed-by-town")
+            if (target == null) plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[1]) else plugin.messageManager.sendMessage(sender, "jail.player-not-jailed", "player", target.name ?: args[1])
             return
         }
         releaseJail(target)

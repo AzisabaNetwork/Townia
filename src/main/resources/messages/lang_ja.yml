@@ -26,6 +26,10 @@ error:
   database: "<red>データベースエラーが発生しました。管理者に連絡してください。"
   cannot-kick-mayor: "<red>町長を町から追放することはできません。"
   not-same-town: "<red>そのプレイヤーはあなたの町の住民ではありません。"
+  player-already-in-town: "<red><yellow>{player}</yellow> は既に町 <yellow>{town}</yellow> に所属しています。"
+  player-not-in-town: "<red><yellow>{player}</yellow> はどの町にも所属していません。"
+  player-not-same-town: "<red><yellow>{player}</yellow> はあなたの町の住民ではありません。"
+  cannot-kick-mayor-player: "<red><yellow>{player}</yellow> は町長なので追放できません。"
   rank-not-found: "<red>不明な役職です: <yellow>{rank}</yellow>"
   not-implemented: "<yellow>この機能はまだ実装されていません。"
   outpost-not-found: "<red>アウトポストが見つかりません。"
@@ -192,6 +196,9 @@ nation:
   neutral-set: "<green>国の中立設定: <aqua>{state}</aqua>"
   title-set: "<green><yellow>{player}</yellow> の称号を更新しました。"
   not-in-nation: "<red>あなたの町は国に所属していません。"
+  town-already-in-nation: "<red>町 <yellow>{town}</yellow> は既に国に所属しています。"
+  town-not-member: "<red>町 <yellow>{town}</yellow> はあなたの国に所属していません。"
+  cannot-kick-capital: "<red>町 <yellow>{town}</yellow> は首都なので追放できません。"
   info:
     - "<gold>.oOo._______________.<yellow>[ {nation} ]</yellow><gold>._______________.oOo."
     - "<dark_green>掲示板: <green>{board} <dark_green>設立日: <green>{founded}"
@@ -290,6 +297,7 @@ jail:
   cell-not-found: "<red>jail cellが見つかりません。"
   jailed: "<green><yellow>{player}</yellow> を <yellow>{hours}</yellow> 時間jailしました。"
   not-jailed-by-town: "<red>その住民はあなたの町によってjailされていません。"
+  player-not-jailed: "<red><yellow>{player}</yellow> はあなたの町で投獄されていません。"
   no-cells: "<yellow>jail cellは設定されていません。"
   cell-entry: "<gray>{id}: <yellow>{name}</yellow> <gray>{world} ({x}, {y}, {z})"
   cell-added: "<green>jail cell <yellow>{cell}</yellow> を追加しました。"
@@ -335,8 +343,14 @@ admin:
   town-deleted: "<green>町 <yellow>{town}</yellow> を強制削除しました。"
   nation-deleted: "<green>国 <yellow>{nation}</yellow> を強制削除しました。"
   bonus-given: "<green>町 <yellow>{town}</yellow> にボーナス区画 <yellow>{amount}</yellow> を付与しました。"
-  mayor-set: "<green>町 <yellow>{town}</yellow> の町長を <yellow>{player}</yellow> に設定しました。"
   resident-added: "<green><yellow>{player}</yellow> を町 <yellow>{town}</yellow> に住民として追加しました。"
+  player-in-other-town: "<red><yellow>{player}</yellow> は既に町 <yellow>{town}</yellow> に所属しています。移す場合は <aqua>/towniaadmin moveresident</aqua> を使ってください。"
+  target-is-mayor: "<red><yellow>{player}</yellow> は町 <yellow>{town}</yellow> の町長です。先に <aqua>/towniaadmin setmayor</aqua> で別の町長を設定してください。"
+  rank-set: "<green>町 <yellow>{town}</yellow> での <yellow>{player}</yellow> の役職を <aqua>{rank}</aqua> にしました。"
+  resident-moved: "<green><yellow>{player}</yellow> を <yellow>{from}</yellow> から町 <yellow>{town}</yellow> に移しました。"
+  resident-kicked: "<green><yellow>{player}</yellow> を町 <yellow>{town}</yellow> から外しました。"
+  notify-added: "<green>管理者によって町 <yellow>{town}</yellow> に加えられました。"
+  notify-removed: "<yellow>管理者によって町 <yellow>{town}</yellow> から外されました。"
   migration_start: "<yellow>Townyからのデータ移行を開始します..."
   migration-source: "<gray>移行元: <white>{source}"
   migration-progress: "<yellow>移行中: <white>{stage}</white> <gray>- 取り込み済み <aqua>{count}</aqua>"
@@ -862,13 +876,44 @@ cmdhelp:
       desc: "町が取得できる土地の上限にボーナスを設定します。"
     setmayor:
       usage: "/towniaadmin setmayor <町名> <プレイヤー|UUID>"
-      desc: "町長を強制的に変更します。対象が町に未所属なら町に加えます。"
+      desc: "プレイヤーを町長にし、元の町長は一般住民に戻します。町に未所属なら町に加えます。"
+      detail:
+        - "/towniaadmin setrank <町名> <プレイヤー> mayor と同じです。"
     addresident:
       usage: "/towniaadmin addresident <町名> <プレイヤー|UUID>"
-      desc: "プレイヤーを強制的に町の住民にします（招待不要）。"
+      desc: "町に未所属のプレイヤーを強制的に町の住民にします（招待不要）。"
       detail:
-        - "対象がすでに別の町に所属している場合は追加できません。"
+        - "別の町に所属している場合は追加できません。移すには /towniaadmin moveresident を使います。"
         - "対象がその町のアウトローだった場合は解除されます。"
+    setsubmayor:
+      usage: "/towniaadmin setsubmayor <町名> <プレイヤー|UUID>"
+      desc: "プレイヤーを町の副町長にします。町に未所属なら町に加えます。"
+      detail:
+        - "/towniaadmin setrank <町名> <プレイヤー> sub_mayor と同じです。"
+    setassistant:
+      usage: "/towniaadmin setassistant <町名> <プレイヤー|UUID>"
+      desc: "プレイヤーを町の補佐にします。町に未所属なら町に加えます。"
+      detail:
+        - "/towniaadmin setrank <町名> <プレイヤー> assistant と同じです。"
+    setrank:
+      usage: "/towniaadmin setrank <町名> <プレイヤー|UUID> <resident|assistant|sub_mayor|mayor>"
+      desc: "町でのプレイヤーの役職を設定します。resident で一般住民に戻します。町に未所属なら町に加えます。"
+      detail:
+        - "setmayor・setsubmayor・setassistant はこのコマンドの省略形で、ルールも同じです。"
+        - "別の町の住民は指定できません。先に /towniaadmin moveresident で移してください。"
+        - "mayor を指定すると町長になり、元の町長は一般住民になります。今の町長を降格することはできないので、先に別の人を町長にしてください。"
+    moveresident:
+      usage: "/towniaadmin moveresident <町名> <プレイヤー|UUID>"
+      desc: "別の町に所属していても、プレイヤーを強制的に指定の町へ移します（一般住民として）。"
+      detail:
+        - "元の町からは脱退扱いになり、元の町で所有していた区画は手放されます。"
+        - "町長は移せません。先にその町の別の町長を設定してください。"
+        - "対象がオンラインなら通知されます。"
+    kickresident:
+      usage: "/towniaadmin kickresident <プレイヤー|UUID>"
+      desc: "プレイヤーを所属している町から外します。町で所有していた区画は手放されます。"
+      detail:
+        - "町長は外せません。先にその町の別の町長を設定してください。"
     mergeresident:
       usage: "/towniaadmin mergeresident <統合元の名前|UUID> <統合先の名前|UUID>"
       desc: "重複した住民データを1つに統合します。"

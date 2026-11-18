@@ -58,6 +58,12 @@ Towniaは、町（Town）や国（Nation）を作成し、土地（Plot）を保
 - `/towniaadmin setclaim <町名>` - 指定したチャンクを強制的に町の土地にします
 - `/towniaadmin unclaim` - 指定したチャンクを強制的に保護解除します
 - `/towniaadmin deletetown <町名>` - 町を強制解散します
+- `/towniaadmin addresident <町名> <プレイヤー>` - 町に未所属のプレイヤーを住民として追加します
+- `/towniaadmin setrank <町名> <プレイヤー> <resident|assistant|sub_mayor|mayor>` - 役職を変更します（未所属なら町に追加）
+- `/towniaadmin setmayor|setsubmayor|setassistant <町名> <プレイヤー>` - `setrank` の省略形です
+- `/towniaadmin moveresident <町名> <プレイヤー>` - 別の町に所属していても強制的に移します
+- `/towniaadmin kickresident <プレイヤー>` - 所属している町から外します
+- 各コマンドの詳しい使い方は `/towniaadmin help <サブコマンド>` で確認できます
 
 ## データ構造
 MySQLデータベースを利用し、非同期でデータを読み書きします。

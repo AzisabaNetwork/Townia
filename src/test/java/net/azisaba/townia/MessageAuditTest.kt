@@ -91,7 +91,7 @@ class MessageAuditTest {
                 Triple("nation.left", arrayOf("nation", "Azisaba"), "Azisaba"),
                 Triple("town.reslist-header", arrayOf("town", "berry_town", "count", "28"), "berry_town"),
                 Triple("town.withdraw-insufficient", arrayOf("balance", "100.00"), "100.00"),
-                Triple("admin.mayor-set", arrayOf("town", "berry_town", "player", "Alice"), "Alice"),
+                Triple("admin.rank-set", arrayOf("town", "berry_town", "player", "Alice", "rank", "mayor"), "Alice"),
                 Triple("admin.resident-added", arrayOf("town", "berry_town", "player", "Bob"), "Bob"),
                 Triple("error.town-not-found", arrayOf("town", "berry_town"), "berry_town"),
                 Triple("error.player-not-found", arrayOf("player", "Bob"), "Bob"),
