@@ -657,6 +657,32 @@ class DatabaseManager(private val plugin: Townia) {
             return towns
         }
 
+    /**
+     * Clears resident references to towns that no longer exist (town membership and jail).
+     * Towny migrations leave such references when a resident's town could not be imported,
+     * and the resident then counts as "in a town" that cannot be found: shown as no town,
+     * yet refused by every join or admin command. The towns table is the source of truth,
+     * so this is checked in SQL rather than against the loaded cache.
+     * Returns (memberships cleared, jail entries cleared).
+     */
+    @Synchronized
+    @Throws(SQLException::class)
+    fun clearMissingTownReferences(): Pair<Int, Int> {
+        dataSource!!.getConnection().use { connection ->
+            connection.createStatement().use { stmt ->
+                val members = stmt.executeUpdate(
+                    "UPDATE residents SET town_uuid = NULL, rank = 'RESIDENT' " +
+                        "WHERE town_uuid IS NOT NULL AND town_uuid NOT IN (SELECT id FROM towns)"
+                )
+                val jailed = stmt.executeUpdate(
+                    "UPDATE residents SET jailed_town_uuid = NULL, jail_release_at = 0, jail_bail = 0 " +
+                        "WHERE jailed_town_uuid IS NOT NULL AND jailed_town_uuid NOT IN (SELECT id FROM towns)"
+                )
+                return members to jailed
+            }
+        }
+    }
+
     @Synchronized
     @Throws(SQLException::class)
     fun deleteTown(id: UUID) {

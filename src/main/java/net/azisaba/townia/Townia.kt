@@ -54,6 +54,16 @@ class  Townia : JavaPlugin() {
 
         messageManager = MessageManager(this)
 
+        // Before residents are cached, so nobody stays "in" a town that no longer exists.
+        try {
+            val (members, jailed) = databaseManager.clearMissingTownReferences()
+            if (members > 0 || jailed > 0) {
+                logger.warning("Cleared references to missing towns: $members town membership(s), $jailed jail entr(y/ies).")
+            }
+        } catch (e: SQLException) {
+            logger.log(Level.WARNING, "Could not clear references to missing towns", e)
+        }
+
         nameHistory = NameHistory(this)
         residentManager = ResidentManager(this, databaseManager)
         townManager = TownManager(this, databaseManager, residentManager)

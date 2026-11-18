@@ -22,8 +22,7 @@ class ResidentAboutTest {
             cmd.onCommand(player, env.dummyCommand("resident"), "res", arrayOf("set", "about", "よろしく", "お願いします"))
             assertTrue(env.sentMessages.any { it.recipient === player && it.key == "resident.about-set" })
 
-            env.reloadManagers()
-            assertEquals("よろしく お願いします", env.residentManager.getResident(uuid).orElseThrow().about)
+            assertEquals("よろしく お願いします", env.databaseManager.getResident(uuid).orElseThrow().about)
 
             env.sentMessages.clear()
             cmd.onCommand(player, env.dummyCommand("resident"), "res", arrayOf("set", "about", "x".repeat(101)))
@@ -31,8 +30,7 @@ class ResidentAboutTest {
             assertEquals("よろしく お願いします", env.residentManager.getResident(uuid).orElseThrow().about)
 
             cmd.onCommand(player, env.dummyCommand("resident"), "res", arrayOf("set", "about", "none"))
-            env.reloadManagers()
-            assertNull(env.residentManager.getResident(uuid).orElseThrow().about)
+            assertNull(env.databaseManager.getResident(uuid).orElseThrow().about)
         }
     }
 }

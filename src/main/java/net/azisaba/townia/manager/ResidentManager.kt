@@ -218,7 +218,9 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     /** Copies what [current] lacks from [legacy] and drops [legacy] from the cache. References are not moved. */
     private fun absorbLegacy(legacyUuid: UUID, legacy: TowniaPlayer, current: TowniaPlayer) {
         val currentUuid = current.uuid ?: return
-        if (current.townUuid == null && legacy.townUuid != null) {
+        // Only a town that still exists is carried over; a dangling reference would leave the
+        // player "in" a town nobody can find.
+        if (current.townUuid == null && legacy.townUuid != null && plugin.townManager.getTown(legacy.townUuid).isPresent) {
             current.townUuid = legacy.townUuid
             current.rank = legacy.rank
         }

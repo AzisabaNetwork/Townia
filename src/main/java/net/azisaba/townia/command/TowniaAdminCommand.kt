@@ -251,7 +251,20 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
             return null
         }
+        dropMissingTown(target)
         return town to target
+    }
+
+    /**
+     * A resident can still reference a town that no longer exists (a Towny migration that
+     * could not import the town). Such a player is townless: clear the reference so they
+     * are not refused as "already in a town" that cannot even be named.
+     */
+    private fun dropMissingTown(target: TowniaPlayer) {
+        val townUuid = target.townUuid ?: return
+        if (townManager.getTown(townUuid).isPresent) return
+        plugin.logger.info("Clearing ${target.name}'s reference to missing town $townUuid")
+        residentManager.clearTown(target.uuid)
     }
 
     private fun townName(townUuid: UUID?): String =
@@ -404,6 +417,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[1])
             return
         }
+        dropMissingTown(target)
         if (target.townUuid == null) {
             plugin.messageManager.sendMessage(sender, "error.player-not-in-town", "player", target.name ?: args[1])
             return
