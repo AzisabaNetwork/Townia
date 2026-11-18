@@ -250,6 +250,9 @@ object TownyMigrator {
                         null
                     )
                     player.registeredAt = tRes.registered
+                    runCatching { tRes.about }.getOrNull()
+                        ?.takeIf { it.isNotBlank() && !it.equals("/res set about", ignoreCase = true) }
+                        ?.let { player.about = it.take(255) }
                     applyTownyResidentPermissions(tRes.permissions, player)
                     if (tRes.isJailed) {
                         runCatching {

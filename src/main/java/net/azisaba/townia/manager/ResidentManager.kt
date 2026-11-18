@@ -227,6 +227,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             current.jailReleaseAt = legacy.jailReleaseAt
             current.jailBail = legacy.jailBail
         }
+        if (current.about.isNullOrBlank() && !legacy.about.isNullOrBlank()) current.about = legacy.about
         current.registeredAt = listOf(current.registeredAt, legacy.registeredAt)
             .filter { it > 0L }
             .minOrNull() ?: current.registeredAt

@@ -28,7 +28,10 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     private val residentManager: ResidentManager = plugin.residentManager
     private val plotManager: PlotManager = plugin.plotManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("towniaadmin", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("townia.admin")) {
             plugin.messageManager.sendMessage(sender, "error.no-permission")
             return true
@@ -52,7 +55,8 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "mergeresident" -> handleMergeResident(sender, args)
             "setmayor" -> handleSetMayor(sender, args)
             "addresident" -> handleAddResident(sender, args)
-            else -> sendHelp(sender)
+            "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "towniaadmin", args.drop(1))
+            else -> CommandHelp.sendUnknown(plugin.messageManager, sender, "towniaadmin", args[0])
         }
         return true
     }
@@ -465,7 +469,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
     }
 
     private fun sendHelp(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "admin.help")
+        CommandHelp.sendList(plugin.messageManager, sender, "towniaadmin", 1)
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {

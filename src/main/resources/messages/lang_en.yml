@@ -248,6 +248,9 @@ resident:
   list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
   perm-applied: "<green>Resident plot permissions have been applied to your owned plots."
   perm-updated: "<green>Resident default permissions updated."
+  about-set: "<green>About set to: <white>{about}"
+  about-cleared: "<yellow>About has been cleared."
+  about-too-long: "<red>About must be at most <yellow>{max}</yellow> characters."
   toggle-set: "<green><yellow>{setting}</yellow> is now <aqua>{state}</aqua>."
   toggle-reset: "<yellow>Resident modes have been reset."
   spawn-teleport: "<green>Teleported to your bed spawn."
@@ -452,3 +455,457 @@ townia:
     - "<gold>/townia map <gray>- Show nearby map"
     - "<gold>/townia price <gray>- Show prices"
     - "<gold>/townia time <gray>- Show time until next upkeep"
+
+# Command help: /<command> help [page|subcommand]. usage/desc are plain text (no MiniMessage tags).
+cmdhelp:
+  header: "<gold>===== <yellow>/{command}</yellow> help <gray>({page}/{max})</gray> ====="
+  entry: "<click:suggest_command:'{suggest}'><hover:show_text:'<yellow>Click to type <gray>(details: {detail_command})'><aqua>{usage}</aqua></hover></click> <gray>- {desc}"
+  footer: "<gray>Details of each command: <yellow>/{command} help \\<subcommand></yellow>"
+  next-page: "<click:run_command:'/{command} help {next}'><yellow>[Next page]</yellow></click> <gray>/{command} help {next}"
+  detail:
+    - "<gold>===== <aqua>{usage}</aqua> ====="
+    - "<white>{desc}"
+    - "<click:suggest_command:'{suggest}'><yellow>[Click to type]</yellow></click>"
+  detail-line: "<gray>- {line}"
+  unknown: "<red>There is no subcommand \"{sub}\". See <click:run_command:'/{command} help'><yellow>/{command} help</yellow></click> for the list."
+  invalid-args: "<red>Invalid arguments. See <click:run_command:'/{command} help'><yellow>/{command} help</yellow></click> for usage."
+  invalid-args-usage: "<red>Invalid arguments. Usage:"
+  usage-line: "  <click:suggest_command:'{suggest}'><hover:show_text:'<yellow>Click to type'><aqua>{usage}</aqua></hover></click> <gray>- {desc}"
+  see-detail: "<gray>More details: <click:run_command:'/{command} help {sub}'><yellow>/{command} help {sub}</yellow></click>"
+
+  town:
+    info:
+      usage: "/town info [town]"
+      desc: "Shows town information. Without a town name, shows your own town (same as /town)."
+    here:
+      usage: "/town here"
+      desc: "Shows the town at your current location."
+    list:
+      usage: "/town list [by <sort>] [page]"
+      desc: "Lists towns."
+      detail:
+        - "Sort: name, residents, balance, claims, open (open towns first), public (public towns first), founded"
+        - "Example: /town list by residents 2"
+    new:
+      usage: "/town new <name>"
+      desc: "Creates a new town with you as mayor."
+      detail:
+        - "If a creation cost is configured, it is paid from your balance."
+        - "The chunk you stand in becomes the first claim."
+    join:
+      usage: "/town join <town>"
+      desc: "Joins a town that is open to everyone."
+    leave:
+      usage: "/town leave"
+      desc: "Leaves your town."
+    spawn:
+      usage: "/town spawn [town]"
+      desc: "Teleports to a town spawn. Without a town name, your own town."
+      detail:
+        - "You can only teleport to another town if it is public."
+    online:
+      usage: "/town online [town]"
+      desc: "Shows the online residents of a town."
+    reslist:
+      usage: "/town reslist [town]"
+      desc: "Lists the residents of a town."
+    ranklist:
+      usage: "/town ranklist [town]"
+      desc: "Lists the residents of a town by rank."
+    claim:
+      usage: "/town claim [radius|outpost]"
+      desc: "Claims the chunk you stand in for your town (assistant or higher)."
+      detail:
+        - "With a radius, claims a (radius*2+1) x (radius*2+1) square of chunks around you (radius up to 10)."
+        - "With outpost, claims a chunk away from the town as an outpost."
+        - "The cost is paid from the town bank."
+        - "Example: /town claim 2 claims 5x5 chunks"
+    unclaim:
+      usage: "/town unclaim [radius|all]"
+      desc: "Unclaims the chunk you stand in (assistant or higher)."
+      detail:
+        - "With a radius, also unclaims the chunks around you (up to 10)."
+        - "With all, unclaims every claim of the town."
+    outpost:
+      list:
+        usage: "/town outpost list [town]"
+        desc: "Lists the outposts of a town."
+      tp:
+        usage: "/town outpost tp [town] <number|name>"
+        desc: "Teleports to an outpost. Without a town name, one of your own town."
+      togglepublic:
+        usage: "/town outpost togglepublic <number>"
+        desc: "Toggles whether people from other towns can use an outpost (assistant or higher)."
+      rename:
+        usage: "/town outpost rename <number> <name>"
+        desc: "Names an outpost (assistant or higher, up to 64 characters)."
+    invite:
+      usage: "/town invite <player>"
+      desc: "Invites a player to your town. They join with /invite accept."
+    kick:
+      usage: "/town kick <player>"
+      desc: "Kicks a resident from your town."
+    rank:
+      add:
+        usage: "/town rank add <player> <rank>"
+        desc: "Gives a resident a rank (mayor only)."
+        detail:
+          - "Ranks: resident, assistant, sub_mayor"
+          - "Assistants and above can claim and unclaim land, set the spawn, jail players and more."
+      remove:
+        usage: "/town rank remove <player>"
+        desc: "Removes a resident's rank (mayor only)."
+    set:
+      spawn:
+        usage: "/town set spawn"
+        desc: "Sets the town spawn to your location (assistant or higher)."
+      homeblock:
+        usage: "/town set homeblock"
+        desc: "Sets the chunk you stand in as the home block (assistant or higher, town land only)."
+      name:
+        usage: "/town set name <new name>"
+        desc: "Renames the town (mayor only)."
+      board:
+        usage: "/town set board <message>"
+        desc: "Sets the town board shown in /town info (mayor only)."
+      taxes:
+        usage: "/town set taxes <amount>"
+        desc: "Sets the daily tax collected from residents (mayor only)."
+        detail:
+          - "With /town toggle taxpercent on, the value is a percentage of each resident's balance."
+      plotprice:
+        usage: "/town set plotprice <amount>"
+        desc: "Sets the default price used when plots are put up for sale."
+      public:
+        usage: "/town set public"
+        desc: "Makes the town public so others can use /town spawn (mayor only)."
+      private:
+        usage: "/town set private"
+        desc: "Makes the town private (mayor only)."
+      perm:
+        usage: "/town set perm [group] [action] <on|off>"
+        desc: "Sets permissions on town land (assistant or higher). Without arguments, shows the current settings."
+        detail:
+          - "Groups: resident, nation, ally, outsider"
+          - "Actions: build, destroy, switch (doors, buttons, ...), itemuse"
+          - "Leaving out the group or action applies to all of them."
+          - "Example: /town set perm outsider build off"
+      jail:
+        usage: "/town set jail"
+        desc: "Sets the town jail to your location (assistant or higher)."
+    toggle:
+      usage: "/town toggle <pvp|mobs|explosions|fire|open|public|taxpercent> [on|off]"
+      desc: "Turns a town setting on or off (mayor only). Without on/off, flips it."
+      detail:
+        - "pvp: PvP / mobs: mob spawning / explosions: explosions / fire: fire spread"
+        - "open: anyone can join with /town join"
+        - "public: others can use /town spawn"
+        - "taxpercent: town tax is a percentage instead of a fixed amount"
+    deposit:
+      usage: "/town deposit <amount>"
+      desc: "Deposits money into the town bank."
+    withdraw:
+      usage: "/town withdraw <amount>"
+      desc: "Withdraws money from the town bank."
+    bankhistory:
+      usage: "/town bankhistory [count]"
+      desc: "Shows the town bank history (1-50 entries, default 10)."
+    outlaw:
+      usage: "/town outlaw <add|remove|list> [player]"
+      desc: "Adds, removes or lists town outlaws (assistant or higher)."
+    outlawlist:
+      usage: "/town outlawlist [town]"
+      desc: "Lists the outlaws of a town."
+    jail:
+      usage: "/town jail <player> [hours] [bail] [cell]"
+      desc: "Jails a resident of your town (assistant or higher)."
+      detail:
+        - "Hours default to 1 and bail defaults to 0."
+        - "The cell is the number or name of a cell added with /town jailcell. Without it, the /town set jail location is used."
+        - "Without arguments, or with list, shows the jail information."
+        - "Jailed players can pay the bail with /resident jail paybail."
+    unjail:
+      usage: "/town unjail <player>"
+      desc: "Releases a jailed resident (assistant or higher)."
+    jailcell:
+      usage: "/town jailcell <add [name]|remove <number|name>|list>"
+      desc: "Adds, removes or lists jail cells (assistant or higher). add uses your current location."
+    map:
+      usage: "/town map"
+      desc: "Shows a map of the claims around you."
+    menu:
+      usage: "/town menu"
+      desc: "Opens the town menu (GUI)."
+    delete:
+      usage: "/town delete confirm"
+      desc: "Deletes your town (mayor only). confirm is required to avoid accidents."
+
+  nation:
+    info:
+      usage: "/nation info [nation]"
+      desc: "Shows nation information. Without a name, your own nation."
+    list:
+      usage: "/nation list [by <name|towns|balance>] [page]"
+      desc: "Lists nations, sorted by name, number of towns or balance."
+    new:
+      usage: "/nation new <name>"
+      desc: "Creates a nation with your town as the capital and you as the leader (mayor only)."
+    join:
+      usage: "/nation join <nation>"
+      desc: "Joins a nation that invited your town (mayor only)."
+    leave:
+      usage: "/nation leave"
+      desc: "Makes your town leave its nation (mayor only)."
+    invite:
+      usage: "/nation invite <town>"
+      desc: "Invites a town to the nation."
+    kick:
+      usage: "/nation kick <town>"
+      desc: "Kicks a town from the nation."
+    spawn:
+      usage: "/nation spawn [nation|town]"
+      desc: "Teleports to a nation spawn."
+    setspawn:
+      usage: "/nation setspawn"
+      desc: "Sets the nation spawn to your location."
+    online:
+      usage: "/nation online"
+      desc: "Shows the online members of your nation."
+    deposit:
+      usage: "/nation deposit <amount>"
+      desc: "Deposits money into the nation bank."
+    withdraw:
+      usage: "/nation withdraw <amount>"
+      desc: "Withdraws money from the nation bank."
+    bankhistory:
+      usage: "/nation bankhistory [count]"
+      desc: "Shows the nation bank history (1-50 entries, default 10)."
+    set:
+      board:
+        usage: "/nation set board <message>"
+        desc: "Sets the nation board (leader only)."
+      name:
+        usage: "/nation set name <new name>"
+        desc: "Renames the nation (leader only)."
+      taxes:
+        usage: "/nation set taxes <amount>"
+        desc: "Sets the daily tax collected from member towns (leader only)."
+      king:
+        usage: "/nation set king <player>"
+        desc: "Hands the leadership to another player (leader only)."
+      capital:
+        usage: "/nation set capital <town>"
+        desc: "Moves the capital to another member town (leader only)."
+      title:
+        usage: "/nation set title <player> [title]"
+        desc: "Sets a title shown before a member's name (leader only). Without a title, removes it."
+      surname:
+        usage: "/nation set surname <player> [surname]"
+        desc: "Sets a surname shown after a member's name (leader only). Without one, removes it."
+    ally:
+      usage: "/nation ally <add|remove> <nation>"
+      desc: "Adds or removes an ally (leader only)."
+    enemy:
+      usage: "/nation enemy <add|remove> <nation>"
+      desc: "Adds or removes an enemy (leader only)."
+    toggle:
+      usage: "/nation toggle neutral"
+      desc: "Toggles whether the nation is neutral."
+    delete:
+      usage: "/nation delete confirm"
+      desc: "Disbands the nation (leader only). confirm is required to avoid accidents."
+
+  plot:
+    info:
+      usage: "/plot info"
+      desc: "Shows the plot you stand in (owner, permissions, settings). Same as /plot here and /plot perm."
+    set:
+      type:
+        usage: "/plot set type <type>"
+        desc: "Changes the plot type."
+        detail:
+          - "Types: default, shop, arena, embassy, farm, inn"
+          - "You can leave out type, as in /plot set shop."
+      name:
+        usage: "/plot set name <name>"
+        desc: "Names the plot."
+      perm:
+        usage: "/plot set perm [group] [action] <on|off>"
+        desc: "Sets plot permissions (plot owner, or town assistant or higher)."
+        detail:
+          - "Groups: friend, resident, nation, ally, outsider"
+          - "Actions: build, destroy, switch (doors, buttons, ...), itemuse"
+          - "Leaving out the group or action applies to all of them."
+          - "Example: /plot set perm friend build on"
+      reset:
+        usage: "/plot set reset"
+        desc: "Resets the plot permissions to the owner (or town) defaults. Same as /plot set perm reset."
+    toggle:
+      usage: "/plot toggle <pvp|mobs|explosions|fire>"
+      desc: "Toggles PvP, mobs, explosions or fire spread in the plot."
+    forsale:
+      usage: "/plot forsale [price] [rect|circle <radius>]"
+      desc: "Puts the plot you stand in up for sale (also /plot fs)."
+      detail:
+        - "Without a price, the town default price (/town set plotprice) is used."
+        - "With rect or circle and a radius, the plots around you are put up for sale too."
+        - "Example: /plot fs 1000 rect 2"
+    notforsale:
+      usage: "/plot notforsale [rect|circle <radius>]"
+      desc: "Takes plots off the market (also /plot nfs). Accepts a range too."
+    buy:
+      usage: "/plot buy [auto]"
+      desc: "Buys the for-sale plot you stand in (also /plot claim)."
+      detail:
+        - "With auto, buys every for-sale plot of your town within a radius of 3 chunks, as far as your money allows."
+    clear:
+      usage: "/plot clear"
+      desc: "Resets the plot name, type, toggles and permissions, and removes its signs (mayor or plot owner)."
+    evict:
+      usage: "/plot evict"
+      desc: "Evicts the plot owner and returns the plot to the town (town assistant or higher)."
+
+  resident:
+    info:
+      usage: "/resident [player]"
+      desc: "Shows resident information. Without a player, your own."
+    list:
+      usage: "/resident list [page]"
+      desc: "Lists residents."
+    plotlist:
+      usage: "/resident plotlist [player]"
+      desc: "Lists the plots a player owns."
+    set:
+      about:
+        usage: "/resident set about [message]"
+        desc: "Sets the about text shown in your resident info (up to 100 characters)."
+        detail:
+          - "none, clear or no message removes it."
+      perm:
+        usage: "/resident set perm [group] [action] <on|off>"
+        desc: "Sets the default permissions for your plots."
+        detail:
+          - "Groups: friend, resident, ally, outsider / actions: build, destroy, switch, itemuse"
+          - "/resident set perm reset applies your defaults to every plot you own."
+      mode:
+        usage: "/resident set mode map"
+        desc: "Shows a map of the claims around you (same as /townia map)."
+    toggle:
+      usage: "/resident toggle <map|townclaim|plotborder|pvp|fire|explosions|mobs|reset>"
+      desc: "Toggles your display modes or the settings of your plots."
+      detail:
+        - "map: map mode / townclaim: townclaim mode / plotborder: show plot borders"
+        - "pvp, fire, explosions, mobs: toggles the setting on every plot you own"
+        - "reset: turns map, townclaim and plotborder off"
+    friend:
+      usage: "/resident friend <add|remove|list|clear> [player]"
+      desc: "Adds, removes, lists or clears friends. Friends can get their own plot permissions."
+    spawn:
+      usage: "/resident spawn"
+      desc: "Teleports to your bed spawn."
+    tax:
+      usage: "/resident tax"
+      desc: "Shows the town tax and plot tax of your town."
+    jail:
+      usage: "/resident jail paybail"
+      desc: "Pays your bail to get out of jail."
+
+  townia:
+    info:
+      usage: "/townia info"
+      desc: "Shows the Townia version."
+    map:
+      usage: "/townia map"
+      desc: "Shows a map of the claims around you."
+    price:
+      usage: "/townia price"
+      desc: "Shows the costs of creating towns and claiming land."
+    time:
+      usage: "/townia time"
+      desc: "Shows the time until the next upkeep (tax) collection."
+    top:
+      usage: "/townia top <residents|land> <all|town|nation|resident>"
+      desc: "Shows rankings."
+      detail:
+        - "residents: by number of residents (all / town / nation)"
+        - "land: by number of claims (all / town / nation / resident)"
+        - "Example: /townia top land town"
+    reload:
+      usage: "/townia reload"
+      desc: "Reloads the config and messages."
+    debug:
+      usage: "/townia debug"
+      desc: "Shows display debug information."
+
+  towniaadmin:
+    reload:
+      usage: "/towniaadmin reload"
+      desc: "Reloads the config and messages."
+    bypass:
+      usage: "/towniaadmin bypass"
+      desc: "Toggles bypassing land protection."
+    forceclaim:
+      usage: "/towniaadmin forceclaim [town]"
+      desc: "Claims the chunk you stand in for a town, ignoring costs and limits. Without a town, your own."
+    forceunclaim:
+      usage: "/towniaadmin forceunclaim"
+      desc: "Force-unclaims the chunk you stand in."
+    deletetown:
+      usage: "/towniaadmin deletetown <town>"
+      desc: "Force-deletes a town. Its residents become townless."
+    deletenation:
+      usage: "/towniaadmin deletenation <nation>"
+      desc: "Force-disbands a nation."
+    givebonus:
+      usage: "/towniaadmin givebonus <town> <amount>"
+      desc: "Sets bonus claims for a town."
+    setmayor:
+      usage: "/towniaadmin setmayor <town> <player|UUID>"
+      desc: "Force-changes the mayor. Adds the player to the town if needed."
+    addresident:
+      usage: "/towniaadmin addresident <town> <player|UUID>"
+      desc: "Force-adds a player to a town as a resident (no invite needed)."
+      detail:
+        - "Players already in another town cannot be added."
+        - "If the player is an outlaw of that town, the outlaw entry is removed."
+    mergeresident:
+      usage: "/towniaadmin mergeresident <from name|UUID> <into name|UUID>"
+      desc: "Merges duplicate resident records into one."
+    dedupe:
+      usage: "/towniaadmin dedupe [confirm]"
+      desc: "Finds residents duplicated by offline UUIDs. With confirm, merges them."
+    migrate:
+      usage: "/towniaadmin migrate [data [target] [options] | config]"
+      desc: "Migrates data or settings from Towny."
+      detail:
+        - "Targets: all, towns, nations, residents, townblocks, jails, outlaws, relations"
+        - "Options: skip-profiles, missing-only, prune"
+        - "config: migrates settings from the Towny config.yml."
+        - "/towniaadmin migrate diagnose <player> diagnoses a player's town membership."
+
+  towniaworld:
+    list:
+      usage: "/towniaworld list"
+      desc: "Lists the worlds where towns can be made."
+    add:
+      usage: "/towniaworld add <world>"
+      desc: "Allows towns in a world."
+    remove:
+      usage: "/towniaworld remove <world>"
+      desc: "Disallows towns in a world."
+
+  invite:
+    list:
+      usage: "/invite list"
+      desc: "Shows your town invites."
+    accept:
+      usage: "/invite accept [town]"
+      desc: "Accepts an invite and joins the town. Without a town, accepts the oldest invite."
+    decline:
+      usage: "/invite decline <town>"
+      desc: "Declines a town invite."
+
+  townconfig:
+    set:
+      usage: "/townconfig <allowInvisibility|allowSit|allowPetPickup|allowPassenger> <true|false>"
+      desc: "Sets whether invisibility, sitting, picking up pets and riding players are allowed on town land (mayor only)."

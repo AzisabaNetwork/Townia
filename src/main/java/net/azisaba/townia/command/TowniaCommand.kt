@@ -13,7 +13,10 @@ import org.bukkit.util.StringUtil
 import java.util.UUID
 
 class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("townia", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             sendHelp(sender)
             return true
@@ -27,8 +30,8 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "time" -> handleTime(sender)
             "top" -> handleTop(sender, args)
             "debug" -> handleDebug(sender)
-            "?", "help" -> sendHelp(sender)
-            else -> sendHelp(sender)
+            "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "townia", args.drop(1))
+            else -> CommandHelp.sendUnknown(plugin.messageManager, sender, "townia", args[0])
         }
         return true
     }
@@ -70,7 +73,7 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun sendHelp(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "townia.help")
+        CommandHelp.sendList(plugin.messageManager, sender, "townia", 1)
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {

@@ -50,6 +50,7 @@ Towniaは、町（Town）や国（Nation）を作成し、土地（Plot）を保
 - `/resident info [プレイヤー]` - 住人情報を表示します
 - `/resident list` - 住人リストを表示します
 - `/resident friend add/remove <プレイヤー>` - フレンドを追加・削除します
+- `/resident set about [メッセージ]` - 住人情報に表示する紹介文を設定します（`none` または空で削除）
 
 ### 管理者用 (`/towniaadmin`)
 - `/towniaadmin reload` - 設定ファイルを再読み込みします

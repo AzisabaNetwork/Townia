@@ -12,14 +12,17 @@ import org.bukkit.util.StringUtil
 import java.util.*
 
 class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("townconfig", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
             plugin.messageManager.sendMessage(sender, "error.player-only")
             return true
         }
 
         if (args.size < 2) {
-            sendHelp(sender)
+            if (args.isEmpty()) sendHelp(sender) else plugin.messageManager.sendMessage(sender, "error.invalid-args")
             return true
         }
 
@@ -86,7 +89,7 @@ class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabComple
                 )
             }
 
-            else -> sendHelp(sender)
+            else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
         }
         return true
     }
@@ -98,7 +101,7 @@ class TownConfigCommand(private val plugin: Townia) : CommandExecutor, TabComple
     }
 
     private fun sendHelp(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "townconfig.help")
+        CommandHelp.sendList(plugin.messageManager, sender, "townconfig", 1)
     }
 
     override fun onTabComplete(

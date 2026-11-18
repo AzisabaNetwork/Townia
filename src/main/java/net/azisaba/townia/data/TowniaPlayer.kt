@@ -11,6 +11,7 @@ class TowniaPlayer {
     var registeredAt: Long = 0L
     var preferredLang: String?
     var friends: MutableList<String?>? = ArrayList<String?>()
+    var about: String? = null
 
     var isToggleMap: Boolean = false
     var isToggleTownClaim: Boolean = false

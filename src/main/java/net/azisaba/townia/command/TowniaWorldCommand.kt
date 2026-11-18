@@ -10,7 +10,10 @@ import org.bukkit.util.StringUtil
 import java.util.*
 
 class TowniaWorldCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("towniaworld", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (!sender.hasPermission("townia.admin.world")) {
             plugin.messageManager.sendMessage(sender, "error.no-permission")
             return true

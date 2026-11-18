@@ -48,7 +48,10 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     private val residentManager: ResidentManager = plugin.residentManager
     private val plotManager: PlotManager = plugin.plotManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("nation", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             sendHelp(sender)
             return true
@@ -73,8 +76,8 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "delete" -> handleDelete(sender, args)
             "online" -> handleOnline(sender)
             "toggle" -> handleToggle(sender, args)
-            "?", "help" -> sendHelp(sender)
-            else -> sendHelp(sender)
+            "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "nation", args.drop(1))
+            else -> CommandHelp.sendUnknown(plugin.messageManager, sender, "nation", args[0])
         }
         return true
     }
@@ -945,7 +948,7 @@ class NationCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     }
 
     private fun sendHelp(sender: CommandSender) {
-        plugin.messageManager.sendMessage(sender, "nation.help")
+        CommandHelp.sendList(plugin.messageManager, sender, "nation", 1)
     }
 
     private fun requirePlayer(sender: CommandSender): Player? {

@@ -8,6 +8,7 @@ import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.manager.NationManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
+import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -38,7 +39,10 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     private val townManager: TownManager = plugin.townManager
     private val nationManager: NationManager = plugin.nationManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("resident", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             val player = requirePlayer(sender) ?: return true
             showResidentInfo(sender, residentManager.getOrCreate(player))
@@ -61,6 +65,8 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
                     }
                 } else if (args.size >= 2 && args[1].equals("perm", ignoreCase = true)) {
                     handleSetPerm(sender, args.toList().toTypedArray())
+                } else if (args.size >= 2 && args[1].equals("about", ignoreCase = true)) {
+                    handleSetAbout(sender, args)
                 } else {
                     plugin.messageManager.sendMessage(sender, "error.invalid-args")
                 }
@@ -71,7 +77,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             "tax" -> handleTax(sender, args.toList().toTypedArray())
             "jail" -> handleJail(sender, args.toList().toTypedArray())
             "friend" -> handleFriend(sender, args)
-            "?", "help" -> plugin.messageManager.sendMessage(sender, "townia.help")
+            "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "resident", args.drop(1))
             else -> {
                 val targetName = args[0]
                 val onlineTarget = Bukkit.getPlayerExact(targetName)
@@ -277,7 +283,8 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             sender, "resident.info",
             "player", (res.name ?: "Unknown"),
             "title", title,
-            "about", "/res set about [msg]",
+            "about", res.about?.takeIf { it.isNotBlank() }?.let { MiniMessage.miniMessage().escapeTags(it) }
+                ?: "/res set about [msg]",
             "town", townName,
             "town_info", townInfo,
             "town_mayor", townMayor,
@@ -390,7 +397,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             }
 
             2 if args[0].equals("set", ignoreCase = true) -> {
-                StringUtil.copyPartialMatches(args[1], mutableListOf<String?>("perm"), completions)
+                StringUtil.copyPartialMatches(args[1], mutableListOf<String?>("perm", "about"), completions)
             }
 
             2 if args[0].equals("toggle", ignoreCase = true) -> {
@@ -474,6 +481,26 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
         return sender
     }
 
+
+    /** /resident set about [msg]: sets the self-introduction shown in /res; "none", "clear" or no text clears it. */
+    private fun handleSetAbout(sender: CommandSender, args: Array<out String>) {
+        val player = requirePlayer(sender) ?: return
+        val res = residentManager.getOrCreate(player)
+        val text = args.drop(2).joinToString(" ").trim()
+        if (text.isEmpty() || text.equals("none", ignoreCase = true) || text.equals("clear", ignoreCase = true)) {
+            res.about = null
+            residentManager.saveResident(res)
+            plugin.messageManager.sendMessage(sender, "resident.about-cleared")
+            return
+        }
+        if (text.length > ABOUT_MAX_LENGTH) {
+            plugin.messageManager.sendMessage(sender, "resident.about-too-long", "max", ABOUT_MAX_LENGTH.toString())
+            return
+        }
+        res.about = text
+        residentManager.saveResident(res)
+        plugin.messageManager.sendMessage(sender, "resident.about-set", "about", MiniMessage.miniMessage().escapeTags(text))
+    }
 
     private fun handleSetPerm(sender: CommandSender, args: Array<String>?) {
         val player = requirePlayer(sender) ?: return
@@ -657,6 +684,7 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     private fun stateName(value: Boolean): String = if (value) "ON" else "OFF"
 
     companion object {
+        private const val ABOUT_MAX_LENGTH = 100
         private val DATE_FMT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
     }

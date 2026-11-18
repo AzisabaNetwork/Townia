@@ -36,7 +36,10 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     private val residentManager: ResidentManager = plugin.residentManager
     private val townManager: TownManager = plugin.townManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("plot", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = requirePlayer(sender) ?: return true
 
         if (args.isEmpty()) {
@@ -48,7 +51,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             "info", "perm", "here" -> handleInfo(player)
             "set" -> {
                 if (args.size < 2) {
-                    sendHelp(player)
+                    plugin.messageManager.sendMessage(player, "error.invalid-args")
                     return true
                 }
                 if (args[1].equals("type", ignoreCase = true) && args.size >= 3) {
@@ -66,7 +69,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 } else if (PlotType.parseOrNull(args[1]) != null) {
                     handleSetType(player, args[1])
                 } else {
-                    sendHelp(player)
+                    plugin.messageManager.sendMessage(player, "error.invalid-args")
                 }
             }
 
@@ -84,8 +87,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
             "clear" -> handleClear(player)
             "evict" -> handleEvict(player)
-            "?", "help" -> sendHelp(player)
-            else -> sendHelp(player)
+            "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, player, "plot", args.drop(1))
+            else -> CommandHelp.sendUnknown(plugin.messageManager, player, "plot", args[0])
         }
         return true
     }
@@ -529,7 +532,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     }
 
     private fun sendHelp(player: Player?) {
-        plugin.messageManager.sendMessage(player!!, "plot.help")
+        CommandHelp.sendList(plugin.messageManager, player!!, "plot", 1)
     }
 
     override fun onTabComplete(

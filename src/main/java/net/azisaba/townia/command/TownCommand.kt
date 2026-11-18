@@ -68,7 +68,10 @@ class TownCommand
     private val nationManager: NationManager = plugin.nationManager
     private val databaseManager: DatabaseManager = plugin.databaseManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("town", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             this.handleInfo(sender, arrayOf("info"))
             return true
@@ -192,12 +195,11 @@ class TownCommand
             }
 
             "?", "help" -> {
-                this.handleHelp(sender)
+                CommandHelp.handleHelp(this.plugin.messageManager, sender, "town", args.drop(1))
             }
 
             else -> {
-                this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
-                this.handleHelp(sender)
+                CommandHelp.sendUnknown(this.plugin.messageManager, sender, "town", args[0])
             }
         }
         return true
@@ -1965,8 +1967,9 @@ class TownCommand
         }
     }
 
+    /** Called where a subcommand got arguments it does not understand: shows that subcommand's usage. */
     private fun handleHelp(sender: CommandSender) {
-        this.plugin.messageManager.sendMessage(sender, "town.help")
+        this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
     }
 
     private fun handleMap(sender: CommandSender) {

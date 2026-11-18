@@ -23,7 +23,10 @@ class InviteCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
     private val residentManager: ResidentManager = plugin.residentManager
     private val townManager: TownManager = plugin.townManager
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
+        CommandHelp.withCommand("invite", args) { execute(sender, command, label, args) }
+
+    private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         val player = requirePlayer(sender) ?: return true
 
         val playerUuid = player.uniqueId

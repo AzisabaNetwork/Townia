@@ -527,6 +527,7 @@ object TownyFlatfileMigrator {
                 }.map { it.toString() }.toMutableList()
             )
             resident.registeredAt = values.long("registered", "registeredat", "createdat")
+            values.first("about")?.takeIf { it.isNotBlank() }?.let { resident.about = it.take(255) }
             applyResidentProtection(values, resident)
 
             val title = values.first("title")

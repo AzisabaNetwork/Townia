@@ -1,6 +1,7 @@
 package net.azisaba.townia.manager
 
 import net.azisaba.townia.Townia
+import net.azisaba.townia.command.CommandHelp
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.command.CommandSender
@@ -119,7 +120,15 @@ class MessageManager(private val plugin: Townia) {
         sendMessageInternal(sender, key, false, *replacements)
     }
 
+    /** Lines of [key] in [sender]'s language (or the default language), or null if the key is not defined. */
+    fun getRawLines(sender: CommandSender?, key: String): List<String>? {
+        val obj = allMessages[getLanguage(sender)]?.get(key) ?: allMessages[defaultLanguage]?.get(key) ?: return null
+        return if (obj is List<*>) obj.map { it.toString() } else listOf(obj.toString())
+    }
+
     private fun sendMessageInternal(sender: CommandSender, key: String, withPrefix: Boolean, vararg replacements: String) {
+        // Inside a Townia command, a bare "invalid arguments" error becomes that subcommand's usage.
+        if (key == "error.invalid-args" && CommandHelp.sendInvalidArgsForCurrentCommand(this, sender)) return
         val language = getLanguage(sender)
         val lines: List<*> = when (val messageObject = getMessageObject(language, key)) {
             is List<*> -> messageObject

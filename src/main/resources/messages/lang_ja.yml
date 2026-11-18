@@ -248,6 +248,9 @@ resident:
   list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
   perm-applied: "<green>あなたの所有区画にResident権限設定を反映しました。"
   perm-updated: "<green>Residentのデフォルト権限を更新しました。"
+  about-set: "<green>紹介文を設定しました: <white>{about}"
+  about-cleared: "<yellow>紹介文を削除しました。"
+  about-too-long: "<red>紹介文は <yellow>{max}</yellow> 文字以内で入力してください。"
   toggle-set: "<green><yellow>{setting}</yellow> を <aqua>{state}</aqua> にしました。"
   toggle-reset: "<yellow>Residentの表示モードをリセットしました。"
   spawn-teleport: "<green>ベッドスポーン地点にテレポートしました。"
@@ -453,3 +456,457 @@ townia:
 "townia.debug-title-ok": "<yellow>Title のテスト送信に成功しました。"
 "townia.debug-title-error": "<red>Title エラー: {error}"
 
+
+# Command help: /<command> help [page|subcommand]. usage/desc are plain text (no MiniMessage tags).
+cmdhelp:
+  header: "<gold>===== <yellow>/{command}</yellow> ヘルプ <gray>({page}/{max})</gray> ====="
+  entry: "<click:suggest_command:'{suggest}'><hover:show_text:'<yellow>クリックで入力 <gray>(詳細: {detail_command})'><aqua>{usage}</aqua></hover></click> <gray>- {desc}"
+  footer: "<gray>各コマンドの詳しい説明: <yellow>/{command} help \\<サブコマンド></yellow>"
+  next-page: "<click:run_command:'/{command} help {next}'><yellow>[次のページへ]</yellow></click> <gray>/{command} help {next}"
+  detail:
+    - "<gold>===== <aqua>{usage}</aqua> ====="
+    - "<white>{desc}"
+    - "<click:suggest_command:'{suggest}'><yellow>[クリックで入力]</yellow></click>"
+  detail-line: "<gray>・{line}"
+  unknown: "<red>「{sub}」というサブコマンドはありません。<click:run_command:'/{command} help'><yellow>/{command} help</yellow></click> で一覧を確認できます。"
+  invalid-args: "<red>引数が正しくありません。<click:run_command:'/{command} help'><yellow>/{command} help</yellow></click> で使い方を確認できます。"
+  invalid-args-usage: "<red>引数が正しくありません。正しい使い方:"
+  usage-line: "  <click:suggest_command:'{suggest}'><hover:show_text:'<yellow>クリックで入力'><aqua>{usage}</aqua></hover></click> <gray>- {desc}"
+  see-detail: "<gray>詳しい説明: <click:run_command:'/{command} help {sub}'><yellow>/{command} help {sub}</yellow></click>"
+
+  town:
+    info:
+      usage: "/town info [町名]"
+      desc: "町の情報を表示します。町名を省略すると自分の町です（/town だけでも同じ）。"
+    here:
+      usage: "/town here"
+      desc: "今いる場所の町の情報を表示します。"
+    list:
+      usage: "/town list [by <並び順>] [ページ]"
+      desc: "町の一覧を表示します。"
+      detail:
+        - "並び順: name（名前）, residents（住民数）, balance（残高）, claims（土地数）, open（参加自由な町を先に）, public（公開中の町を先に）, founded（設立日）"
+        - "例: /town list by residents 2"
+    new:
+      usage: "/town new <町名>"
+      desc: "新しい町を作成し、自分が町長になります。"
+      detail:
+        - "作成費用が設定されている場合は所持金から支払われます。"
+        - "今いるチャンクが最初の土地になります。"
+    join:
+      usage: "/town join <町名>"
+      desc: "参加自由（open）に設定された町に参加します。"
+    leave:
+      usage: "/town leave"
+      desc: "所属している町から脱退します。"
+    spawn:
+      usage: "/town spawn [町名]"
+      desc: "町のスポーン地点へテレポートします。町名を省略すると自分の町です。"
+      detail:
+        - "他の町へは、その町が公開（public）に設定されている場合のみテレポートできます。"
+    online:
+      usage: "/town online [町名]"
+      desc: "町のオンライン中の住民を表示します。"
+    reslist:
+      usage: "/town reslist [町名]"
+      desc: "町の住民一覧を表示します。"
+    ranklist:
+      usage: "/town ranklist [町名]"
+      desc: "町の住民を役職ごとに表示します。"
+    claim:
+      usage: "/town claim [半径|outpost]"
+      desc: "今いるチャンクを町の土地にします（補佐以上）。"
+      detail:
+        - "半径を指定すると、今いるチャンクを中心に (半径×2+1)×(半径×2+1) チャンクをまとめて取得します（半径は最大10）。"
+        - "outpost を付けると、町から離れた場所を飛び地（アウトポスト）として取得します。"
+        - "費用は町の銀行から支払われます。"
+        - "例: /town claim 2 → 周囲5×5チャンク"
+    unclaim:
+      usage: "/town unclaim [半径|all]"
+      desc: "今いるチャンクの土地を手放します（補佐以上）。"
+      detail:
+        - "半径を指定すると周囲のチャンクもまとめて手放します（最大10）。"
+        - "all を指定すると町の土地をすべて手放します。"
+    outpost:
+      list:
+        usage: "/town outpost list [町名]"
+        desc: "町のアウトポスト一覧を表示します。"
+      tp:
+        usage: "/town outpost tp [町名] <番号|名前>"
+        desc: "アウトポストへテレポートします。町名を省略すると自分の町のアウトポストです。"
+      togglepublic:
+        usage: "/town outpost togglepublic <番号>"
+        desc: "アウトポストを他の町の人にも公開するか切り替えます（補佐以上）。"
+      rename:
+        usage: "/town outpost rename <番号> <名前>"
+        desc: "アウトポストに名前を付けます（補佐以上、64文字まで）。"
+    invite:
+      usage: "/town invite <プレイヤー>"
+      desc: "プレイヤーを町に招待します。招待されたプレイヤーは /invite accept で参加できます。"
+    kick:
+      usage: "/town kick <プレイヤー>"
+      desc: "住民を町から追放します。"
+    rank:
+      add:
+        usage: "/town rank add <プレイヤー> <役職>"
+        desc: "住民に役職を付けます（町長のみ）。"
+        detail:
+          - "役職: resident（一般住民）, assistant（補佐）, sub_mayor（副町長）"
+          - "補佐以上は土地の取得・手放し、スポーン設定、投獄などができます。"
+      remove:
+        usage: "/town rank remove <プレイヤー>"
+        desc: "住民の役職を外して一般住民に戻します（町長のみ）。"
+    set:
+      spawn:
+        usage: "/town set spawn"
+        desc: "今いる場所を町のスポーン地点にします（補佐以上）。"
+      homeblock:
+        usage: "/town set homeblock"
+        desc: "今いるチャンクを町のホームブロックにします（補佐以上、町の土地内のみ）。"
+      name:
+        usage: "/town set name <新しい町名>"
+        desc: "町の名前を変更します（町長のみ）。"
+      board:
+        usage: "/town set board <メッセージ>"
+        desc: "町の掲示板（/town info に表示されるメッセージ）を設定します（町長のみ）。"
+      taxes:
+        usage: "/town set taxes <金額>"
+        desc: "住民から毎日徴収する町税を設定します（町長のみ）。"
+        detail:
+          - "/town toggle taxpercent をONにすると、金額ではなく所持金に対する割合（%）として扱われます。"
+      plotprice:
+        usage: "/town set plotprice <金額>"
+        desc: "区画を売りに出すときの標準価格を設定します。"
+      public:
+        usage: "/town set public"
+        desc: "町を公開にし、他の町の人も /town spawn で来られるようにします（町長のみ）。"
+      private:
+        usage: "/town set private"
+        desc: "町を非公開にします（町長のみ）。"
+      perm:
+        usage: "/town set perm [グループ] [行動] <on|off>"
+        desc: "町の土地での権限を設定します（補佐以上）。引数なしで現在の設定を表示します。"
+        detail:
+          - "グループ: resident（住民）, nation（同じ国）, ally（同盟国）, outsider（その他）"
+          - "行動: build（設置）, destroy（破壊）, switch（ドア・ボタン等）, itemuse（アイテム使用）"
+          - "グループや行動を省略すると、すべてに適用されます。"
+          - "例: /town set perm outsider build off"
+      jail:
+        usage: "/town set jail"
+        desc: "今いる場所を町の牢屋にします（補佐以上）。"
+    toggle:
+      usage: "/town toggle <pvp|mobs|explosions|fire|open|public|taxpercent> [on|off]"
+      desc: "町の設定をON/OFFします（町長のみ）。on/off を省略すると切り替えます。"
+      detail:
+        - "pvp: PvP / mobs: モブのスポーン / explosions: 爆発 / fire: 延焼"
+        - "open: 招待なしで /town join で参加できるようにする"
+        - "public: 他の町の人も /town spawn で来られるようにする"
+        - "taxpercent: 町税を金額ではなく割合（%）にする"
+    deposit:
+      usage: "/town deposit <金額>"
+      desc: "所持金を町の銀行に入金します。"
+    withdraw:
+      usage: "/town withdraw <金額>"
+      desc: "町の銀行から出金します。"
+    bankhistory:
+      usage: "/town bankhistory [件数]"
+      desc: "町の銀行の入出金履歴を表示します（1〜50件、既定10件）。"
+    outlaw:
+      usage: "/town outlaw <add|remove|list> [プレイヤー]"
+      desc: "町のアウトロー（お尋ね者）を登録・解除・一覧表示します（補佐以上）。"
+    outlawlist:
+      usage: "/town outlawlist [町名]"
+      desc: "町のアウトロー一覧を表示します。"
+    jail:
+      usage: "/town jail <プレイヤー> [時間] [保釈金] [牢屋]"
+      desc: "同じ町の住民を投獄します（補佐以上）。"
+      detail:
+        - "時間は時間（hour）単位で、省略すると1時間です。保釈金は省略すると0です。"
+        - "牢屋は /town jailcell で追加した牢屋の番号か名前です。省略すると /town set jail の場所です。"
+        - "引数なし、または list で牢屋の情報を表示します。"
+        - "投獄された人は /resident jail paybail で保釈金を払って出られます。"
+    unjail:
+      usage: "/town unjail <プレイヤー>"
+      desc: "投獄中の住民を釈放します（補佐以上）。"
+    jailcell:
+      usage: "/town jailcell <add [名前]|remove <番号|名前>|list>"
+      desc: "町の牢屋（独房）を追加・削除・一覧表示します（補佐以上）。add は今いる場所に追加します。"
+    map:
+      usage: "/town map"
+      desc: "周辺の土地のマップを表示します。"
+    menu:
+      usage: "/town menu"
+      desc: "町のメニュー画面（GUI）を開きます。"
+    delete:
+      usage: "/town delete confirm"
+      desc: "町を削除します（町長のみ）。誤操作防止のため confirm が必要です。"
+
+  nation:
+    info:
+      usage: "/nation info [国名]"
+      desc: "国の情報を表示します。国名を省略すると自分の国です。"
+    list:
+      usage: "/nation list [by <name|towns|balance>] [ページ]"
+      desc: "国の一覧を表示します。並び順は名前・町の数・残高から選べます。"
+    new:
+      usage: "/nation new <国名>"
+      desc: "新しい国を作成します。自分の町が首都、自分が国王になります（町長のみ）。"
+    join:
+      usage: "/nation join <国名>"
+      desc: "招待された国に自分の町を参加させます（町長のみ）。"
+    leave:
+      usage: "/nation leave"
+      desc: "自分の町を国から脱退させます（町長のみ）。"
+    invite:
+      usage: "/nation invite <町名>"
+      desc: "町を国に招待します。"
+    kick:
+      usage: "/nation kick <町名>"
+      desc: "町を国から追放します。"
+    spawn:
+      usage: "/nation spawn [国名|町名]"
+      desc: "国のスポーン地点へテレポートします。"
+    setspawn:
+      usage: "/nation setspawn"
+      desc: "今いる場所を国のスポーン地点にします。"
+    online:
+      usage: "/nation online"
+      desc: "国のオンライン中の国民を表示します。"
+    deposit:
+      usage: "/nation deposit <金額>"
+      desc: "所持金を国の銀行に入金します。"
+    withdraw:
+      usage: "/nation withdraw <金額>"
+      desc: "国の銀行から出金します。"
+    bankhistory:
+      usage: "/nation bankhistory [件数]"
+      desc: "国の銀行の入出金履歴を表示します（1〜50件、既定10件）。"
+    set:
+      board:
+        usage: "/nation set board <メッセージ>"
+        desc: "国の掲示板を設定します（国王のみ）。"
+      name:
+        usage: "/nation set name <新しい国名>"
+        desc: "国の名前を変更します（国王のみ）。"
+      taxes:
+        usage: "/nation set taxes <金額>"
+        desc: "加盟している町から毎日徴収する国税を設定します（国王のみ）。"
+      king:
+        usage: "/nation set king <プレイヤー>"
+        desc: "国王を別のプレイヤーに譲ります（国王のみ）。"
+      capital:
+        usage: "/nation set capital <町名>"
+        desc: "首都を別の加盟町に変更します（国王のみ）。"
+      title:
+        usage: "/nation set title <プレイヤー> [称号]"
+        desc: "国民に名前の前に付く称号を設定します（国王のみ）。称号を省略すると削除します。"
+      surname:
+        usage: "/nation set surname <プレイヤー> [名前]"
+        desc: "国民に名前の後ろに付く称号を設定します（国王のみ）。省略すると削除します。"
+    ally:
+      usage: "/nation ally <add|remove> <国名>"
+      desc: "同盟国を追加・削除します（国王のみ）。"
+    enemy:
+      usage: "/nation enemy <add|remove> <国名>"
+      desc: "敵対国を追加・削除します（国王のみ）。"
+    toggle:
+      usage: "/nation toggle neutral"
+      desc: "国の中立設定を切り替えます。"
+    delete:
+      usage: "/nation delete confirm"
+      desc: "国を解散します（国王のみ）。誤操作防止のため confirm が必要です。"
+
+  plot:
+    info:
+      usage: "/plot info"
+      desc: "今いる区画の情報（所有者・権限・設定）を表示します。/plot here, /plot perm でも同じです。"
+    set:
+      type:
+        usage: "/plot set type <種類>"
+        desc: "区画の種類を変更します。"
+        detail:
+          - "種類: default（通常）, shop（店）, arena（闘技場）, embassy（大使館）, farm（農場）, inn（宿）"
+          - "/plot set shop のように type を省略しても指定できます。"
+      name:
+        usage: "/plot set name <名前>"
+        desc: "区画に名前を付けます。"
+      perm:
+        usage: "/plot set perm [グループ] [行動] <on|off>"
+        desc: "区画の権限を設定します（区画の所有者、または町の補佐以上）。"
+        detail:
+          - "グループ: friend（フレンド）, resident（町の住民）, nation（同じ国）, ally（同盟国）, outsider（その他）"
+          - "行動: build（設置）, destroy（破壊）, switch（ドア・ボタン等）, itemuse（アイテム使用）"
+          - "グループや行動を省略すると、すべてに適用されます。"
+          - "例: /plot set perm friend build on"
+      reset:
+        usage: "/plot set reset"
+        desc: "区画の権限を所有者（または町）の標準設定に戻します。/plot set perm reset でも同じです。"
+    toggle:
+      usage: "/plot toggle <pvp|mobs|explosions|fire>"
+      desc: "区画のPvP・モブ・爆発・延焼の設定を切り替えます。"
+    forsale:
+      usage: "/plot forsale [価格] [rect|circle <半径>]"
+      desc: "今いる区画を売りに出します（/plot fs でも可）。"
+      detail:
+        - "価格を省略すると町の標準価格（/town set plotprice）になります。"
+        - "rect（四角）または circle（円）と半径を付けると、周囲の区画もまとめて売りに出します。"
+        - "例: /plot fs 1000 rect 2"
+    notforsale:
+      usage: "/plot notforsale [rect|circle <半径>]"
+      desc: "区画の売出を取り消します（/plot nfs でも可）。範囲指定もできます。"
+    buy:
+      usage: "/plot buy [auto]"
+      desc: "今いる売出中の区画を購入します（/plot claim でも可）。"
+      detail:
+        - "auto を付けると、周囲（半径3チャンクの円内）にある自分の町の売出中の区画を、所持金が足りる分だけまとめて購入します。"
+    clear:
+      usage: "/plot clear"
+      desc: "区画の名前・種類・PvP等の設定・権限を初期状態に戻し、区画内の看板を取り除きます（町長または区画の所有者）。"
+    evict:
+      usage: "/plot evict"
+      desc: "区画の所有者を退去させ、町の所有に戻します（町の補佐以上）。"
+
+  resident:
+    info:
+      usage: "/resident [プレイヤー]"
+      desc: "住民の情報を表示します。プレイヤーを省略すると自分の情報です。"
+    list:
+      usage: "/resident list [ページ]"
+      desc: "住民の一覧を表示します。"
+    plotlist:
+      usage: "/resident plotlist [プレイヤー]"
+      desc: "プレイヤーが所有している区画の一覧を表示します。"
+    set:
+      about:
+        usage: "/resident set about [メッセージ]"
+        desc: "住民情報に表示される紹介文を設定します（100文字まで）。"
+        detail:
+          - "none または clear を指定するか、メッセージを省略すると紹介文を削除します。"
+      perm:
+        usage: "/resident set perm [グループ] [行動] <on|off>"
+        desc: "自分の区画の標準権限を設定します。"
+        detail:
+          - "グループ: friend, resident, ally, outsider / 行動: build, destroy, switch, itemuse"
+          - "/resident set perm reset で、所有しているすべての区画に標準権限を反映します。"
+      mode:
+        usage: "/resident set mode map"
+        desc: "周辺の土地のマップを表示します（/townia map と同じ）。"
+    toggle:
+      usage: "/resident toggle <map|townclaim|plotborder|pvp|fire|explosions|mobs|reset>"
+      desc: "自分の表示モードや、所有している区画の設定を切り替えます。"
+      detail:
+        - "map: マップ表示モード / townclaim: townclaim モード / plotborder: 区画の境界表示"
+        - "pvp, fire, explosions, mobs: 自分が所有しているすべての区画の設定を切り替え"
+        - "reset: map・townclaim・plotborder をすべてOFFにする"
+    friend:
+      usage: "/resident friend <add|remove|list|clear> [プレイヤー]"
+      desc: "フレンドを追加・削除・一覧表示・全削除します。フレンドには区画の権限を別に設定できます。"
+    spawn:
+      usage: "/resident spawn"
+      desc: "ベッドのスポーン地点へテレポートします。"
+    tax:
+      usage: "/resident tax"
+      desc: "所属している町の町税と区画税を表示します。"
+    jail:
+      usage: "/resident jail paybail"
+      desc: "投獄中に保釈金を払って釈放されます。"
+
+  townia:
+    info:
+      usage: "/townia info"
+      desc: "Towniaのバージョン情報を表示します。"
+    map:
+      usage: "/townia map"
+      desc: "周辺の土地のマップを表示します。"
+    price:
+      usage: "/townia price"
+      desc: "町の作成や土地の取得にかかる費用を表示します。"
+    time:
+      usage: "/townia time"
+      desc: "次の維持費（税）の徴収までの時間を表示します。"
+    top:
+      usage: "/townia top <residents|land> <all|town|nation|resident>"
+      desc: "ランキングを表示します。"
+      detail:
+        - "residents: 住民数のランキング（all / town / nation）"
+        - "land: 土地の数のランキング（all / town / nation / resident）"
+        - "例: /townia top land town"
+    reload:
+      usage: "/townia reload"
+      desc: "設定とメッセージを再読み込みします。"
+    debug:
+      usage: "/townia debug"
+      desc: "表示まわりのデバッグ情報を表示します。"
+
+  towniaadmin:
+    reload:
+      usage: "/towniaadmin reload"
+      desc: "設定とメッセージを再読み込みします。"
+    bypass:
+      usage: "/towniaadmin bypass"
+      desc: "土地の保護を無視するモードを切り替えます。"
+    forceclaim:
+      usage: "/towniaadmin forceclaim [町名]"
+      desc: "今いるチャンクを費用や制限なしで町の土地にします。町名を省略すると自分の町です。"
+    forceunclaim:
+      usage: "/towniaadmin forceunclaim"
+      desc: "今いるチャンクの土地を強制的に解放します。"
+    deletetown:
+      usage: "/towniaadmin deletetown <町名>"
+      desc: "町を強制的に削除します。住民は無所属になります。"
+    deletenation:
+      usage: "/towniaadmin deletenation <国名>"
+      desc: "国を強制的に解散します。"
+    givebonus:
+      usage: "/towniaadmin givebonus <町名> <数>"
+      desc: "町が取得できる土地の上限にボーナスを設定します。"
+    setmayor:
+      usage: "/towniaadmin setmayor <町名> <プレイヤー|UUID>"
+      desc: "町長を強制的に変更します。対象が町に未所属なら町に加えます。"
+    addresident:
+      usage: "/towniaadmin addresident <町名> <プレイヤー|UUID>"
+      desc: "プレイヤーを強制的に町の住民にします（招待不要）。"
+      detail:
+        - "対象がすでに別の町に所属している場合は追加できません。"
+        - "対象がその町のアウトローだった場合は解除されます。"
+    mergeresident:
+      usage: "/towniaadmin mergeresident <統合元の名前|UUID> <統合先の名前|UUID>"
+      desc: "重複した住民データを1つに統合します。"
+    dedupe:
+      usage: "/towniaadmin dedupe [confirm]"
+      desc: "オフラインUUIDで重複した住民を検出します。confirm を付けると統合を実行します。"
+    migrate:
+      usage: "/towniaadmin migrate [data [対象] [オプション] | config]"
+      desc: "Townyからデータや設定を移行します。"
+      detail:
+        - "対象: all, towns, nations, residents, townblocks, jails, outlaws, relations"
+        - "オプション: skip-profiles, missing-only, prune"
+        - "config: Townyの config.yml の設定を移行します。"
+        - "/towniaadmin migrate diagnose <プレイヤー> で町の所属を診断します。"
+
+  towniaworld:
+    list:
+      usage: "/towniaworld list"
+      desc: "町を作れるワールドの一覧を表示します。"
+    add:
+      usage: "/towniaworld add <ワールド>"
+      desc: "町を作れるワールドを追加します。"
+    remove:
+      usage: "/towniaworld remove <ワールド>"
+      desc: "町を作れるワールドから削除します。"
+
+  invite:
+    list:
+      usage: "/invite list"
+      desc: "届いている町からの招待を表示します。"
+    accept:
+      usage: "/invite accept [町名]"
+      desc: "招待を承諾して町に参加します。町名を省略すると最も古い招待を承諾します。"
+    decline:
+      usage: "/invite decline <町名>"
+      desc: "町からの招待を断ります。"
+
+  townconfig:
+    set:
+      usage: "/townconfig <allowInvisibility|allowSit|allowPetPickup|allowPassenger> <true|false>"
+      desc: "町の土地で透明化・座る・ペットを持ち上げる・他のプレイヤーに乗ることを許可するか設定します（町長のみ）。"

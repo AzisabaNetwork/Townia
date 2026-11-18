@@ -156,7 +156,8 @@ class DatabaseManager(private val plugin: Townia) {
                             "default_perms_resident VARCHAR(16) DEFAULT 'BDSI', " +
                             "jailed_town_uuid VARCHAR(36), " +
                             "jail_release_at BIGINT DEFAULT 0, " +
-                            "jail_bail DOUBLE DEFAULT 0)"
+                            "jail_bail DOUBLE DEFAULT 0, " +
+                            "about VARCHAR(255))"
                 )
 
                 stmt.execute(
@@ -337,7 +338,8 @@ class DatabaseManager(private val plugin: Townia) {
                     "ALTER TABLE residents ADD COLUMN jailed_town_uuid VARCHAR(36)",
                     "ALTER TABLE residents ADD COLUMN jail_release_at BIGINT DEFAULT 0",
                     "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0",
-                    "ALTER TABLE residents ADD COLUMN registered_at BIGINT NOT NULL DEFAULT 0"
+                    "ALTER TABLE residents ADD COLUMN registered_at BIGINT NOT NULL DEFAULT 0",
+                    "ALTER TABLE residents ADD COLUMN about VARCHAR(255)"
                 )) {
                     try {
                         stmt.execute(ddl)
@@ -939,29 +941,29 @@ class DatabaseManager(private val plugin: Townia) {
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
-                                   jailed_town_uuid, jail_release_at, jail_bail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   jailed_town_uuid, jail_release_at, jail_bail, about)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), town_uuid=VALUES(town_uuid), rank=VALUES(rank),
                 last_seen=VALUES(last_seen), registered_at=VALUES(registered_at), preferred_lang=VALUES(preferred_lang),
                 toggle_map=VALUES(toggle_map), toggle_town_claim=VALUES(toggle_town_claim), toggle_plot_border=VALUES(toggle_plot_border),
                 default_perms_friend=VALUES(default_perms_friend), default_perms_ally=VALUES(default_perms_ally),
                 default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident),
-                jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail)
+                jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail), about=VALUES(about)
         
         """.trimIndent() else """
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
-                                   jailed_town_uuid, jail_release_at, jail_bail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   jailed_town_uuid, jail_release_at, jail_bail, about)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uuid) DO UPDATE SET
                 name=excluded.name, town_uuid=excluded.town_uuid, rank=excluded.rank,
                 last_seen=excluded.last_seen, registered_at=excluded.registered_at, preferred_lang=excluded.preferred_lang,
                 toggle_map=excluded.toggle_map, toggle_town_claim=excluded.toggle_town_claim, toggle_plot_border=excluded.toggle_plot_border,
                 default_perms_friend=excluded.default_perms_friend, default_perms_ally=excluded.default_perms_ally,
                 default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident,
-                jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail
+                jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail, about=excluded.about
         
         """.trimIndent()
         run {
@@ -983,6 +985,7 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setString(15, player.jailedTownUuid?.toString())
                 ps.setLong(16, player.jailReleaseAt)
                 ps.setDouble(17, player.jailBail)
+                ps.setString(18, player.about)
                 ps.executeUpdate()
             }
         }
@@ -1087,6 +1090,7 @@ class DatabaseManager(private val plugin: Townia) {
         if (jailedTownStr != null) player.jailedTownUuid = UUID.fromString(jailedTownStr)
         if ("jail_release_at" in columns) player.jailReleaseAt = rs.getLong("jail_release_at")
         if ("jail_bail" in columns) player.jailBail = rs.getDouble("jail_bail")
+        if ("about" in columns) player.about = rs.getString("about")
         return player
     }
 
