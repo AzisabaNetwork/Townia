@@ -83,6 +83,24 @@ class Plot(
     val isTownOwned: Boolean
         get() = ownerUuid == null
 
+    /**
+     * Unsets every plot-level perm so the plot inherits again. Call this whenever the owner
+     * changes: perms set for (or by) the previous owner must not carry over to the next one.
+     */
+    fun clearPerms() {
+        permsFriend = null
+        permsResident = null
+        permsAlly = null
+        permsOutsider = null
+        permsNation = null
+    }
+
+    /** Changes the owner and drops the previous owner's plot perms. */
+    fun changeOwner(newOwnerUuid: UUID?) {
+        if (ownerUuid != newOwnerUuid) clearPerms()
+        ownerUuid = newOwnerUuid
+    }
+
     fun setPvp(pvp: Boolean) {
         this.pvp = pvp
     }

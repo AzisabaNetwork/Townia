@@ -634,10 +634,17 @@ object TownyMigrator {
     }
 
     private fun applyTownyPlotPermissions(permission: TownyPermission, plot: Plot) {
-        plot.permsResident = permissionString(permission, PermLevel.RESIDENT)
-        // On resident-owned plots Towny's "resident" level is what the owner's friends get.
-        if (plot.ownerUuid != null) plot.permsFriend = permissionString(permission, PermLevel.RESIDENT)
-        plot.permsNation = permissionString(permission, PermLevel.NATION)
+        if (plot.ownerUuid != null) {
+            // Resident-owned plots use Towny's personal levels: RESIDENT = the owner's friends,
+            // NATION = the plot's town members, ALLY = nation members and allies.
+            // Mapping RESIDENT to town members would open the plot to the whole town.
+            plot.permsFriend = permissionString(permission, PermLevel.RESIDENT)
+            plot.permsResident = permissionString(permission, PermLevel.NATION)
+            plot.permsNation = permissionString(permission, PermLevel.ALLY)
+        } else {
+            plot.permsResident = permissionString(permission, PermLevel.RESIDENT)
+            plot.permsNation = permissionString(permission, PermLevel.NATION)
+        }
         plot.permsAlly = permissionString(permission, PermLevel.ALLY)
         plot.permsOutsider = permissionString(permission, PermLevel.OUTSIDER)
     }

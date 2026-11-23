@@ -177,9 +177,12 @@ town-defaults:
     outsider: ""
 
 # Defaults applied to newly created residents for personally owned plots.
+# Unset plot perms on a resident-owned plot inherit these (not the town's perms above).
+# "resident" is every member of the plot's town; keep it empty so other residents can't
+# build in or open containers on someone else's plot unless the owner allows it.
 resident-defaults:
   perms:
     friend: ""
-    resident: "BDSI"
+    resident: ""
     ally: ""
     outsider: ""

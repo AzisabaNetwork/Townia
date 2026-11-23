@@ -80,7 +80,7 @@ class TowniaConfig(private val plugin: Townia) {
         private set
     var defaultResidentPermsOutsider: String = ""
         private set
-    var defaultResidentPermsResident: String = "BDSI"
+    var defaultResidentPermsResident: String = ""
         private set
 
     var claimCost: Double = 0.0
@@ -151,7 +151,7 @@ class TowniaConfig(private val plugin: Townia) {
         defaultResidentPermsFriend = config.getString("resident-defaults.perms.friend", "") ?: ""
         defaultResidentPermsAlly = config.getString("resident-defaults.perms.ally", "") ?: ""
         defaultResidentPermsOutsider = config.getString("resident-defaults.perms.outsider", "") ?: ""
-        defaultResidentPermsResident = config.getString("resident-defaults.perms.resident", "BDSI") ?: "BDSI"
+        defaultResidentPermsResident = config.getString("resident-defaults.perms.resident", "") ?: ""
 
         // Parse Town Levels
         val tLevels = mutableListOf<TownLevel>()

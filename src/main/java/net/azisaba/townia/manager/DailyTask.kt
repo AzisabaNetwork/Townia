@@ -65,7 +65,7 @@ class DailyTask(private val plugin: Townia) : BukkitRunnable() {
                 if (eco.has(owner, tax) && eco.withdrawPlayer(owner, tax).transactionSuccess()) {
                     town.balance += tax
                 } else {
-                    plot.ownerUuid = null
+                    plot.changeOwner(null)
                     plot.isForSale = false
                     plot.price = 0.0
                     plugin.plotManager.persistPlot(plot)

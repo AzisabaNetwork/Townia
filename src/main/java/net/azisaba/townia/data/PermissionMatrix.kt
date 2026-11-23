@@ -9,6 +9,33 @@ object PermissionMatrix {
         return permString.indexOf(type) >= 0
     }
 
+    /**
+     * What an unset plot perm group inherits. Resident-owned plots inherit the owner's personal
+     * defaults, like Towny, so the town's perms (meant for town-owned land) never open someone
+     * else's plot; nation has no personal default and still falls back to the town.
+     * Town-owned plots inherit the town's perms, and have no friends.
+     *
+     * @param group one of friend, resident, ally, nation, outsider
+     */
+    fun inheritedPlotPerms(plot: Plot, town: Town?, owner: TowniaPlayer?, group: String): String? {
+        if (plot.ownerUuid != null) {
+            return when (group) {
+                "friend" -> owner?.defaultPermsFriend
+                "resident" -> owner?.defaultPermsResident
+                "ally" -> owner?.defaultPermsAlly
+                "outsider" -> owner?.defaultPermsOutsider
+                else -> town?.permsNation
+            }
+        }
+        return when (group) {
+            "friend" -> null
+            "resident" -> town?.permsResident
+            "ally" -> town?.permsAlly
+            "outsider" -> town?.permsOutsider
+            else -> town?.permsNation
+        }
+    }
+
     fun setPerm(permString: String?, type: Char, value: Boolean): String {
         var permString = permString
         if (permString == null) permString = ""

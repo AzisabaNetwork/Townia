@@ -4,6 +4,7 @@ import io.papermc.paper.event.player.PlayerOpenSignEvent
 import net.azisaba.townia.Townia
 import net.azisaba.townia.command.TowniaAdminCommand
 import net.azisaba.townia.data.PermissionMatrix.hasPerm
+import net.azisaba.townia.data.PermissionMatrix.inheritedPlotPerms
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.PlotType
 import net.azisaba.townia.hook.ShopChestHook
@@ -467,28 +468,22 @@ class PlotProtectionListener(private val plugin: Townia) : Listener {
 
         val rel = getRelationship(player, plot, town)
 
-        // Plot-level perms (set via /plot set perm) override the town defaults for both
-        // player-owned and town-owned plots; unset (null) groups fall back to the town.
-        val perms: String = when (rel) {
-            // A friend's unset plot perms use the owner's personal friend defaults.
-            Relationship.FRIEND -> plot.permsFriend
-                ?: residentManager.getResident(plot.ownerUuid).orElse(null)?.defaultPermsFriend
-            Relationship.RESIDENT -> plot.permsResident
-            Relationship.ALLY -> plot.permsAlly
-            Relationship.NATION -> plot.permsNation
-            else -> plot.permsOutsider
-        } ?: getTownPerms(town, rel) ?: ""
-        return !hasPerm(perms, type.id)
-    }
-
-    private fun getTownPerms(town: Town, rel: Relationship): String? {
-        return when (rel) {
-            Relationship.FRIEND -> town.permsResident
-            Relationship.RESIDENT -> town.permsResident
-            Relationship.ALLY -> town.permsAlly
-            Relationship.NATION -> town.permsNation
-            else -> town.permsOutsider
+        // Plot-level perms (set via /plot set perm) win; unset (null) groups inherit the owner's
+        // personal defaults on resident-owned plots and the town's perms on town-owned plots.
+        val (plotPerms, group) = when (rel) {
+            Relationship.FRIEND -> plot.permsFriend to "friend"
+            Relationship.RESIDENT -> plot.permsResident to "resident"
+            Relationship.ALLY -> plot.permsAlly to "ally"
+            Relationship.NATION -> plot.permsNation to "nation"
+            else -> plot.permsOutsider to "outsider"
         }
+        val perms: String = plotPerms ?: inheritedPlotPerms(
+            plot,
+            town,
+            plot.ownerUuid?.let { residentManager.getResident(it).orElse(null) },
+            group
+        ) ?: ""
+        return !hasPerm(perms, type.id)
     }
 
     private fun getRelationship(player: Player, plot: Plot, town: Town): Relationship {

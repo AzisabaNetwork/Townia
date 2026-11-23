@@ -908,10 +908,17 @@ object TownyFlatfileMigrator {
             ?.map { it.lowercase(Locale.getDefault()) }?.toSet() ?: return
         val hasFlags = status.any { it.endsWith("build") || it.endsWith("destroy") || it.endsWith("switch") || it.endsWith("itemuse") }
         if (!hasFlags) return
-        plot.permsResident = permissionString(status, "resident")
-        // On resident-owned plots Towny's "resident" level is what the owner's friends get.
-        if (plot.ownerUuid != null) plot.permsFriend = permissionString(status, "resident")
-        plot.permsNation = permissionString(status, "nation")
+        if (plot.ownerUuid != null) {
+            // Resident-owned plots use Towny's personal levels: "resident" = the owner's friends,
+            // "nation" = the plot's town members, "ally" = nation members and allies.
+            // Mapping "resident" to town members would open the plot to the whole town.
+            plot.permsFriend = permissionString(status, "resident")
+            plot.permsResident = permissionString(status, "nation")
+            plot.permsNation = permissionString(status, "ally")
+        } else {
+            plot.permsResident = permissionString(status, "resident")
+            plot.permsNation = permissionString(status, "nation")
+        }
         plot.permsAlly = permissionString(status, "ally")
         plot.permsOutsider = permissionString(status, "outsider")
     }

@@ -2,6 +2,7 @@ package net.azisaba.townia.command
 
 import net.azisaba.townia.Townia
 import net.azisaba.townia.TowniaException
+import net.azisaba.townia.data.PermissionMatrix
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.PlotType
 import net.azisaba.townia.data.Town
@@ -132,17 +133,18 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
     /**
      * Effective perms per group (F=owner's friends, R=resident, A=ally, N=nation, O=outsider), using
      * the plot's own setting when present and the fallback otherwise, as PlotProtectionListener does.
-     * Friends only exist on resident-owned plots and fall back to the owner's friend defaults.
+     * Friends only exist on resident-owned plots.
      */
     private fun formatPlotPerm(plot: Plot, town: Town?, action: Char): String {
-        fun has(plotPerms: String?, townPerms: String?) = ((plotPerms ?: townPerms)?.indexOf(action) ?: -1) >= 0
+        val owner = plot.ownerUuid?.let { residentManager.getResident(it).orElse(null) }
+        fun has(plotPerms: String?, group: String) =
+            ((plotPerms ?: PermissionMatrix.inheritedPlotPerms(plot, town, owner, group))?.indexOf(action) ?: -1) >= 0
         val sb = StringBuilder()
-        val ownerFriendDefaults = plot.ownerUuid?.let { residentManager.getResident(it).orElse(null)?.defaultPermsFriend }
-        sb.append(if (plot.ownerUuid != null && has(plot.permsFriend, ownerFriendDefaults)) "F" else "-")
-        sb.append(if (has(plot.permsResident, town?.permsResident)) "R" else "-")
-        sb.append(if (has(plot.permsAlly, town?.permsAlly)) "A" else "-")
-        sb.append(if (has(plot.permsNation, town?.permsNation)) "N" else "-")
-        sb.append(if (has(plot.permsOutsider, town?.permsOutsider)) "O" else "-")
+        sb.append(if (plot.ownerUuid != null && has(plot.permsFriend, "friend")) "F" else "-")
+        sb.append(if (has(plot.permsResident, "resident")) "R" else "-")
+        sb.append(if (has(plot.permsAlly, "ally")) "A" else "-")
+        sb.append(if (has(plot.permsNation, "nation")) "N" else "-")
+        sb.append(if (has(plot.permsOutsider, "outsider")) "O" else "-")
         return sb.toString()
     }
 
@@ -757,16 +759,17 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
 
         val town = townManager.getTown(plot.townUuid).orElse(null)
+        val owner = plot.ownerUuid?.let { residentManager.getResident(it).orElse(null) }
         for (group in groups) {
-            // Unset plot perms inherit the town's; start from those so toggling one action
-            // doesn't silently revoke the others.
+            // Unset plot perms inherit (owner's defaults or the town's); start from those so
+            // toggling one action doesn't silently revoke the others.
             var current: String? = when (group) {
-                "friend" -> plot.permsFriend ?: plot.ownerUuid?.let { residentManager.getResident(it).orElse(null)?.defaultPermsFriend }
-                "resident" -> plot.permsResident ?: town?.permsResident
-                "ally" -> plot.permsAlly ?: town?.permsAlly
-                "outsider" -> plot.permsOutsider ?: town?.permsOutsider
-                else -> plot.permsNation ?: town?.permsNation
-            } ?: ""
+                "friend" -> plot.permsFriend
+                "resident" -> plot.permsResident
+                "ally" -> plot.permsAlly
+                "outsider" -> plot.permsOutsider
+                else -> plot.permsNation
+            } ?: PermissionMatrix.inheritedPlotPerms(plot, town, owner, group) ?: ""
 
             for (action in actions) {
                 current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action!!, state)
@@ -851,11 +854,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         plot.setMobs(false)
         plot.setExplosions(false)
         plot.setFire(false)
-        plot.permsFriend = null
-        plot.permsResident = null
-        plot.permsAlly = null
-        plot.permsOutsider = null
-        plot.permsNation = null
+        plot.clearPerms()
         // Like Towny's /plot clear: remove every sign (standing, wall, hanging) in the plot.
         // Signs are tile entities, so scanning the chunk's tile entities covers all heights cheaply.
         player.location.chunk.tileEntities
@@ -888,7 +887,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             plugin.messageManager.sendMessage(player, "plot.already-town-owned")
             return
         }
-        plot.ownerUuid = null
+        plot.changeOwner(null)
         plot.isForSale = false
         plot.price = 0.0
         try {

@@ -20,7 +20,7 @@ class TowniaPlayer {
     var defaultPermsFriend: String? = ""
     var defaultPermsAlly: String? = ""
     var defaultPermsOutsider: String? = ""
-    var defaultPermsResident: String? = "BDSI"
+    var defaultPermsResident: String? = ""
 
     var jailedTownUuid: UUID? = null
     var jailReleaseAt: Long = 0L

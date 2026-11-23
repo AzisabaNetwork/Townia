@@ -55,7 +55,55 @@ class DatabaseManager(private val plugin: Townia) {
             }
         }
         createTables()
+        runDataMigrations()
         plugin.logger.info("Database initialised (MySQL: $isMySQL)")
+    }
+
+    /**
+     * One-time data fixes, each recorded in townia_data_migrations so it never runs twice
+     * (a later run would overwrite values players set on purpose afterwards).
+     */
+    @Throws(SQLException::class)
+    private fun runDataMigrations() {
+        dataSource!!.getConnection().use { connection ->
+            connection.createStatement().use { stmt ->
+                stmt.execute("CREATE TABLE IF NOT EXISTS townia_data_migrations (id VARCHAR(64) PRIMARY KEY, applied_at BIGINT NOT NULL)")
+            }
+            // The old resident default "BDSI" let every member of the town build in and open
+            // containers on a resident's own plot. Clear it to the new default; residents who
+            // chose any other value keep it.
+            runDataMigration(connection, "clear-bdsi-resident-default-perms") {
+                connection.prepareStatement("UPDATE residents SET default_perms_resident = '' WHERE default_perms_resident = 'BDSI'").use { ps ->
+                    val updated = ps.executeUpdate()
+                    if (updated > 0) {
+                        plugin.logger.info("Cleared the old BDSI resident default plot perms of $updated resident(s).")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun runDataMigration(connection: java.sql.Connection, id: String, body: () -> Unit) {
+        connection.prepareStatement("SELECT 1 FROM townia_data_migrations WHERE id = ?").use { ps ->
+            ps.setString(1, id)
+            ps.executeQuery().use { rs -> if (rs.next()) return }
+        }
+        val autoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            body()
+            connection.prepareStatement("INSERT INTO townia_data_migrations (id, applied_at) VALUES (?, ?)").use { ps ->
+                ps.setString(1, id)
+                ps.setLong(2, System.currentTimeMillis())
+                ps.executeUpdate()
+            }
+            connection.commit()
+        } catch (e: SQLException) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = autoCommit
+        }
     }
 
     @Synchronized
@@ -484,7 +532,7 @@ class DatabaseManager(private val plugin: Townia) {
                 } catch (_: Exception) {
                 }
                 try {
-                    stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_resident VARCHAR(16) DEFAULT 'BDSI'")
+                    stmt.execute("ALTER TABLE residents ADD COLUMN default_perms_resident VARCHAR(16) DEFAULT ''")
                 } catch (_: Exception) {
                 }
 

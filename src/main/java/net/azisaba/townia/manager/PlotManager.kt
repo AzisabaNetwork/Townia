@@ -234,7 +234,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
 
     fun releaseOwnedPlots(ownerUuid: UUID) {
         for (plot in getPlotsByOwner(ownerUuid)) {
-            plot.ownerUuid = null
+            plot.changeOwner(null)
             plot.isForSale = false
             plot.price = 0.0
             persistPlot(plot)
@@ -277,7 +277,7 @@ class PlotManager(private val plugin: Townia, private val db: DatabaseManager, p
     fun transferOwnership(worldName: String?, chunkX: Int, chunkZ: Int, newOwnerUuid: UUID?) {
         val key: ChunkKey = ChunkKey.of(worldName, chunkX, chunkZ)
         val plot: Plot = requirePlot(key)
-        plot.ownerUuid = newOwnerUuid
+        plot.changeOwner(newOwnerUuid)
         plot.isForSale = false
         plot.price = 0.toDouble()
         persistPlot(plot)
