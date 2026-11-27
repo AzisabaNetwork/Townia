@@ -25,7 +25,7 @@ dependencies {
     testImplementation("de.epiceric:ShopChest:2.0.5+1.21.11") { isTransitive = false }
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("org.mockito:mockito-core:5.24.0")
+    testImplementation("org.mockito:mockito-core:5.25.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:6.4.0")
 }
 
