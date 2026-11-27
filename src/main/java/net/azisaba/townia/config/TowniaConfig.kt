@@ -86,12 +86,21 @@ class TowniaConfig(private val plugin: Townia) {
     var claimCost: Double = 0.0
         private set
 
+    /** Towny's price, spawn, distance and protection rules; all off unless configured. */
+    lateinit var rules: TownyRules
+        private set
+
+    /** Seconds the plot line stays in the action bar after entering a plot (Towny: 15). 0 keeps it on. */
+    var actionBarDuration: Int = 15
+        private set
+
     init {
         reload()
     }
 
     fun reload() {
         plugin.reloadConfig()
+        net.azisaba.townia.manager.ActionBarTask.clearCache()
         var config = plugin.config
 
         val internalConfigStream = plugin.getResource("config.yml")
@@ -117,6 +126,7 @@ class TowniaConfig(private val plugin: Townia) {
 
         prefix             = config.getString("prefix", "<gray>[<green>Townia<gray>]<reset> ") ?: ""
         defaultLanguage    = config.getString("default-language", "ja") ?: "ja"
+        actionBarDuration  = config.getInt("actionbar-duration", 15)
         allowedWorlds      = config.getStringList("allowed-worlds")
         defaultClaimLimit  = config.getInt("default-claim-limit", 8)
         claimsPerResident  = config.getInt("claims-per-resident", 1)
@@ -132,6 +142,7 @@ class TowniaConfig(private val plugin: Townia) {
         townUpkeep         = config.getDouble("town-upkeep", 0.0)
         defaultTownTax     = config.getDouble("default-town-tax", 0.0)
         defaultNationTax   = config.getDouble("default-nation-tax", 0.0)
+        rules              = TownyRules(config)
         wildernessBuild      = config.getBoolean("wilderness.build", true)
         wildernessDestroy    = config.getBoolean("wilderness.destroy", true)
         wildernessSwitch     = config.getBoolean("wilderness.switch", true)

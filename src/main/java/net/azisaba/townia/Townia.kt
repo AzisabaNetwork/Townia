@@ -32,6 +32,10 @@ class  Townia : JavaPlugin() {
         private set
     lateinit var plotManager: PlotManager
         private set
+    lateinit var townyPerms: net.azisaba.townia.permission.TownyPerms
+        private set
+    lateinit var townTimers: net.azisaba.townia.manager.TownTimers
+        private set
     var economy: Economy? = null
         private set
     var nextUpkeepTime: Long = 0
@@ -69,7 +73,14 @@ class  Townia : JavaPlugin() {
         townManager = TownManager(this, databaseManager, residentManager)
         nationManager = NationManager(this, databaseManager, townManager)
         plotManager = PlotManager(this, databaseManager, townManager)
+        townyPerms = net.azisaba.townia.permission.TownyPerms(this)
         residentManager.repairMayors().takeIf { it > 0 }?.let { logger.info("Repaired $it mayor record(s).") }
+        plotManager.allPlots.count { townManager.getTown(it.townUuid).isEmpty }.takeIf { it > 0 }?.let {
+            logger.warning(
+                "$it claimed chunk(s) belong to a town that no longer exists. They are not protected and cannot be " +
+                    "claimed; stand in one and use /towniaadmin forceunclaim to free it."
+            )
+        }
         server.servicesManager.register(TowniaAPI::class.java, TowniaApiImpl(this), this, ServicePriority.Normal)
 
         hookVault()
@@ -83,15 +94,24 @@ class  Townia : JavaPlugin() {
         net.azisaba.townia.hook.ShopChestHook.register(this, plotProtectionListener)
         server.pluginManager.registerEvents(JailCommandListener(this), this)
         server.pluginManager.registerEvents(TownMenuListener(this), this)
+        server.pluginManager.registerEvents(net.azisaba.townia.listener.DeathCostListener(this), this)
+        townTimers = net.azisaba.townia.manager.TownTimers(this)
+        townTimers.restart()
 
         for (p in server.onlinePlayers) {
             residentManager.getOrCreate(p)
+            townyPerms.refresh(p)
         }
 
 
-        val upkeepTicks = 1728000L
-        nextUpkeepTime = System.currentTimeMillis() + upkeepTicks * 50L
-        DailyTask(this).runTaskTimer(this, upkeepTicks, upkeepTicks)
+        val newDayTime = towniaConfig.rules.newDayTime
+        if (newDayTime != null) {
+            scheduleNewDay(newDayTime)
+        } else {
+            val upkeepTicks = 1728000L
+            nextUpkeepTime = System.currentTimeMillis() + upkeepTicks * 50L
+            DailyTask(this).runTaskTimer(this, upkeepTicks, upkeepTicks)
+        }
         
         ActionBarTask(this).runTaskTimer(this, 40L, 40L)
 
@@ -99,11 +119,35 @@ class  Townia : JavaPlugin() {
     }
 
     override fun onDisable() {
+        if (::townyPerms.isInitialized) server.onlinePlayers.forEach(townyPerms::forget)
+        if (::townTimers.isInitialized) townTimers.stop()
         server.servicesManager.unregisterAll(this)
         if (::databaseManager.isInitialized) {
             databaseManager.close()
         }
         logger.info("Townia disabled.")
+    }
+
+    /**
+     * Towny's new_day_time: taxes and upkeep are collected at a fixed time of day, so a server
+     * that restarts daily still gets its new day (a timer counted from start-up never would).
+     */
+    private fun scheduleNewDay(time: java.time.LocalTime, after: java.time.ZonedDateTime = java.time.ZonedDateTime.now()) {
+        val next = DailyTask.nextNewDay(time, after)
+        nextUpkeepTime = next.toInstant().toEpochMilli()
+        val ticks = (java.time.Duration.between(java.time.ZonedDateTime.now(), next).toMillis() / 50L).coerceAtLeast(20L)
+        server.scheduler.runTaskLater(this, Runnable {
+            // Ticks run slow on a lagging server; never start the day early.
+            if (System.currentTimeMillis() + 1000L < nextUpkeepTime) {
+                scheduleNewDay(time, after)
+                return@Runnable
+            }
+            DailyTask(this).run()
+            // The day after the one just run, counted from that day's start. The task may fire a
+            // moment early; counted from "now", today's start was then still ahead, and the same
+            // day ran a second time one second later (taxes and upkeep taken twice).
+            scheduleNewDay(time, next)
+        }, ticks)
     }
 
     private fun hookVault() {
@@ -153,6 +197,7 @@ class  Townia : JavaPlugin() {
     }
 
     fun resetNextUpkeepTime() {
+        if (towniaConfig.rules.newDayTime != null) return
         nextUpkeepTime = System.currentTimeMillis() + 1728000L * 50L
     }
 

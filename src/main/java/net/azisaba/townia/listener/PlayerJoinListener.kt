@@ -23,6 +23,9 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
         // command looks it up, which previously raced with an asynchronous creation.
         try {
             val resident = residentManager.getOrCreate(uuid, name)
+            // A rejoining player is a new Player object: drop the old attachment, then grant afresh.
+            plugin.townyPerms.forget(player)
+            plugin.townyPerms.refresh(player)
             if (resident.jailedTownUuid != null) {
                 if (resident.jailReleaseAt > 0L && resident.jailReleaseAt <= System.currentTimeMillis()) {
                     resident.jailedTownUuid = null
@@ -39,8 +42,21 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
                 }
             }
             PlayerMoveListener.evictIfOutlawed(plugin, player)
+            if (plugin.towniaConfig.rules.boardOnLogin) showBoards(player, resident)
         } catch (e: Exception) {
             plugin.logger.severe("Failed to load/create resident for $name: ${e.message}")
+        }
+    }
+
+    /** Towny's display_board_onlogin: the town's and the nation's board greet their members. */
+    private fun showBoards(player: org.bukkit.entity.Player, resident: net.azisaba.townia.data.TowniaPlayer) {
+        val town = resident.townUuid?.let { plugin.townManager.getTown(it).orElse(null) } ?: return
+        town.board?.takeIf { it.isNotBlank() }?.let {
+            plugin.messageManager.sendMessage(player, "town.board-login", "town", town.name ?: "", "board", it)
+        }
+        val nation = town.nationUuid?.let { plugin.nationManager.getNation(it).orElse(null) } ?: return
+        nation.board?.takeIf { it.isNotBlank() }?.let {
+            plugin.messageManager.sendMessage(player, "nation.board-login", "nation", nation.name ?: "", "board", it)
         }
     }
 
@@ -49,6 +65,8 @@ class PlayerJoinListener(private val plugin: Townia) : Listener {
         val player = event.getPlayer()
         val uuid: UUID = player.uniqueId
         val name = player.name
+        net.azisaba.townia.manager.ActionBarTask.forget(uuid)
+        plugin.townyPerms.forget(player)
         plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
             try {
                 residentManager.updateLastSeen(uuid)

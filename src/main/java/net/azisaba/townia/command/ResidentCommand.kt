@@ -42,6 +42,21 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean =
         CommandHelp.withCommand("resident", args) { execute(sender, command, label, args) }
 
+    /** The Towny node a `/resident` invocation needs, or null when it needs none (about and plotlist are Townia's own). */
+    private fun nodeFor(args: Array<out String>): String? {
+        val sub = args.getOrNull(1)?.lowercase(Locale.getDefault())
+        return when (args[0].lowercase(Locale.getDefault())) {
+            "list" -> "towny.command.resident.list"
+            "tax" -> "towny.command.resident.tax"
+            "jail" -> "towny.command.resident.jail"
+            "friend" -> "towny.command.resident.friend"
+            "spawn" -> "towny.command.resident.spawn"
+            "toggle" -> sub?.let { "towny.command.resident.toggle." + if (it == "explosions") "explosion" else if (it == "mob") "mobs" else it }
+            "set" -> if (sub == "perm" || sub == "mode") "towny.command.resident.set.$sub" else null
+            else -> null
+        }
+    }
+
     private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             val player = requirePlayer(sender) ?: return true
@@ -49,6 +64,11 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             return true
         }
 
+        val node = nodeFor(args)
+        if (node != null && !net.azisaba.townia.permission.Perm.has(sender, node)) {
+            plugin.messageManager.sendMessage(sender, "error.no-permission")
+            return true
+        }
         when (args[0].lowercase(Locale.getDefault())) {
             "list" -> showList(sender, args)
             "plotlist" -> handlePlotList(sender, args)
@@ -308,6 +328,16 @@ class ResidentCommand(private val plugin: Townia) : CommandExecutor, TabComplete
             "explosions", "N/A",
             "fire", "N/A",
             "mobs", "N/A"
+        )
+        // A line of its own, as Towny's "Friends [2]: a, b". The screen above is a message a
+        // server may have edited, and such a message does not take new lines from an update.
+        val friendNames = res.friends!!.filterNotNull().mapNotNull { friend ->
+            runCatching { UUID.fromString(friend) }.getOrNull()?.let { residentManager.getResident(it).orElse(null)?.name }
+        }.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        plugin.messageManager.sendMessageWithoutPrefix(
+            sender, "resident.info-friends",
+            "count", friendNames.size.toString(),
+            "friends", friendNames.joinToString(", ")
         )
     }
 

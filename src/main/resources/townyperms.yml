@@ -1,0 +1,144 @@
+# Townia - who may do what.
+#
+# Every player gets the permission nodes listed for their situation:
+#   nomad            everyone, in a town or not
+#   towns.default    every member of a town
+#   towns.mayor      the mayor, on top of towns.default
+#   towns.ranks.X    members holding town rank X (/town rank add <player> X)
+#   nations.default  every member of a town that is in a nation
+#   nations.king     the nation's leader
+#   nations.ranks.X  members holding nation rank X (/nation rank add <player> X)
+#
+# The node names and the layout are the ones Towny used, so a townyperms.yml from an
+# old Towny server can be dropped in here as it is (or copied by /towniaadmin migrate config).
+# Nodes of other plugins may be listed too. A leading '-' takes a node away.
+# You can add your own ranks; a rank with no nodes is just a title.
+#
+# These defaults let everyone do what Townia 1.3.3 let them do, without any permission plugin:
+# Towny's own defaults were narrower (no /resident commands for players without a town, no
+# resident lists for residents, assistants without unclaim, spawn, outlaws or jail).
+# The helper, sheriff, vip and donator ranks mean what they meant in Towny.
+
+nomad:
+    - towny.command.towny.map
+    - towny.command.towny.prices
+    - towny.command.towny.tree
+    - towny.command.towny.time
+    - towny.command.towny.universe
+    - towny.command.towny.version
+    - towny.command.towny.war
+    - towny.command.towny.top
+    - towny.command.town.online
+    - towny.command.town.here
+    - towny.command.town.new
+    - towny.command.town.join
+    - towny.command.town.list
+    - towny.command.town.reslist
+    - towny.command.town.ranklist
+    - towny.command.plot.perm
+    - towny.command.nation.list
+    - towny.command.nation.townlist
+    - towny.command.nation.allylist
+    - towny.command.nation.enemylist
+    - towny.command.resident.*
+    - towny.town.resident
+    - towny.town.spawn.public
+    - towny.chat.general
+    - towny.command.towny.war.hud
+
+towns:
+    default:
+        - towny.command.resident.*
+        - towny.command.plot.claim
+        - towny.command.plot.unclaim
+        - towny.command.plot.forsale
+        - towny.command.plot.notforsale
+        - towny.command.plot.toggle.*
+        # A resident names, types and clears their own plot.
+        - towny.command.plot.set.*
+        - towny.command.plot.clear
+        - towny.command.town.online
+        - towny.command.town.leave
+        - towny.command.town.deposit
+        - towny.command.town.bankhistory
+        - towny.town.spawn.town
+        - towny.chat.town
+
+    mayor:
+        - towny.tax_exempt
+        - towny.command.towny.top
+        - towny.command.town.*
+        - towny.command.plot.*
+        - towny.claimed.owntown.*
+        - towny.command.nation.new
+        - towny.outlaw.jailer
+        - towny.command.nation.join
+        - towny.command.nation.leave
+        # Any mayor of a town in the nation sees its bank history, as in 1.3.3.
+        - towny.command.nation.bankhistory
+
+    ranks:
+        # What a Townia assistant could do before permission nodes were introduced.
+        assistant:
+            - towny.command.town.claim.*
+            - towny.command.town.unclaim.*
+            - towny.command.town.invite.add
+            - towny.command.town.set.spawn
+            - towny.command.town.set.jail
+            - towny.command.town.set.homeblock
+            - towny.command.town.set.perm
+            - towny.command.town.set.outpost
+            - towny.command.town.outlaw
+            - towny.command.town.toggle.jail
+            - towny.command.plot.asmayor
+            - towny.command.plot.evict
+            - towny.outlaw.jailer
+        helper:
+            - towny.claimed.townowned.switch.*
+        donator:
+        vip:
+        # Sheriffs may jail members of their town.
+        sheriff:
+            - towny.command.town.toggle.jail
+            - towny.outlaw.jailer
+        # Townia's own rank (/towniaadmin setsubmayor); it could do what an assistant could.
+        sub_mayor:
+            - towny.command.town.claim.*
+            - towny.command.town.unclaim.*
+            - towny.command.town.invite.add
+            - towny.command.town.set.spawn
+            - towny.command.town.set.jail
+            - towny.command.town.set.homeblock
+            - towny.command.town.set.perm
+            - towny.command.town.set.outpost
+            - towny.command.town.outlaw
+            - towny.command.town.toggle.jail
+            - towny.command.plot.asmayor
+            - towny.command.plot.evict
+            - towny.outlaw.jailer
+
+nations:
+    default:
+        - towny.command.nation.online
+        - towny.command.nation.deposit
+        - towny.command.nation.spawn
+        - towny.nation.spawn.nation
+        - towny.nation.spawn.ally
+        - towny.town.spawn.nation
+        - towny.town.spawn.ally
+        - towny.chat.nation
+        - towny.chat.alliance
+
+    king:
+        - towny.command.nation.*
+        - towny.command.nation.deposit.other
+
+    ranks:
+        assistant:
+            - towny.command.nation.rank.helper
+            - towny.command.nation.invite.add
+            - towny.command.nation.ally.*
+            - towny.command.nation.enemy
+            - towny.command.nation.deposit.other
+        helper:
+            - towny.command.nation.add

@@ -11,6 +11,7 @@ common:
 error:
   invalid-name: "<red>名前には文字・数字・アンダースコア・ハイフンのみ使用でき、2〜32文字にしてください。"
   no-permission: "<red>権限がありません。"
+  cooldown: "<red>あと <yellow>{seconds}</yellow> 秒待ってください。"
   player-only: "<red>このコマンドはプレイヤーのみ実行できます。"
   unknown: "<red>不明なエラーが発生しました。"
   invalid-args: "<red>引数が正しくありません。<yellow>/town help</yellow> を確認してください。"
@@ -97,10 +98,27 @@ town:
   set-public: "<green>町を公開にしました。誰でも <aqua>/t spawn</aqua> で訪問できます。<gray>(自由参加は <aqua>/t toggle open on</aqua>)"
   set-private: "<yellow>町を非公開にしました。住民・同じ国・同盟国以外は <aqua>/t spawn</aqua> で訪問できません。"
   rank-set: "<green><yellow>{player}</yellow> の役職を <yellow>{rank}</yellow> にしました。"
+  rank-removed: "<green><yellow>{player}</yellow> から役職 <yellow>{rank}</yellow> を外しました。"
+  rank-none: "<red><yellow>{player}</yellow> には外せる役職がありません。"
+  mayor-changed: "<gold>[{town}]</gold> <yellow>{player}</yellow> <green>が新しい町長になりました。"
+  tag-invalid: "<red>タグは英数字 <yellow>{max}</yellow> 文字までです。消すには clear を指定します。"
+  tag-set: "<green>町のタグを設定しました: <yellow>{tag}</yellow>"
+  value-set: "<green>{setting} を <yellow>{amount}</yellow> に設定しました。"
+  say: "<gold>[{town}]</gold> <yellow>{player}</yellow><gray>:</gray> <white>{message}"
+  buy-disabled: "<red>このサーバーでは追加の土地枠を購入できません。"
+  buy-limit: "<red>追加の土地枠は <yellow>{max}</yellow> までです（現在 <yellow>{current}</yellow>）。"
+  buy-done: "<green>土地枠を <yellow>{amount}</yellow> 追加しました（費用 <yellow>{cost}</yellow>、追加枠の合計 <yellow>{total}</yellow>）。"
+  invites-sent: "<gold>送信済みの招待: <white>{players}"
   already-in-nation: "<red>この町は既に国に所属しています。"
   not-in-nation: "<red>この町は国に所属していません。"
   board-set: "<green>町の掲示板を設定しました: <white>{board}"
   taxes-set: "<green>町税を設定しました: <yellow>{amount}</yellow>"
+  claim-multiple-denied: "<red>複数のチャンクをまとめて取得する権限がありません（towny.command.town.claim.town.multiple）。1枚ずつ /town claim してください。"
+  taxes-too-high: "<red>税は <yellow>{max}</yellow> までしか設定できません。"
+  claim-too-close-plot: "<red>ほかの町の土地に近すぎます（<yellow>{distance}</yellow> チャンク以上離してください）。"
+  claim-too-close-homeblock: "<red>ほかの町のホームブロックに近すぎます（<yellow>{distance}</yellow> チャンク以上離してください）。"
+  outpost-too-close: "<red>前哨地は町の土地から <yellow>{distance}</yellow> チャンク以上離してください。"
+  board-login: "<gold>[{town}]</gold> <white>{board}"
   plotprice-set: "<green>区画価格を設定しました: <yellow>{amount}</yellow>"
   toggled: "<green><yellow>{setting}</yellow> を <aqua>{state}</aqua> にしました。"
   homeblock-set: "<green>現在の区画を町のホームブロックに設定しました。"
@@ -187,6 +205,7 @@ nation:
   not-leader: "<red>国王のみ実行できます。"
   board-set: "<green>国の掲示板を設定しました: <white>{board}"
   taxes-set: "<green>国税を設定しました: <yellow>{amount}</yellow>"
+  board-login: "<gold>[{nation}]</gold> <white>{board}"
   relation-added: "<green><yellow>{nation}</yellow> を <aqua>{relation}</aqua> として追加しました。"
   relation-removed: "<yellow><yellow>{nation}</yellow> を <aqua>{relation}</aqua> から削除しました。"
   renamed: "<green>国名を <yellow>{nation}</yellow> に変更しました。"
@@ -194,8 +213,21 @@ nation:
   capital-set: "<green>首都を <yellow>{town}</yellow> に変更しました。"
   online: "<green>オンラインの国民 <yellow>({count})</yellow>: <white>{players}"
   neutral-set: "<green>国の中立設定: <aqua>{state}</aqua>"
+  toggled: "<green>国の設定 <yellow>{setting}</yellow>: <aqua>{state}</aqua>"
+  tag-set: "<green>国のタグを設定しました: <yellow>{tag}</yellow>"
+  say: "<gold>[{nation}]</gold> <yellow>{player}</yellow><gray>:</gray> <white>{message}"
+  allylist: "<gold>{nation} の同盟国: <white>{nations}"
+  enemylist: "<gold>{nation} の敵対国: <white>{nations}"
+  ally-already: "<red><yellow>{nation}</yellow> とは既に同盟しています。"
+  ally-request-sent: "<green><yellow>{nation}</yellow> に同盟を申請しました。相手の承認を待ってください。"
+  ally-request-received: "<gold><yellow>{nation}</yellow> から同盟の申請が届きました。<white>/nation ally accept {nation}</white> で承認、<white>/nation ally deny {nation}</white> で拒否します。"
+  ally-no-request: "<red><yellow>{nation}</yellow> からの同盟の申請はありません。"
+  ally-denied: "<yellow><yellow>{nation}</yellow> からの同盟の申請を拒否しました。"
+  ally-requests-sent: "<gold>申請中の同盟: <white>{nations}"
+  ally-requests-received: "<gold>届いている同盟の申請: <white>{nations}"
   title-set: "<green><yellow>{player}</yellow> の称号を更新しました。"
   not-in-nation: "<red>あなたの町は国に所属していません。"
+  rank-not-member: "<red><yellow>{player}</yellow> はあなたの国の住民ではありません。"
   town-already-in-nation: "<red>町 <yellow>{town}</yellow> は既に国に所属しています。"
   town-not-member: "<red>町 <yellow>{town}</yellow> はあなたの国に所属していません。"
   cannot-kick-capital: "<red>町 <yellow>{town}</yellow> は首都なので追放できません。"
@@ -215,7 +247,10 @@ nation:
 
 plot:
   no-plot-here: "<red>この区画はどの町にも保護されていません。"
+  max-plots: "<red>持てる区画は <yellow>{max}</yellow> 個までです。"
   not-owned-by-your-town: "<red>この区画はあなたの町の土地ではありません。"
+  not-owned: "<red>この区画には持ち主がいません。"
+  returned: "<green>区画を町に返しました。"
   set-type: "<green>区画タイプを <yellow>{type}</yellow> に設定しました。"
   for-sale: "<green>この区画を <yellow>{price}</yellow> で売りに出しました。"
   price-too-high: "<red>区画の販売価格は <yellow>{max}</yellow> 以下である必要があります。"
@@ -232,6 +267,8 @@ plot:
   range-for-sale: "<green><yellow>{count}</yellow> 区画を <yellow>{price}</yellow> で売りに出しました。失敗: <yellow>{failed}</yellow>"
   range-not-for-sale: "<yellow><yellow>{count}</yellow> 区画の売出を取り消しました。失敗: <yellow>{failed}</yellow>"
   already-town-owned: "<yellow>この区画は既に町所有です。"
+  perm-usage: "<gold>使い方: <aqua>/plot set perm [friend|resident|ally|nation|outsider] [build|destroy|switch|itemuse] <on|off></aqua>"
+  perm-friend-town-plot: "<yellow>ここは町の土地で持ち主がいないので、フレンドの設定はありません（何も変えていません）。<gray>friend</gray> は持ち主のいる区画で、持ち主のフレンドに許すときに使います。町の住民に許すなら <gray>resident</gray> を指定してください。"
   evicted: "<green>区画の所有者を退去させました。"
   info:
     - "<gold>.oOo._______________.<yellow>[ {name} ]</yellow><gold>._______________.oOo."
@@ -250,6 +287,7 @@ resident:
     - "<dark_green>国: <green>{nation} <green>{nation_info} <dark_green>銀行: <green>{balance} <dark_green>所有区画: <green>{plots}"
     - "<dark_green>権限: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
     - "<dark_green>PVP: <green>{pvp} <dark_green>爆発: <green>{explosions} <dark_green>火: <green>{fire} <dark_green>Mob: <green>{mobs}"
+  info-friends: "<dark_green>フレンド <gray>[{count}]</gray><dark_green>: <green>{friends}"
   list-header: "<green>=== 住民一覧 (<yellow>{count}</yellow>) ==="
   list-entry: "<gold>{player}</gold> <gray>- 町: <white>{town}"
   list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
@@ -323,8 +361,20 @@ protection:
   build-denied: "<red>ここにブロックを設置する権限がありません。"
   destroy-denied: "<red>ここでブロックを破壊する権限がありません。"
   pvp-denied: "<red>この区画ではPvPが無効です。"
+  friendly-fire: "<red>仲間を攻撃することはできません。"
   item-denied: "<red>ここでアイテムを使用する権限がありません。"
   shop-plot-required: "<red>ショップは SHOP 区画内でのみ作成できます。"
+
+spawn:
+  travel-disabled: "<red>その町へのスポーン移動は許可されていません。"
+  prevented-here: "<red>この場所からはスポーン移動できません。"
+  fare-paid: "<gray>移動料金 <yellow>{amount}</yellow> を支払いました。"
+  warmup: "<yellow>{seconds}</yellow> <gray>秒後に移動します。"
+
+death:
+  cost: "<red>死亡したため <yellow>{amount}</yellow> を失いました。"
+  cost-town: "<red>死亡したため、町の銀行から <yellow>{amount}</yellow> が引かれました。"
+  cost-nation: "<red>死亡したため、国の銀行から <yellow>{amount}</yellow> が引かれました。"
 
 world:
   list-header: "<dark_gray>[ <aqua>許可ワールド <dark_gray>(<yellow>{count}</yellow>) ]"
@@ -343,6 +393,14 @@ admin:
   town-deleted: "<green>町 <yellow>{town}</yellow> を強制削除しました。"
   nation-deleted: "<green>国 <yellow>{nation}</yellow> を強制削除しました。"
   bonus-given: "<green>町 <yellow>{town}</yellow> にボーナス区画 <yellow>{amount}</yellow> を付与しました。"
+  newday-done: "<green>税と維持費の徴収を今すぐ実行しました。"
+  checkperm: "<gold>{player}</gold> <gray>の</gray> <white>{node}</white><gray>:</gray> <aqua>{result}</aqua>"
+  bank-changed: "<green><yellow>{name}</yellow> の銀行残高: <yellow>{balance}</yellow>"
+  renamed: "<green>名前を <yellow>{name}</yellow> に変更しました。"
+  plot-given: "<green>この区画の持ち主を <yellow>{player}</yellow> にしました。"
+  plot-owner-cleared: "<green>この区画を町（<yellow>{town}</yellow>）の土地に戻しました。持ち主はいません。"
+  plot-owner-not-member: "<yellow>{player}</yellow> <yellow>は {town} の住民ではありません。町に入っていない人の区画は、その人が町に入って抜けたときなどに手放されます。</yellow>"
+  plot-owner-usage: "<gold>使い方: <aqua>/towniaadmin plot owner <プレイヤー|none> [<ワールド> <X> <Z>]</aqua> <gray>（座標はブロックの座標。省くと今いる区画。none で町の土地に戻す）"
   resident-added: "<green><yellow>{player}</yellow> を町 <yellow>{town}</yellow> に住民として追加しました。"
   player-in-other-town: "<red><yellow>{player}</yellow> は既に町 <yellow>{town}</yellow> に所属しています。移す場合は <aqua>/towniaadmin moveresident</aqua> を使ってください。"
   target-is-mayor: "<red><yellow>{player}</yellow> は町 <yellow>{town}</yellow> の町長です。先に <aqua>/towniaadmin setmayor</aqua> で別の町長を設定してください。"
@@ -366,7 +424,14 @@ admin:
   merge-usage: "<red>使い方: /towniaadmin mergeresident <統合元の名前|UUID> <統合先の名前|UUID>"
   merge-not-found: "<red>住民 <yellow>{player}</yellow> が見つかりません。"
   merge-done: "<green><yellow>{from}</yellow> の記録を <yellow>{into}</yellow> に統合しました。"
-  migrate-usage: "<red>使い方: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] [missing-only] [prune] | config]"
+  migrate-usage: "<red>使い方: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] [missing-only] [prune] | only town <町名> [resident <名前>] | config]"
+  audit-line: "<gray>{text}"
+  migration-busy: "<red>別の処理（{job}）がまだ動いています。終わってからもう一度実行してください。"
+  repair-dry-run: "<yellow>まだ何も変えていません。内容: <white>{file}</white> <yellow>実行するには <white>/towniaadmin migrate repair confirm"
+  repair-done: "<green>修復しました。内容: <yellow>{file}</yellow>"
+  audit-done: "<green>監査が終わりました。詳しい結果: <yellow>{file}</yellow>"
+  migrate-only-usage: "<red>使い方: /towniaadmin migrate only [town <町名>] [resident <名前>] [settings-only] [missing-only]"
+  migrate-only-not-found: "<red>Townyのデータに {kind} <white>{name}</white> が見つかりません。"
   diagnose-towny-disabled: "<red>Townyが有効になっていないため、Towny APIの診断は利用できません。"
   diagnose-target-offline: "<red>対象プレイヤーはオンラインである必要があります。使用法: /towniaadmin migrate diagnose <player>"
   diagnose-header: "<gold>Towniaの町所属診断: <yellow>{player}"
@@ -438,6 +503,7 @@ ui:
       pvp: "<gray>PvP: <white>{pvp}"
 
 townia:
+  universe: "<gold>住民 <white>{residents}</white>（無所属 <white>{townless}</white>） <gold>町 <white>{towns}</white> <gold>国 <white>{nations}</white> <gold>区画 <white>{plots}</white> <gray>| ワールド: {worlds}"
   price:
     - "<gold>町/国の作成費と維持費"
     - "<gray>新しい町: <white>{town_create}"
@@ -565,11 +631,11 @@ cmdhelp:
         usage: "/town rank add <プレイヤー> <役職>"
         desc: "住民に役職を付けます（町長のみ）。"
         detail:
-          - "役職: resident（一般住民）, assistant（補佐）, sub_mayor（副町長）"
-          - "補佐以上は土地の取得・手放し、スポーン設定、投獄などができます。"
+          - "役職は townyperms.yml に書かれた物です（assistant, helper, sheriff, sub_mayor など）。"
+          - "付けられるのは towny.command.town.rank.<役職> の権限を持つ役職だけです。"
       remove:
-        usage: "/town rank remove <プレイヤー>"
-        desc: "住民の役職を外して一般住民に戻します（町長のみ）。"
+        usage: "/town rank remove <プレイヤー> [役職]"
+        desc: "住民から役職を外します。役職を省くと全部外します。"
     set:
       spawn:
         usage: "/town set spawn"
@@ -608,6 +674,30 @@ cmdhelp:
       jail:
         usage: "/town set jail"
         desc: "今いる場所を町の牢屋にします（補佐以上）。"
+      mayor:
+        usage: "/town set mayor <住民>"
+        desc: "町長を同じ町の住民に交代します。"
+      tag:
+        usage: "/town set tag <タグ|clear>"
+        desc: "町のタグ（4文字まで）を設定します。"
+      plottax:
+        usage: "/town set plottax <金額>"
+        desc: "区画の持ち主が毎日払う税を設定します。"
+      shoptax:
+        usage: "/town set shoptax <金額>"
+        desc: "店区画の持ち主が毎日払う税を設定します。"
+      embassytax:
+        usage: "/town set embassytax <金額>"
+        desc: "大使館区画の持ち主が毎日払う税を設定します。"
+      shopprice:
+        usage: "/town set shopprice <金額>"
+        desc: "店区画を売りに出すときの標準の値段を設定します。"
+      embassyprice:
+        usage: "/town set embassyprice <金額>"
+        desc: "大使館区画を売りに出すときの標準の値段を設定します。"
+      spawncost:
+        usage: "/town set spawncost <金額>"
+        desc: "よその人がこの町のスポーンへ移動するときの料金を設定します。"
     toggle:
       usage: "/town toggle <pvp|mobs|explosions|fire|open|public|taxpercent> [on|off]"
       desc: "町の設定をON/OFFします（町長のみ）。on/off を省略すると切り替えます。"
@@ -648,6 +738,12 @@ cmdhelp:
     map:
       usage: "/town map"
       desc: "周辺の土地のマップを表示します。"
+    buy:
+      usage: "/town buy bonus <数>"
+      desc: "町の銀行のお金で、取得できる土地の枠を増やします。"
+    say:
+      usage: "/town say <メッセージ>"
+      desc: "オンラインの町の住民全員にメッセージを送ります。"
     menu:
       usage: "/town menu"
       desc: "町のメニュー画面（GUI）を開きます。"
@@ -717,15 +813,36 @@ cmdhelp:
       surname:
         usage: "/nation set surname <プレイヤー> [名前]"
         desc: "国民に名前の後ろに付く称号を設定します（国王のみ）。省略すると削除します。"
+      tag:
+        usage: "/nation set tag <タグ|clear>"
+        desc: "国のタグ（4文字まで）を設定します。"
+      spawncost:
+        usage: "/nation set spawncost <金額>"
+        desc: "よその人がこの国のスポーンへ移動するときの料金を設定します。"
     ally:
-      usage: "/nation ally <add|remove> <国名>"
-      desc: "同盟国を追加・削除します（国王のみ）。"
+      usage: "/nation ally <add|remove|accept|deny|sent|received> [国名]"
+      desc: "同盟国を追加・削除します。"
+      detail:
+        - "承認が必要な設定の鯖では、add は申請になり、相手が accept すると両方の国で同盟になります。"
+        - "sent / received で申請中・届いている申請を表示します。"
+    allylist:
+      usage: "/nation allylist [国名]"
+      desc: "同盟国の一覧を表示します。"
+    enemylist:
+      usage: "/nation enemylist [国名]"
+      desc: "敵対国の一覧を表示します。"
+    say:
+      usage: "/nation say <メッセージ>"
+      desc: "オンラインの国民全員にメッセージを送ります。"
     enemy:
       usage: "/nation enemy <add|remove> <国名>"
       desc: "敵対国を追加・削除します（国王のみ）。"
     toggle:
-      usage: "/nation toggle neutral"
-      desc: "国の中立設定を切り替えます。"
+      usage: "/nation toggle <neutral|public|open>"
+      desc: "国の中立・公開（スポーン移動）・オープン（招待なしで加入）を切り替えます。"
+    rank:
+      usage: "/nation rank <add|remove> <プレイヤー> <役職>"
+      desc: "国の住民に国の役職を付け外しします。"
     delete:
       usage: "/nation delete confirm"
       desc: "国を解散します（国王のみ）。誤操作防止のため confirm が必要です。"
@@ -773,6 +890,9 @@ cmdhelp:
       desc: "今いる売出中の区画を購入します（/plot claim でも可）。"
       detail:
         - "auto を付けると、周囲（半径3チャンクの円内）にある自分の町の売出中の区画を、所持金が足りる分だけまとめて購入します。"
+    unclaim:
+      usage: "/plot unclaim"
+      desc: "自分の区画を町に返します（町長・補佐はほかの人の区画も返せます）。"
     clear:
       usage: "/plot clear"
       desc: "区画の名前・種類・PvP等の設定・権限を初期状態に戻し、区画内の看板を取り除きます（町長または区画の所有者）。"
@@ -838,6 +958,9 @@ cmdhelp:
     time:
       usage: "/townia time"
       desc: "次の維持費（税）の徴収までの時間を表示します。"
+    universe:
+      usage: "/townia universe"
+      desc: "住民・町・国・区画の総数を表示します。"
     top:
       usage: "/townia top <residents|land> <all|town|nation|resident>"
       desc: "ランキングを表示します。"
@@ -853,6 +976,33 @@ cmdhelp:
       desc: "表示まわりのデバッグ情報を表示します。"
 
   towniaadmin:
+    newday:
+      usage: "/towniaadmin newday"
+      desc: "税と維持費の徴収を今すぐ実行します。"
+    checkperm:
+      usage: "/towniaadmin checkperm <プレイヤー> <権限>"
+      desc: "オンラインのプレイヤーがその権限を持っているかを調べます（townyperms.yml の分も含む）。"
+    town:
+      usage: "/towniaadmin town <町名> <deposit|withdraw|rename|spawn|rank> ..."
+      desc: "町の銀行の出し入れ、改名、スポーンへの移動、役職の付け外しをします。"
+      detail:
+        - "deposit|withdraw <金額>: 町の銀行にお金を入れる・出す"
+        - "rename <新しい名前> / spawn"
+        - "rank <add|remove> <住民> <役職>"
+    nation:
+      usage: "/towniaadmin nation <国名> <deposit|withdraw|rename> ..."
+      desc: "国の銀行の出し入れと改名をします。"
+    plot:
+      usage: "/towniaadmin plot <claim|owner> <プレイヤー|none> [<ワールド> <X> <Z>]"
+      desc: "区画の持ち主を変えるか、町の土地に戻します。"
+      detail:
+        - "owner <プレイヤー>: 今いる区画の持ち主をそのプレイヤーにします（claim も同じ）。"
+        - "owner none: 今いる区画の持ち主を外し、町の土地に戻します。"
+        - "<ワールド> <X> <Z> を付けると、そのブロックの座標がある区画を変えます。コンソールからはこちらを使います。"
+        - "持ち主を変えると売り出しは取り消され、区画の個別の権限は消えます。"
+    set:
+      usage: "/towniaadmin set capital <町名>"
+      desc: "その町を、所属している国の首都にします。"
     reload:
       usage: "/towniaadmin reload"
       desc: "設定とメッセージを再読み込みします。"
@@ -921,9 +1071,14 @@ cmdhelp:
       usage: "/towniaadmin dedupe [confirm]"
       desc: "オフラインUUIDで重複した住民を検出します。confirm を付けると統合を実行します。"
     migrate:
-      usage: "/towniaadmin migrate [data [対象] [オプション] | config]"
+      usage: "/towniaadmin migrate [data [対象] [オプション] | only ... | config]"
       desc: "Townyからデータや設定を移行します。"
       detail:
+        - "repair [confirm]: 以前の移行で起きた「所属が前の町になっている」「区画の持ち主が消えた」「町長が2人いる」を、Towny のファイルを元に直します。confirm を付けない間は調べるだけです。"
+        - "audit: Towny の設定とデータを読むだけで、何を使っていたかを towny-compat/audit.yml に書き出します。"
+        - "only town <町名>: その町だけ（設定・住民・区画・追放者・牢屋）を移行します。"
+        - "only resident <名前>: その住民だけ（設定・フレンド・所有区画）を移行します。"
+        - "only に settings-only を付けると、町や住民の設定だけを移行します。"
         - "対象: all, towns, nations, residents, townblocks, jails, outlaws, relations"
         - "オプション: skip-profiles, missing-only, prune"
         - "config: Townyの config.yml の設定を移行します。"

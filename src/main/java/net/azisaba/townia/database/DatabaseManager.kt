@@ -15,9 +15,32 @@ class DatabaseManager(private val plugin: Townia) {
     private var dataSource: HikariDataSource? = null
     private val isMySQL: Boolean = "mysql".equals(plugin.getConfig().getString("database.type", "sqlite"), ignoreCase = true)
 
+    private var writeBehind: WriteBehind? = null
+
+    /** True when writes only queue up and return at once, so callers need no thread of their own. */
+    val writesAreQueued: Boolean
+        get() = writeBehind != null
+
     val connection: java.sql.Connection
         @Throws(SQLException::class)
-        get() = dataSource!!.connection
+        get() = direct()
+
+    /** A real connection, handed out only after every queued write has been committed. */
+    @Throws(SQLException::class)
+    private fun direct(): java.sql.Connection {
+        writeBehind?.drain()
+        return dataSource!!.connection
+    }
+
+    /** A connection whose statements are recorded and written by the background writer. */
+    @Throws(SQLException::class)
+    private fun queued(): java.sql.Connection =
+        writeBehind?.recordingConnection() ?: dataSource!!.connection
+
+    /** Waits until every write issued so far is on disk. */
+    fun flush() {
+        writeBehind?.drain()
+    }
 
     @Throws(SQLException::class)
     fun initialize() {
@@ -42,12 +65,16 @@ class DatabaseManager(private val plugin: Townia) {
             if (!dataFolder.exists()) dataFolder.mkdirs()
             val dbFile = File(dataFolder, "townia.db")
             config.setJdbcUrl("jdbc:sqlite:" + dbFile.absolutePath)
+            // SQLite switches foreign keys on per connection, not per file. Set once, it reached
+            // only the first connection of the pool; rows written through any other connection
+            // skipped the ON DELETE CASCADE that removes a deleted town's plots.
+            config.connectionInitSql = "PRAGMA foreign_keys=ON"
         }
         config.setMaximumPoolSize(plugin.getConfig().getInt("database.pool-size", 10))
         dataSource = HikariDataSource(config)
 
         if (!isMySQL) {
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 connection.createStatement().use { stmt ->
                     stmt.execute("PRAGMA journal_mode=WAL")
                     stmt.execute("PRAGMA foreign_keys=ON")
@@ -56,6 +83,9 @@ class DatabaseManager(private val plugin: Townia) {
         }
         createTables()
         runDataMigrations()
+        if (plugin.getConfig().getBoolean("database.async-writes", true)) {
+            writeBehind = WriteBehind(plugin.logger) { dataSource!!.connection }
+        }
         plugin.logger.info("Database initialised (MySQL: $isMySQL)")
     }
 
@@ -65,7 +95,7 @@ class DatabaseManager(private val plugin: Townia) {
      */
     @Throws(SQLException::class)
     private fun runDataMigrations() {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.createStatement().use { stmt ->
                 stmt.execute("CREATE TABLE IF NOT EXISTS townia_data_migrations (id VARCHAR(64) PRIMARY KEY, applied_at BIGINT NOT NULL)")
             }
@@ -108,6 +138,8 @@ class DatabaseManager(private val plugin: Townia) {
 
     @Synchronized
     fun close() {
+        writeBehind?.close()
+        writeBehind = null
         if (dataSource != null && !dataSource!!.isClosed) {
             dataSource!!.close()
         }
@@ -116,7 +148,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     private fun createTables() {
         val autoInc = if (isMySQL) "AUTO_INCREMENT" else "AUTOINCREMENT"
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.createStatement().use { stmt ->
                 stmt.execute(
                     "CREATE TABLE IF NOT EXISTS towns (" +
@@ -205,7 +237,9 @@ class DatabaseManager(private val plugin: Townia) {
                             "jailed_town_uuid VARCHAR(36), " +
                             "jail_release_at BIGINT DEFAULT 0, " +
                             "jail_bail DOUBLE DEFAULT 0, " +
-                            "about VARCHAR(255))"
+                            "about VARCHAR(255), " +
+                            "town_ranks VARCHAR(255), " +
+                            "nation_ranks VARCHAR(255))"
                 )
 
                 stmt.execute(
@@ -387,7 +421,21 @@ class DatabaseManager(private val plugin: Townia) {
                     "ALTER TABLE residents ADD COLUMN jail_release_at BIGINT DEFAULT 0",
                     "ALTER TABLE residents ADD COLUMN jail_bail DOUBLE DEFAULT 0",
                     "ALTER TABLE residents ADD COLUMN registered_at BIGINT NOT NULL DEFAULT 0",
-                    "ALTER TABLE residents ADD COLUMN about VARCHAR(255)"
+                    "ALTER TABLE residents ADD COLUMN about VARCHAR(255)",
+                    "ALTER TABLE residents ADD COLUMN town_ranks VARCHAR(255)",
+                    "ALTER TABLE residents ADD COLUMN nation_ranks VARCHAR(255)",
+                    "ALTER TABLE towns ADD COLUMN tag VARCHAR(16)",
+                    "ALTER TABLE towns ADD COLUMN tax_percent INTEGER DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN plot_tax DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN shop_price DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN shop_tax DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN embassy_price DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN embassy_tax DOUBLE DEFAULT 0",
+                    "ALTER TABLE towns ADD COLUMN spawn_cost DOUBLE DEFAULT -1",
+                    "ALTER TABLE nations ADD COLUMN tag VARCHAR(16)",
+                    "ALTER TABLE nations ADD COLUMN is_public INTEGER DEFAULT 0",
+                    "ALTER TABLE nations ADD COLUMN is_open INTEGER DEFAULT 0",
+                    "ALTER TABLE nations ADD COLUMN spawn_cost DOUBLE DEFAULT -1"
                 )) {
                     try {
                         stmt.execute(ddl)
@@ -609,7 +657,7 @@ class DatabaseManager(private val plugin: Townia) {
                 is_open=excluded.is_open
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, town.id.toString())
                 ps.setString(2, town.name)
@@ -659,13 +707,28 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setInt(41, if (town.isOpen) 1 else 0)
                 ps.executeUpdate()
             }
+            connection.prepareStatement(
+                "UPDATE towns SET tag = ?, tax_percent = ?, plot_tax = ?, shop_price = ?, shop_tax = ?, " +
+                    "embassy_price = ?, embassy_tax = ?, spawn_cost = ? WHERE id = ?"
+            ).use { ps ->
+                ps.setString(1, town.tag)
+                ps.setInt(2, if (town.isTaxPercent) 1 else 0)
+                ps.setDouble(3, town.plotTax)
+                ps.setDouble(4, town.shopPrice)
+                ps.setDouble(5, town.shopTax)
+                ps.setDouble(6, town.embassyPrice)
+                ps.setDouble(7, town.embassyTax)
+                ps.setDouble(8, town.spawnCost)
+                ps.setString(9, town.id.toString())
+                ps.executeUpdate()
+            }
         }
     }
 
     @Synchronized
     @Throws(SQLException::class)
     fun getTown(id: UUID): Optional<Town> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM towns WHERE id = ?").use { ps ->
                 ps.setString(1, id.toString())
                 ps.executeQuery().use { rs ->
@@ -679,7 +742,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getTownByName(name: String?): Optional<Town> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM towns WHERE LOWER(name) = LOWER(?)").use { ps ->
                 ps.setString(1, name)
                 ps.executeQuery().use { rs ->
@@ -695,7 +758,7 @@ class DatabaseManager(private val plugin: Townia) {
     val allTowns: MutableList<Town?>
         get() {
             val towns: MutableList<Town?> = ArrayList<Town?>()
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 connection.createStatement().use { stmt ->
                     stmt.executeQuery("SELECT * FROM towns ORDER BY name").use { rs ->
                         while (rs.next()) towns.add(mapTown(rs))
@@ -716,7 +779,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun clearMissingTownReferences(): Pair<Int, Int> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.createStatement().use { stmt ->
                 val members = stmt.executeUpdate(
                     "UPDATE residents SET town_uuid = NULL, rank = 'RESIDENT' " +
@@ -734,13 +797,29 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteTown(id: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        // Named here rather than left to ON DELETE CASCADE: a plot row that outlives its town
+        // comes back at the next start as land nobody can claim.
+        for (sql in listOf(
+            "DELETE FROM plots WHERE town_uuid = ?",
+            "DELETE FROM town_outposts WHERE town_uuid = ?",
+            "DELETE FROM town_outlaws WHERE town_uuid = ?",
+            "DELETE FROM town_jail_cells WHERE town_uuid = ?",
+            "DELETE FROM invites WHERE town_uuid = ?"
+        )) {
+            queued().use { connection ->
+                connection.prepareStatement(sql).use { ps ->
+                    ps.setString(1, id.toString())
+                    ps.executeUpdate()
+                }
+            }
+        }
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM towns WHERE id = ?").use { ps ->
                 ps.setString(1, id.toString())
                 ps.executeUpdate()
             }
         }
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(
                 "UPDATE residents SET town_uuid = NULL, rank = 'RESIDENT' WHERE town_uuid = ?"
             ).use { ps ->
@@ -791,6 +870,17 @@ class DatabaseManager(private val plugin: Townia) {
         } catch (_: Exception) {
         }
         try {
+            town.tag = rs.getString("tag")
+            town.isTaxPercent = rs.getInt("tax_percent") != 0
+            town.plotTax = rs.getDouble("plot_tax")
+            town.shopPrice = rs.getDouble("shop_price")
+            town.shopTax = rs.getDouble("shop_tax")
+            town.embassyPrice = rs.getDouble("embassy_price")
+            town.embassyTax = rs.getDouble("embassy_tax")
+            if (rs.getObject("spawn_cost") != null) town.spawnCost = rs.getDouble("spawn_cost")
+        } catch (_: Exception) {
+        }
+        try {
             if (rs.getObject("allow_invisibility") != null) town.isAllowInvisibility =
                 rs.getInt("allow_invisibility") != 0
         } catch (ignored: Exception) {
@@ -828,7 +918,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun loadTownOutposts(town: Town) {
         town.outposts.clear()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM town_outposts WHERE town_uuid = ? ORDER BY id").use { ps ->
                 ps.setString(1, town.id.toString())
                 ps.executeQuery().use { rs ->
@@ -864,7 +954,7 @@ class DatabaseManager(private val plugin: Townia) {
             ON CONFLICT(id) DO UPDATE SET world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch, is_public=excluded.is_public, name=excluded.name
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 if (outpost.id == 0) {
                     ps.setNull(1, Types.INTEGER)
@@ -888,7 +978,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteTownOutpost(id: Int) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM town_outposts WHERE id = ?").use { ps ->
                 ps.setInt(1, id)
                 ps.executeUpdate()
@@ -900,7 +990,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun loadTownOutlaws(town: Town) {
         town.outlaws.clear()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT resident_uuid FROM town_outlaws WHERE town_uuid = ?").use { ps ->
                 ps.setString(1, town.id.toString())
                 ps.executeQuery().use { rs ->
@@ -918,7 +1008,7 @@ class DatabaseManager(private val plugin: Townia) {
         } else {
             "INSERT OR IGNORE INTO town_outlaws (town_uuid, resident_uuid) VALUES (?, ?)"
         }
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, townId.toString())
                 ps.setString(2, residentId.toString())
@@ -930,7 +1020,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun removeTownOutlaw(townId: UUID, residentId: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM town_outlaws WHERE town_uuid = ? AND resident_uuid = ?").use { ps ->
                 ps.setString(1, townId.toString())
                 ps.setString(2, residentId.toString())
@@ -943,7 +1033,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun loadTownJailCells(town: Town) {
         town.jailCells.clear()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM town_jail_cells WHERE town_uuid = ? ORDER BY id").use { ps ->
                 ps.setString(1, town.id.toString())
                 ps.executeQuery().use { rs ->
@@ -976,7 +1066,7 @@ class DatabaseManager(private val plugin: Townia) {
             INSERT INTO town_jail_cells (id, town_uuid, name, world, x, y, z, yaw, pitch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET name=excluded.name, world=excluded.world, x=excluded.x, y=excluded.y, z=excluded.z, yaw=excluded.yaw, pitch=excluded.pitch
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 if (cell.id == 0) ps.setNull(1, Types.INTEGER) else ps.setInt(1, cell.id)
                 ps.setString(2, townId.toString())
@@ -995,7 +1085,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteTownJailCell(id: Int) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM town_jail_cells WHERE id = ?").use { ps ->
                 ps.setInt(1, id)
                 ps.executeUpdate()
@@ -1006,7 +1096,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun saveResident(player: TowniaPlayer) {
-        dataSource!!.getConnection().use { connection -> saveResident(connection, player) }
+        queued().use { connection -> saveResident(connection, player) }
     }
 
     @Throws(SQLException::class)
@@ -1015,29 +1105,31 @@ class DatabaseManager(private val plugin: Townia) {
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
-                                   jailed_town_uuid, jail_release_at, jail_bail, about)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   jailed_town_uuid, jail_release_at, jail_bail, about, town_ranks, nation_ranks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 name=VALUES(name), town_uuid=VALUES(town_uuid), rank=VALUES(rank),
                 last_seen=VALUES(last_seen), registered_at=VALUES(registered_at), preferred_lang=VALUES(preferred_lang),
                 toggle_map=VALUES(toggle_map), toggle_town_claim=VALUES(toggle_town_claim), toggle_plot_border=VALUES(toggle_plot_border),
                 default_perms_friend=VALUES(default_perms_friend), default_perms_ally=VALUES(default_perms_ally),
                 default_perms_outsider=VALUES(default_perms_outsider), default_perms_resident=VALUES(default_perms_resident),
-                jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail), about=VALUES(about)
+                jailed_town_uuid=VALUES(jailed_town_uuid), jail_release_at=VALUES(jail_release_at), jail_bail=VALUES(jail_bail), about=VALUES(about),
+                town_ranks=VALUES(town_ranks), nation_ranks=VALUES(nation_ranks)
         
         """.trimIndent() else """
             INSERT INTO residents (uuid, name, town_uuid, rank, last_seen, registered_at, preferred_lang,
                                    toggle_map, toggle_town_claim, toggle_plot_border,
                                    default_perms_friend, default_perms_ally, default_perms_outsider, default_perms_resident,
-                                   jailed_town_uuid, jail_release_at, jail_bail, about)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   jailed_town_uuid, jail_release_at, jail_bail, about, town_ranks, nation_ranks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(uuid) DO UPDATE SET
                 name=excluded.name, town_uuid=excluded.town_uuid, rank=excluded.rank,
                 last_seen=excluded.last_seen, registered_at=excluded.registered_at, preferred_lang=excluded.preferred_lang,
                 toggle_map=excluded.toggle_map, toggle_town_claim=excluded.toggle_town_claim, toggle_plot_border=excluded.toggle_plot_border,
                 default_perms_friend=excluded.default_perms_friend, default_perms_ally=excluded.default_perms_ally,
                 default_perms_outsider=excluded.default_perms_outsider, default_perms_resident=excluded.default_perms_resident,
-                jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail, about=excluded.about
+                jailed_town_uuid=excluded.jailed_town_uuid, jail_release_at=excluded.jail_release_at, jail_bail=excluded.jail_bail, about=excluded.about,
+                town_ranks=excluded.town_ranks, nation_ranks=excluded.nation_ranks
         
         """.trimIndent()
         run {
@@ -1060,6 +1152,8 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setLong(16, player.jailReleaseAt)
                 ps.setDouble(17, player.jailBail)
                 ps.setString(18, player.about)
+                ps.setString(19, player.townRanks.joinToString(",").ifEmpty { null })
+                ps.setString(20, player.nationRanks.joinToString(",").ifEmpty { null })
                 ps.executeUpdate()
             }
         }
@@ -1068,7 +1162,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getResident(uuid: UUID): Optional<TowniaPlayer> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM residents WHERE uuid = ?").use { ps ->
                 ps.setString(1, uuid.toString())
                 ps.executeQuery().use { rs ->
@@ -1082,7 +1176,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getResidentByName(name: String?): Optional<TowniaPlayer> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM residents WHERE LOWER(name) = LOWER(?)").use { ps ->
                 ps.setString(1, name)
                 ps.executeQuery().use { rs ->
@@ -1098,7 +1192,7 @@ class DatabaseManager(private val plugin: Townia) {
     val allResidents: MutableList<TowniaPlayer?>
         get() {
             val list: MutableList<TowniaPlayer?> = ArrayList<TowniaPlayer?>()
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 // One query for every friendship instead of one connection + query per resident (N+1).
                 val friendsByResident = getAllFriends(connection)
                 connection.createStatement().use { stmt ->
@@ -1117,7 +1211,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun getResidentsByTown(townUuid: UUID): MutableList<TowniaPlayer?> {
         val list: MutableList<TowniaPlayer?> = ArrayList<TowniaPlayer?>()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM residents WHERE town_uuid = ? ORDER BY name").use { ps ->
                 ps.setString(1, townUuid.toString())
                 ps.executeQuery().use { rs ->
@@ -1165,13 +1259,15 @@ class DatabaseManager(private val plugin: Townia) {
         if ("jail_release_at" in columns) player.jailReleaseAt = rs.getLong("jail_release_at")
         if ("jail_bail" in columns) player.jailBail = rs.getDouble("jail_bail")
         if ("about" in columns) player.about = rs.getString("about")
+        if ("town_ranks" in columns) player.townRanks.addAll(TowniaPlayer.parseRanks(rs.getString("town_ranks")))
+        if ("nation_ranks" in columns) player.nationRanks.addAll(TowniaPlayer.parseRanks(rs.getString("nation_ranks")))
         return player
     }
 
     @Synchronized
     @Throws(SQLException::class)
     fun getFriends(residentUuid: UUID): MutableList<String?> =
-        dataSource!!.getConnection().use { connection -> getFriends(connection, residentUuid) }
+        direct().use { connection -> getFriends(connection, residentUuid) }
 
     @Throws(SQLException::class)
     private fun getFriends(connection: java.sql.Connection, residentUuid: UUID): MutableList<String?> {
@@ -1206,7 +1302,7 @@ class DatabaseManager(private val plugin: Townia) {
             "INSERT IGNORE INTO resident_friends (resident_uuid, friend_uuid) VALUES (?, ?)"
         else
             "INSERT INTO resident_friends (resident_uuid, friend_uuid) VALUES (?, ?) ON CONFLICT DO NOTHING"
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, residentUuid.toString())
                 ps.setString(2, friendUuid.toString())
@@ -1218,7 +1314,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun removeFriend(residentUuid: UUID, friendUuid: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM resident_friends WHERE resident_uuid = ? AND friend_uuid = ?")
                 .use { ps ->
                     ps.setString(1, residentUuid.toString())
@@ -1245,7 +1341,7 @@ class DatabaseManager(private val plugin: Townia) {
         val old = oldUuid.toString()
         val new = newUuid.toString()
         val insertIgnore = if (isMySQL) "INSERT IGNORE INTO" else "INSERT OR IGNORE INTO"
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             val autoCommit = connection.autoCommit
             connection.autoCommit = false
             try {
@@ -1338,7 +1434,7 @@ class DatabaseManager(private val plugin: Townia) {
                 perms_outsider=excluded.perms_outsider, perms_nation=excluded.perms_nation
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, plot.worldName)
                 ps.setInt(2, plot.chunkX)
@@ -1367,7 +1463,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getPlot(worldName: String?, chunkX: Int, chunkZ: Int): Optional<Plot> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement(
                 "SELECT * FROM plots WHERE world_name = ? AND chunk_x = ? AND chunk_z = ?"
             ).use { ps ->
@@ -1386,7 +1482,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun getPlotsByTown(townUuid: UUID): MutableList<Plot?> {
         val list: MutableList<Plot?> = ArrayList<Plot?>()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM plots WHERE town_uuid = ?").use { ps ->
                 ps.setString(1, townUuid.toString())
                 ps.executeQuery().use { rs ->
@@ -1400,7 +1496,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun countPlotsByTown(townUuid: UUID): Int {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT COUNT(*) FROM plots WHERE town_uuid = ?").use { ps ->
                 ps.setString(1, townUuid.toString())
                 ps.executeQuery().use { rs ->
@@ -1416,7 +1512,7 @@ class DatabaseManager(private val plugin: Townia) {
     val allPlots: MutableList<Plot?>
         get() {
             val list: MutableList<Plot?> = ArrayList<Plot?>()
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 connection.createStatement().use { stmt ->
                     stmt.executeQuery("SELECT * FROM plots").use { rs ->
                         while (rs.next()) list.add(mapPlot(rs))
@@ -1429,7 +1525,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deletePlot(worldName: String?, chunkX: Int, chunkZ: Int) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(
                 "DELETE FROM plots WHERE world_name = ? AND chunk_x = ? AND chunk_z = ?"
             ).use { ps ->
@@ -1495,7 +1591,7 @@ class DatabaseManager(private val plugin: Townia) {
                 neutral=excluded.neutral
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, nation.id.toString())
                 ps.setString(2, nation.name)
@@ -1513,6 +1609,14 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.setInt(14, if (nation.isNeutral) 1 else 0)
                 ps.executeUpdate()
             }
+            connection.prepareStatement("UPDATE nations SET tag = ?, is_public = ?, is_open = ?, spawn_cost = ? WHERE id = ?").use { ps ->
+                ps.setString(1, nation.tag)
+                ps.setInt(2, if (nation.isPublic) 1 else 0)
+                ps.setInt(3, if (nation.isOpen) 1 else 0)
+                ps.setDouble(4, nation.spawnCost)
+                ps.setString(5, nation.id.toString())
+                ps.executeUpdate()
+            }
         }
         saveNationTitles(nation)
     }
@@ -1520,7 +1624,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getNation(id: UUID): Optional<Nation> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM nations WHERE id = ?").use { ps ->
                 ps.setString(1, id.toString())
                 ps.executeQuery().use { rs ->
@@ -1534,7 +1638,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getNationByName(name: String?): Optional<Nation> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM nations WHERE LOWER(name) = LOWER(?)").use { ps ->
                 ps.setString(1, name)
                 ps.executeQuery().use { rs ->
@@ -1550,7 +1654,7 @@ class DatabaseManager(private val plugin: Townia) {
     val allNations: MutableList<Nation?>
         get() {
             val list: MutableList<Nation?> = ArrayList<Nation?>()
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 connection.createStatement().use { stmt ->
                     stmt.executeQuery("SELECT * FROM nations ORDER BY name").use { rs ->
                         while (rs.next()) list.add(mapNation(rs))
@@ -1564,7 +1668,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun deleteNation(id: UUID) {
         // Remove nation reference from all member towns
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(
                 "UPDATE towns SET nation_uuid = NULL WHERE nation_uuid = ?"
             ).use { ps ->
@@ -1572,7 +1676,20 @@ class DatabaseManager(private val plugin: Townia) {
                 ps.executeUpdate()
             }
         }
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
+            connection.prepareStatement("DELETE FROM nation_relations WHERE nation_uuid = ? OR target_uuid = ?").use { ps ->
+                ps.setString(1, id.toString())
+                ps.setString(2, id.toString())
+                ps.executeUpdate()
+            }
+        }
+        queued().use { connection ->
+            connection.prepareStatement("DELETE FROM nation_titles WHERE nation_uuid = ?").use { ps ->
+                ps.setString(1, id.toString())
+                ps.executeUpdate()
+            }
+        }
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM nations WHERE id = ?").use { ps ->
                 ps.setString(1, id.toString())
                 ps.executeUpdate()
@@ -1598,13 +1715,20 @@ class DatabaseManager(private val plugin: Townia) {
             rs.getFloat("spawn_pitch")
         )
         nation.isNeutral = rs.getInt("neutral") == 1
+        try {
+            nation.tag = rs.getString("tag")
+            nation.isPublic = rs.getInt("is_public") != 0
+            nation.isOpen = rs.getInt("is_open") != 0
+            if (rs.getObject("spawn_cost") != null) nation.spawnCost = rs.getDouble("spawn_cost")
+        } catch (_: Exception) {
+        }
         return nation
     }
 
     @Synchronized
     @Throws(SQLException::class)
     fun saveNationTitles(nation: Nation) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM nation_titles WHERE nation_uuid = ?").use { ps ->
                 ps.setString(1, nation.id.toString())
                 ps.executeUpdate()
@@ -1612,7 +1736,7 @@ class DatabaseManager(private val plugin: Townia) {
         }
         if (!nation.titles.isEmpty() || !nation.surnames.isEmpty()) {
             val sql = "INSERT INTO nation_titles (nation_uuid, uuid, title_type, value) VALUES (?, ?, ?, ?)"
-            dataSource!!.getConnection().use { connection ->
+            queued().use { connection ->
                 connection.prepareStatement(sql).use { ps ->
                     for (entry in nation.titles.entries) {
                         ps.setString(1, nation.id.toString())
@@ -1639,7 +1763,7 @@ class DatabaseManager(private val plugin: Townia) {
     fun loadNationTitles(nation: Nation) {
         nation.titles.clear()
         nation.surnames.clear()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT * FROM nation_titles WHERE nation_uuid = ?").use { ps ->
                 ps.setString(1, nation.id.toString())
                 ps.executeQuery().use { rs ->
@@ -1670,7 +1794,7 @@ class DatabaseManager(private val plugin: Townia) {
             ON CONFLICT(nation_uuid, target_uuid) DO UPDATE SET relation=excluded.relation
         
         """.trimIndent()
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, nationId.toString())
                 ps.setString(2, targetId.toString())
@@ -1683,7 +1807,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun removeNationRelation(nationId: UUID, targetId: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(
                 "DELETE FROM nation_relations WHERE nation_uuid = ? AND target_uuid = ?"
             ).use { ps ->
@@ -1699,7 +1823,7 @@ class DatabaseManager(private val plugin: Townia) {
     val allNationRelations: MutableMap<UUID?, MutableMap<UUID?, String?>?>
         get() {
             val map: MutableMap<UUID?, MutableMap<UUID?, String?>?> = HashMap<UUID?, MutableMap<UUID?, String?>?>()
-            dataSource!!.getConnection().use { connection ->
+            direct().use { connection ->
                 connection.createStatement().use { stmt ->
                     stmt.executeQuery("SELECT * FROM nation_relations").use { rs ->
                         while (rs.next()) {
@@ -1719,7 +1843,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun addInvite(invite: Invite) {
         val sql = "INSERT INTO invites (target_uuid, town_uuid, inviter_uuid, created_at) VALUES (?, ?, ?, ?)"
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(sql).use { ps ->
                 ps.setString(1, invite.targetUuid.toString())
                 ps.setString(2, invite.townUuid.toString())
@@ -1732,9 +1856,24 @@ class DatabaseManager(private val plugin: Townia) {
 
     @Synchronized
     @Throws(SQLException::class)
+    fun getInvitesByTown(townUuid: UUID): MutableList<Invite> {
+        val list: MutableList<Invite> = ArrayList()
+        direct().use { connection ->
+            connection.prepareStatement("SELECT * FROM invites WHERE town_uuid = ? ORDER BY created_at DESC").use { ps ->
+                ps.setString(1, townUuid.toString())
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) list.add(mapInvite(rs))
+                }
+            }
+        }
+        return list
+    }
+
+    @Synchronized
+    @Throws(SQLException::class)
     fun getInvitesByTarget(targetUuid: UUID): MutableList<Invite?> {
         val list: MutableList<Invite?> = ArrayList<Invite?>()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement(
                 "SELECT * FROM invites WHERE target_uuid = ? ORDER BY created_at DESC"
             ).use { ps ->
@@ -1750,7 +1889,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun getInvite(targetUuid: UUID, townUuid: UUID): Optional<Invite> {
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement(
                 "SELECT * FROM invites WHERE target_uuid = ? AND town_uuid = ? LIMIT 1"
             ).use { ps ->
@@ -1767,7 +1906,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteInvite(id: Int) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM invites WHERE id = ?").use { ps ->
                 ps.setInt(1, id)
                 ps.executeUpdate()
@@ -1778,7 +1917,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteInvitesByTarget(targetUuid: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM invites WHERE target_uuid = ?").use { ps ->
                 ps.setString(1, targetUuid.toString())
                 ps.executeUpdate()
@@ -1789,7 +1928,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun deleteInvitesByTown(townUuid: UUID) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM invites WHERE town_uuid = ?").use { ps ->
                 ps.setString(1, townUuid.toString())
                 ps.executeUpdate()
@@ -1801,7 +1940,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun purgeExpiredInvites(expirySeconds: Int) {
         val cutoff = System.currentTimeMillis() - expirySeconds.toLong() * 1000L
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement("DELETE FROM invites WHERE created_at < ?").use { ps ->
                 ps.setLong(1, cutoff)
                 ps.executeUpdate()
@@ -1823,7 +1962,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Synchronized
     @Throws(SQLException::class)
     fun addBankHistory(transaction: BankTransaction) {
-        dataSource!!.getConnection().use { connection ->
+        queued().use { connection ->
             connection.prepareStatement(
                 "INSERT INTO bank_history (government_uuid, type, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)"
             ).use { ps ->
@@ -1862,7 +2001,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun getBankHistory(govUuid: UUID, limit: Int, offset: Int): MutableList<BankTransaction> {
         val history = ArrayList<BankTransaction>()
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement(
                 "SELECT * FROM bank_history WHERE government_uuid = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
             ).use { ps ->
@@ -1887,7 +2026,7 @@ class DatabaseManager(private val plugin: Townia) {
     @Throws(SQLException::class)
     fun countBankHistory(govUuid: UUID): Int {
         var count = 0
-        dataSource!!.getConnection().use { connection ->
+        direct().use { connection ->
             connection.prepareStatement("SELECT COUNT(*) FROM bank_history WHERE government_uuid = ?").use { ps ->
                 ps.setString(1, govUuid.toString())
                 val rs = ps.executeQuery()

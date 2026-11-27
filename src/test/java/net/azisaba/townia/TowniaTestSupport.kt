@@ -66,6 +66,7 @@ class TowniaTestEnv(tempDir: Path) : AutoCloseable {
     var townManager: TownManager
     var nationManager: NationManager
     var plotManager: PlotManager
+    val townyPerms: net.azisaba.townia.permission.TownyPerms
 
     val world: World = mock()
     val worldSpawn: Location
@@ -119,6 +120,10 @@ class TowniaTestEnv(tempDir: Path) : AutoCloseable {
 
         plotManager = PlotManager(plugin, databaseManager, townManager)
         whenever(plugin.plotManager).thenReturn(plotManager)
+
+        townyPerms = net.azisaba.townia.permission.TownyPerms(plugin)
+        whenever(plugin.townyPerms).thenReturn(townyPerms)
+        whenever(plugin.townTimers).thenReturn(mock())
     }
 
     fun reloadManagers() {

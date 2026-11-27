@@ -21,6 +21,13 @@ class Nation @JvmOverloads constructor(
     val enemies: MutableSet<UUID?> = HashSet<UUID?>()
 
     var isNeutral: Boolean = false
+    var tag: String? = null
+    /** Public: outsiders may travel to the nation's spawn. */
+    var isPublic: Boolean = false
+    /** Open: a town may join without an invitation. */
+    var isOpen: Boolean = false
+    /** What outsiders pay to travel to the nation's spawn. Negative: the server's price applies. */
+    var spawnCost: Double = -1.0
     val titles: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
     val surnames: MutableMap<UUID?, String?> = HashMap<UUID?, String?>()
 

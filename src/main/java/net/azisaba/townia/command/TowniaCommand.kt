@@ -22,6 +22,18 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return true
         }
 
+        val node = when (args[0].lowercase()) {
+            "map" -> "towny.command.towny.map"
+            "price" -> "towny.command.towny.prices"
+            "time" -> "towny.command.towny.time"
+            "top" -> "towny.command.towny.top"
+            "universe" -> "towny.command.towny.universe"
+            else -> null
+        }
+        if (node != null && !net.azisaba.townia.permission.Perm.has(sender, node)) {
+            plugin.messageManager.sendMessage(sender, "error.no-permission")
+            return true
+        }
         when (args[0].lowercase()) {
             "reload" -> handleReload(sender)
             "info" -> handleInfo(sender)
@@ -30,6 +42,7 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             "time" -> handleTime(sender)
             "top" -> handleTop(sender, args)
             "debug" -> handleDebug(sender)
+            "universe" -> handleUniverse(sender)
             "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "townia", args.drop(1))
             else -> CommandHelp.sendUnknown(plugin.messageManager, sender, "townia", args[0])
         }
@@ -62,6 +75,8 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
             return
         }
         plugin.towniaConfig.reload()
+        plugin.townyPerms.load()
+        plugin.townTimers.restart()
         plugin.messageManager.loadAllMessages()
         plugin.messageManager.sendMessage(sender, "admin.reloaded")
     }
@@ -70,6 +85,20 @@ class TowniaCommand(private val plugin: Townia) : CommandExecutor, TabCompleter 
         val version = plugin.pluginMeta.version
         val authors = plugin.pluginMeta.authors.joinToString(", ")
         plugin.messageManager.sendMessage(sender, "admin.help", "version", version, "authors", authors)
+    }
+
+    /** `/townia universe`: how much of everything there is. */
+    private fun handleUniverse(sender: CommandSender) {
+        val residents = plugin.residentManager.allResidents
+        plugin.messageManager.sendMessage(
+            sender, "townia.universe",
+            "residents", residents.size.toString(),
+            "townless", residents.count { !it.isInTown }.toString(),
+            "towns", plugin.townManager.allTowns.size.toString(),
+            "nations", plugin.nationManager.allNations.size.toString(),
+            "plots", plugin.plotManager.allPlots.size.toString(),
+            "worlds", plugin.towniaConfig.allowedWorlds.joinToString(", ")
+        )
     }
 
     private fun sendHelp(sender: CommandSender) {

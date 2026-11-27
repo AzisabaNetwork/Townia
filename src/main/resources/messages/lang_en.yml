@@ -11,6 +11,7 @@ common:
 error:
   invalid-name: "<red>Names may only contain letters, numbers, underscores and hyphens (2-32 characters)."
   no-permission: "<red>You do not have permission."
+  cooldown: "<red>Please wait <yellow>{seconds}</yellow> more second(s)."
   player-only: "<red>This command can only be used by a player."
   unknown: "<red>An unknown error occurred."
   invalid-args: "<red>Invalid arguments. Use <yellow>/town help</yellow>."
@@ -97,10 +98,27 @@ town:
   set-public: "<green>Town is now public. Anyone can visit with <aqua>/t spawn</aqua>. <gray>(Free joining: <aqua>/t toggle open on</aqua>)"
   set-private: "<yellow>Town is now private. Only residents, nation members and allies can use <aqua>/t spawn</aqua> to visit."
   rank-set: "<green>Set <yellow>{player}</yellow>'s rank to <yellow>{rank}</yellow>."
+  rank-removed: "<green>Removed the rank <yellow>{rank}</yellow> from <yellow>{player}</yellow>."
+  rank-none: "<red><yellow>{player}</yellow> has no rank to remove."
+  mayor-changed: "<gold>[{town}]</gold> <yellow>{player}</yellow> <green>is the new mayor."
+  tag-invalid: "<red>A tag is up to <yellow>{max}</yellow> letters or digits. Use clear to remove it."
+  tag-set: "<green>Town tag set to: <yellow>{tag}</yellow>"
+  value-set: "<green>{setting} set to <yellow>{amount}</yellow>."
+  say: "<gold>[{town}]</gold> <yellow>{player}</yellow><gray>:</gray> <white>{message}"
+  buy-disabled: "<red>Bonus claims cannot be bought on this server."
+  buy-limit: "<red>A town can hold at most <yellow>{max}</yellow> bonus claims (now <yellow>{current}</yellow>)."
+  buy-done: "<green>Bought <yellow>{amount}</yellow> bonus claim(s) for <yellow>{cost}</yellow> (bonus claims in total: <yellow>{total}</yellow>)."
+  invites-sent: "<gold>Invitations sent: <white>{players}"
   already-in-nation: "<red>This town is already in a nation."
   not-in-nation: "<red>This town is not in a nation."
   board-set: "<green>Town board set to: <white>{board}"
   taxes-set: "<green>Town taxes set to: <yellow>{amount}</yellow>"
+  claim-multiple-denied: "<red>You may not claim several chunks at once (towny.command.town.claim.town.multiple). Use /town claim one chunk at a time."
+  taxes-too-high: "<red>Taxes cannot be set higher than <yellow>{max}</yellow>."
+  claim-too-close-plot: "<red>Too close to another town's land (keep at least <yellow>{distance}</yellow> chunks away)."
+  claim-too-close-homeblock: "<red>Too close to another town's home block (keep at least <yellow>{distance}</yellow> chunks away)."
+  outpost-too-close: "<red>An outpost must be at least <yellow>{distance}</yellow> chunks away from town land."
+  board-login: "<gold>[{town}]</gold> <white>{board}"
   plotprice-set: "<green>Town plot price set to: <yellow>{amount}</yellow>"
   toggled: "<green><yellow>{setting}</yellow> is now <aqua>{state}</aqua>."
   homeblock-set: "<green>Set the current chunk as the town homeblock."
@@ -187,6 +205,7 @@ nation:
   not-leader: "<red>Only the nation leader can do this."
   board-set: "<green>Nation board set to: <white>{board}"
   taxes-set: "<green>Nation taxes set to: <yellow>{amount}</yellow>"
+  board-login: "<gold>[{nation}]</gold> <white>{board}"
   relation-added: "<green>Added <yellow>{nation}</yellow> as <aqua>{relation}</aqua>."
   relation-removed: "<yellow>Removed <yellow>{nation}</yellow> from <aqua>{relation}</aqua>."
   renamed: "<green>Nation renamed to <yellow>{nation}</yellow>."
@@ -194,8 +213,21 @@ nation:
   capital-set: "<green>Nation capital set to <yellow>{town}</yellow>."
   online: "<green>Online nation members <yellow>({count})</yellow>: <white>{players}"
   neutral-set: "<green>Nation neutrality: <aqua>{state}</aqua>"
+  toggled: "<green>Nation setting <yellow>{setting}</yellow>: <aqua>{state}</aqua>"
+  tag-set: "<green>Nation tag set to: <yellow>{tag}</yellow>"
+  say: "<gold>[{nation}]</gold> <yellow>{player}</yellow><gray>:</gray> <white>{message}"
+  allylist: "<gold>Allies of {nation}: <white>{nations}"
+  enemylist: "<gold>Enemies of {nation}: <white>{nations}"
+  ally-already: "<red>You are already allied with <yellow>{nation}</yellow>."
+  ally-request-sent: "<green>Alliance request sent to <yellow>{nation}</yellow>. It takes effect once they accept."
+  ally-request-received: "<gold><yellow>{nation}</yellow> asks for an alliance. <white>/nation ally accept {nation}</white> to accept, <white>/nation ally deny {nation}</white> to refuse."
+  ally-no-request: "<red>There is no alliance request from <yellow>{nation}</yellow>."
+  ally-denied: "<yellow>You refused the alliance request from <yellow>{nation}</yellow>."
+  ally-requests-sent: "<gold>Alliance requests sent: <white>{nations}"
+  ally-requests-received: "<gold>Alliance requests received: <white>{nations}"
   title-set: "<green>Updated title for <yellow>{player}</yellow>."
   not-in-nation: "<red>Your town is not in a nation."
+  rank-not-member: "<red><yellow>{player}</yellow> is not a member of your nation."
   town-already-in-nation: "<red><yellow>{town}</yellow> is already in a nation."
   town-not-member: "<red><yellow>{town}</yellow> is not a member of your nation."
   cannot-kick-capital: "<red><yellow>{town}</yellow> is the capital and cannot be kicked."
@@ -215,7 +247,10 @@ nation:
 
 plot:
   no-plot-here: "<red>This chunk is not claimed by any town."
+  max-plots: "<red>You cannot own more than <yellow>{max}</yellow> plots."
   not-owned-by-your-town: "<red>This plot does not belong to your town."
+  not-owned: "<red>Nobody owns this plot."
+  returned: "<green>The plot was handed back to the town."
   set-type: "<green>Plot type set to <yellow>{type}</yellow>."
   for-sale: "<green>Plot is now for sale at <yellow>{price}</yellow>."
   price-too-high: "<red>Plot sale price must be less than or equal to <yellow>{max}</yellow>."
@@ -232,6 +267,8 @@ plot:
   range-for-sale: "<green>Set <yellow>{count}</yellow> plots for sale at <yellow>{price}</yellow>. Failed: <yellow>{failed}</yellow>."
   range-not-for-sale: "<yellow>Removed sale status from <yellow>{count}</yellow> plots. Failed: <yellow>{failed}</yellow>."
   already-town-owned: "<yellow>This plot is already town-owned."
+  perm-usage: "<gold>Usage: <aqua>/plot set perm [friend|resident|ally|nation|outsider] [build|destroy|switch|itemuse] <on|off></aqua>"
+  perm-friend-town-plot: "<yellow>This plot belongs to the town and has no owner, so it has no friend setting (nothing was changed). <gray>friend</gray> is for a plot with an owner, for the owner's friends. Use <gray>resident</gray> for the town's residents."
   evicted: "<green>Plot owner evicted."
   info:
     - "<gold>.oOo._______________.<yellow>[ {name} ]</yellow><gold>._______________.oOo."
@@ -250,6 +287,7 @@ resident:
     - "<dark_green>Nation: <green>{nation} <green>{nation_info} <dark_green>Bank: <green>{balance} <dark_green>Owner of <green>{plots} <dark_green>plots"
     - "<dark_green>Perm: <dark_green>Build=<green>{perms_build} <dark_green>Destroy=<green>{perms_destroy} <dark_green>Switch=<green>{perms_switch} <dark_green>ItemUse=<green>{perms_item}"
     - "<dark_green>PVP: <green>{pvp} <dark_green>Explosions: <green>{explosions} <dark_green>Firespread: <green>{fire} <dark_green>Mob Spawns: <green>{mobs}"
+  info-friends: "<dark_green>Friends <gray>[{count}]</gray><dark_green>: <green>{friends}"
   list-header: "<green>=== Residents List (<yellow>{count}</yellow>) ==="
   list-entry: "<gold>{player}</gold> <gray>- Town: <white>{town}"
   list-page: "<dark_gray>--- <gold>Page <yellow>{page}<dark_gray>/<yellow>{max} <dark_gray>---"
@@ -323,8 +361,20 @@ protection:
   build-denied: "<red>You do not have permission to build here."
   destroy-denied: "<red>You do not have permission to destroy blocks here."
   pvp-denied: "<red>PvP is disabled in this plot."
+  friendly-fire: "<red>You cannot attack your allies."
   item-denied: "<red>You do not have permission to use items here."
   shop-plot-required: "<red>You can only create shops in SHOP plots."
+
+spawn:
+  travel-disabled: "<red>Travelling to that town's spawn is not allowed."
+  prevented-here: "<red>You cannot travel to a spawn from here."
+  fare-paid: "<gray>You paid a travel fare of <yellow>{amount}</yellow>."
+  warmup: "<gray>Teleporting in <yellow>{seconds}</yellow> second(s)."
+
+death:
+  cost: "<red>You lost <yellow>{amount}</yellow> for dying."
+  cost-town: "<red>Your town's bank lost <yellow>{amount}</yellow> because you died."
+  cost-nation: "<red>Your nation's bank lost <yellow>{amount}</yellow> because you died."
 
 world:
   list-header: "<dark_gray>[ <aqua>Allowed Worlds <dark_gray>(<yellow>{count}</yellow>) ]"
@@ -343,6 +393,14 @@ admin:
   town-deleted: "<green>Town <yellow>{town}</yellow> has been force-deleted."
   nation-deleted: "<green>Nation <yellow>{nation}</yellow> has been force-deleted."
   bonus-given: "<green>Gave <yellow>{amount}</yellow> bonus blocks to <yellow>{town}</yellow>."
+  newday-done: "<green>Taxes and upkeep were collected just now."
+  checkperm: "<gold>{player}</gold> <gray>-</gray> <white>{node}</white><gray>:</gray> <aqua>{result}</aqua>"
+  bank-changed: "<green>Bank balance of <yellow>{name}</yellow>: <yellow>{balance}</yellow>"
+  renamed: "<green>Renamed to <yellow>{name}</yellow>."
+  plot-given: "<green>This plot now belongs to <yellow>{player}</yellow>."
+  plot-owner-cleared: "<green>This plot is town land of <yellow>{town}</yellow> again, with no owner."
+  plot-owner-not-member: "<yellow>{player} is not a resident of {town}. A plot of someone outside the town goes back to it when they join and leave a town, for example.</yellow>"
+  plot-owner-usage: "<gold>Usage: <aqua>/towniaadmin plot owner <player|none> [<world> <x> <z>]</aqua> <gray>(block coordinates; without them, the plot you stand in; none gives it back to the town)"
   resident-added: "<green>Added <yellow>{player}</yellow> to <yellow>{town}</yellow>."
   player-in-other-town: "<red><yellow>{player}</yellow> is already a member of <yellow>{town}</yellow>. Use <aqua>/towniaadmin moveresident</aqua> to move them."
   target-is-mayor: "<red><yellow>{player}</yellow> is the mayor of <yellow>{town}</yellow>. Set another mayor with <aqua>/towniaadmin setmayor</aqua> first."
@@ -366,7 +424,14 @@ admin:
   merge-usage: "<red>Usage: /towniaadmin mergeresident <from name|uuid> <into name|uuid>"
   merge-not-found: "<red>Resident <yellow>{player}</yellow> was not found."
   merge-done: "<green>Merged <yellow>{from}</yellow> into <yellow>{into}</yellow>."
-  migrate-usage: "<red>Usage: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] [missing-only] [prune] | config]"
+  migrate-usage: "<red>Usage: /towniaadmin migrate [data [all|towns|nations|residents|townblocks|jails|outlaws|relations] [skip-profiles] [missing-only] [prune] | only town <town> [resident <name>] | config]"
+  audit-line: "<gray>{text}"
+  migration-busy: "<red>Another job ({job}) is still running. Run this again once it has finished."
+  repair-dry-run: "<yellow>Nothing was changed yet. Details: <white>{file}</white> <yellow>Run <white>/towniaadmin migrate repair confirm</white> to apply."
+  repair-done: "<green>Repaired. Details: <yellow>{file}</yellow>"
+  audit-done: "<green>Audit finished. Full report: <yellow>{file}</yellow>"
+  migrate-only-usage: "<red>Usage: /towniaadmin migrate only [town <town>] [resident <name>] [settings-only] [missing-only]"
+  migrate-only-not-found: "<red>No {kind} named <white>{name}</white> in the Towny data."
   diagnose-towny-disabled: "<red>Towny is not enabled; Towny API diagnostics are unavailable."
   diagnose-target-offline: "<red>Target must be online. Usage: /towniaadmin migrate diagnose <player>"
   diagnose-header: "<gold>Town membership diagnostic for <yellow>{player}"
@@ -438,6 +503,7 @@ ui:
       pvp: "<gray>PvP: <white>{pvp}"
 
 townia:
+  universe: "<gold>Residents <white>{residents}</white> (townless <white>{townless}</white>) <gold>Towns <white>{towns}</white> <gold>Nations <white>{nations}</white> <gold>Plots <white>{plots}</white> <gray>| Worlds: {worlds}"
   price:
     - "<gold>Town/Nation Creation & Upkeep Costs"
     - "<gray>New Town: <white>{town_create}"
@@ -564,11 +630,11 @@ cmdhelp:
         usage: "/town rank add <player> <rank>"
         desc: "Gives a resident a rank (mayor only)."
         detail:
-          - "Ranks: resident, assistant, sub_mayor"
-          - "Assistants and above can claim and unclaim land, set the spawn, jail players and more."
+          - "Ranks are the ones in townyperms.yml (assistant, helper, sheriff, sub_mayor, ...)."
+          - "You can only grant a rank if you hold towny.command.town.rank.<rank>."
       remove:
-        usage: "/town rank remove <player>"
-        desc: "Removes a resident's rank (mayor only)."
+        usage: "/town rank remove <player> [rank]"
+        desc: "Removes a rank from a resident; without a rank, removes all of them."
     set:
       spawn:
         usage: "/town set spawn"
@@ -607,6 +673,30 @@ cmdhelp:
       jail:
         usage: "/town set jail"
         desc: "Sets the town jail to your location (assistant or higher)."
+      mayor:
+        usage: "/town set mayor <resident>"
+        desc: "Hands the town over to another resident of the town."
+      tag:
+        usage: "/town set tag <tag|clear>"
+        desc: "Sets the town's tag (up to 4 characters)."
+      plottax:
+        usage: "/town set plottax <amount>"
+        desc: "Sets the daily tax plot owners pay."
+      shoptax:
+        usage: "/town set shoptax <amount>"
+        desc: "Sets the daily tax owners of shop plots pay."
+      embassytax:
+        usage: "/town set embassytax <amount>"
+        desc: "Sets the daily tax owners of embassy plots pay."
+      shopprice:
+        usage: "/town set shopprice <amount>"
+        desc: "Sets the usual price of a shop plot put up for sale."
+      embassyprice:
+        usage: "/town set embassyprice <amount>"
+        desc: "Sets the usual price of an embassy plot put up for sale."
+      spawncost:
+        usage: "/town set spawncost <amount>"
+        desc: "Sets what outsiders pay to travel to this town's spawn."
     toggle:
       usage: "/town toggle <pvp|mobs|explosions|fire|open|public|taxpercent> [on|off]"
       desc: "Turns a town setting on or off (mayor only). Without on/off, flips it."
@@ -647,6 +737,12 @@ cmdhelp:
     map:
       usage: "/town map"
       desc: "Shows a map of the claims around you."
+    buy:
+      usage: "/town buy bonus <amount>"
+      desc: "Buys more claims for the town with money from its bank."
+    say:
+      usage: "/town say <message>"
+      desc: "Sends a message to every member of the town who is online."
     menu:
       usage: "/town menu"
       desc: "Opens the town menu (GUI)."
@@ -716,15 +812,36 @@ cmdhelp:
       surname:
         usage: "/nation set surname <player> [surname]"
         desc: "Sets a surname shown after a member's name (leader only). Without one, removes it."
+      tag:
+        usage: "/nation set tag <tag|clear>"
+        desc: "Sets the nation's tag (up to 4 characters)."
+      spawncost:
+        usage: "/nation set spawncost <amount>"
+        desc: "Sets what outsiders pay to travel to this nation's spawn."
     ally:
-      usage: "/nation ally <add|remove> <nation>"
-      desc: "Adds or removes an ally (leader only)."
+      usage: "/nation ally <add|remove|accept|deny|sent|received> [nation]"
+      desc: "Adds or removes an ally."
+      detail:
+        - "Where consent is required, add sends a request; once the other nation accepts, both are allied."
+        - "sent / received list the requests that are still open."
+    allylist:
+      usage: "/nation allylist [nation]"
+      desc: "Lists a nation's allies."
+    enemylist:
+      usage: "/nation enemylist [nation]"
+      desc: "Lists a nation's enemies."
+    say:
+      usage: "/nation say <message>"
+      desc: "Sends a message to every member of the nation who is online."
     enemy:
       usage: "/nation enemy <add|remove> <nation>"
       desc: "Adds or removes an enemy (leader only)."
     toggle:
-      usage: "/nation toggle neutral"
-      desc: "Toggles whether the nation is neutral."
+      usage: "/nation toggle <neutral|public|open>"
+      desc: "Toggles neutrality, public (spawn travel) and open (join without an invitation)."
+    rank:
+      usage: "/nation rank <add|remove> <player> <rank>"
+      desc: "Gives or removes a nation rank."
     delete:
       usage: "/nation delete confirm"
       desc: "Disbands the nation (leader only). confirm is required to avoid accidents."
@@ -772,6 +889,9 @@ cmdhelp:
       desc: "Buys the for-sale plot you stand in (also /plot claim)."
       detail:
         - "With auto, buys every for-sale plot of your town within a radius of 3 chunks, as far as your money allows."
+    unclaim:
+      usage: "/plot unclaim"
+      desc: "Hands your plot back to the town (a mayor or assistant may do it for others)."
     clear:
       usage: "/plot clear"
       desc: "Resets the plot name, type, toggles and permissions, and removes its signs (mayor or plot owner)."
@@ -837,6 +957,9 @@ cmdhelp:
     time:
       usage: "/townia time"
       desc: "Shows the time until the next upkeep (tax) collection."
+    universe:
+      usage: "/townia universe"
+      desc: "Shows how many residents, towns, nations and plots there are."
     top:
       usage: "/townia top <residents|land> <all|town|nation|resident>"
       desc: "Shows rankings."
@@ -852,6 +975,33 @@ cmdhelp:
       desc: "Shows display debug information."
 
   towniaadmin:
+    newday:
+      usage: "/towniaadmin newday"
+      desc: "Collects taxes and upkeep right now."
+    checkperm:
+      usage: "/towniaadmin checkperm <player> <node>"
+      desc: "Tells whether an online player holds a permission node (townyperms.yml included)."
+    town:
+      usage: "/towniaadmin town <town> <deposit|withdraw|rename|spawn|rank> ..."
+      desc: "Moves money in a town's bank, renames it, teleports to its spawn or changes ranks."
+      detail:
+        - "deposit|withdraw <amount>: put money into or take it out of the town bank"
+        - "rename <new name> / spawn"
+        - "rank <add|remove> <resident> <rank>"
+    nation:
+      usage: "/towniaadmin nation <nation> <deposit|withdraw|rename> ..."
+      desc: "Moves money in a nation's bank or renames it."
+    plot:
+      usage: "/towniaadmin plot <claim|owner> <player|none> [<world> <x> <z>]"
+      desc: "Changes who owns a plot, or gives it back to its town."
+      detail:
+        - "owner <player>: makes the player the owner of the plot you stand in (claim does the same)."
+        - "owner none: takes the owner away; the plot is town land again."
+        - "With <world> <x> <z>, the plot holding those block coordinates. The console uses this form."
+        - "A new owner ends any sale and clears the plot's own permissions."
+    set:
+      usage: "/towniaadmin set capital <town>"
+      desc: "Makes a town the capital of the nation it is in."
     reload:
       usage: "/towniaadmin reload"
       desc: "Reloads the config and messages."
@@ -920,9 +1070,14 @@ cmdhelp:
       usage: "/towniaadmin dedupe [confirm]"
       desc: "Finds residents duplicated by offline UUIDs. With confirm, merges them."
     migrate:
-      usage: "/towniaadmin migrate [data [target] [options] | config]"
+      usage: "/towniaadmin migrate [data [target] [options] | only ... | config]"
       desc: "Migrates data or settings from Towny."
       detail:
+        - "repair [confirm]: fixes what an earlier import left behind (residents in their previous town, plots that lost their owner, towns with two mayors), using Towny's files. Without confirm it only reports."
+        - "audit: only reads Towny's settings and data and writes what was in use to towny-compat/audit.yml."
+        - "only town <town>: migrates just that town (settings, residents, plots, outlaws, jails)."
+        - "only resident <name>: migrates just that resident (settings, friends, owned plots)."
+        - "Add settings-only to migrate only the town's or resident's own settings."
         - "Targets: all, towns, nations, residents, townblocks, jails, outlaws, relations"
         - "Options: skip-profiles, missing-only, prune"
         - "config: migrates settings from the Towny config.yml."

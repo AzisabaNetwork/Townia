@@ -38,6 +38,9 @@ class Town(
     var embassyPrice: Double = 0.0
     var embassyTax: Double = 0.0
 
+    /** What outsiders pay to travel to this town's spawn. Negative: the server's price applies. */
+    var spawnCost: Double = -1.0
+
     var isAllowInvisibility: Boolean = true
     var isAllowSit: Boolean = true
     var isAllowPetPickup: Boolean = true

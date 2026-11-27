@@ -3,20 +3,63 @@ package net.azisaba.townia.manager
 import net.azisaba.townia.Townia
 import net.azisaba.townia.data.Plot
 import net.azisaba.townia.data.Town
+import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.scheduler.BukkitRunnable
 import java.util.*
 
+/**
+ * Shows the "~ Town - owner - PvP" line. The text is built when a player enters another plot
+ * and is then only re-sent, so the periodic task does no parsing for players who stand still.
+ */
 class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
     companion object {
+        private const val MAX_PARSED = 512
+
+        /** What each player currently has on screen and until when (0 = until they move on). */
+        private class Shown(val component: Component, val expiresAt: Long)
+
+        private val shown = HashMap<UUID, Shown>()
+
+        /** MiniMessage parsing is the costly part; identical lines are parsed once. */
+        private val parsed = object : LinkedHashMap<String, Component>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Component>?): Boolean = size > MAX_PARSED
+        }
+
+        private fun parse(plugin: Townia, text: String): Component =
+            parsed.getOrPut(text) { plugin.messageManager.miniMessage.deserialize(text) }
+
+        fun forget(playerId: UUID) {
+            shown.remove(playerId)
+        }
+
+        fun clearCache() {
+            parsed.clear()
+            shown.clear()
+        }
+
         fun sendActionBar(plugin: Townia, player: org.bukkit.entity.Player) {
             sendActionBar(plugin, player, player.location)
         }
 
         fun sendActionBar(plugin: Townia, player: org.bukkit.entity.Player, location: Location) {
-            if (!plugin.towniaConfig.isWorldAllowed(location.world.name)) {
+            val text = buildText(plugin, player, location)
+            if (text == null) {
+                shown.remove(player.uniqueId)
                 return
+            }
+            val component = parse(plugin, text)
+            player.sendActionBar(component)
+            val seconds = plugin.towniaConfig.actionBarDuration
+            val expiresAt = if (seconds <= 0) 0L else System.currentTimeMillis() + seconds * 1000L
+            shown[player.uniqueId] = Shown(component, expiresAt)
+        }
+
+        /** The MiniMessage line for [location], or null when nothing is shown there. */
+        private fun buildText(plugin: Townia, player: org.bukkit.entity.Player, location: Location): String? {
+            if (!plugin.towniaConfig.isWorldAllowed(location.world.name)) {
+                return null
             }
 
             val x = location.blockX shr 4
@@ -27,8 +70,7 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                 val remaining = if (resident.jailReleaseAt > 0L) ((resident.jailReleaseAt - System.currentTimeMillis()) / 1000L).coerceAtLeast(0L) else 0L
                 val minutes = remaining / 60L
                 val seconds = remaining % 60L
-                player.sendActionBar(plugin.messageManager.miniMessage.deserialize(plugin.messageManager.getRawMessage(player, "jail.actionbar", "minutes", minutes.toString(), "seconds", seconds.toString())))
-                return
+                return plugin.messageManager.getRawMessage(player, "jail.actionbar", "minutes", minutes.toString(), "seconds", seconds.toString())
             }
 
             if (plotOpt.isEmpty) {
@@ -36,8 +78,7 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                 val isPvp = true // In Azisaba, wilderness is usually PvP enabled, or let's just show it.
                 val pvpStr = if (isPvp) " <gray>- " + plugin.messageManager.getRawMessage(player, "town.actionbar-pvp") else " <gray>- " + plugin.messageManager.getRawMessage(player, "town.actionbar-nopvp")
                 val wildernessName = plugin.messageManager.getRawMessage(player, "town.actionbar-wilderness-name")
-                val text = "<gold>~ <dark_green>$wildernessName$pvpStr"
-                player.sendActionBar(plugin.messageManager.miniMessage.deserialize(text))
+                return "<gold>~ <dark_green>$wildernessName$pvpStr"
             } else {
                 val townOpt: Optional<Town> = plugin.townManager.getTown(plotOpt.get().townUuid)
                 if (townOpt.isPresent) {
@@ -115,15 +156,32 @@ class ActionBarTask(private val plugin: Townia) : BukkitRunnable() {
                     }
 
                     text += " $suffix"
-                    player.sendActionBar(plugin.messageManager.miniMessage.deserialize(text.trim()))
+                    return text.trim()
                 }
+                return null
             }
         }
     }
 
     override fun run() {
+        val always = plugin.towniaConfig.actionBarDuration <= 0
+        val now = System.currentTimeMillis()
         for (player in Bukkit.getOnlinePlayers()) {
-            sendActionBar(plugin, player)
+            val id = player.uniqueId
+            // The jail countdown changes every second, so jailed players are always rebuilt.
+            if (always || plugin.residentManager.getResident(id).orElse(null)?.isJailed == true) {
+                sendActionBar(plugin, player)
+                continue
+            }
+            val current = shown[id] ?: continue
+            if (current.expiresAt in 1..now) {
+                shown.remove(id)
+            } else {
+                player.sendActionBar(current.component)
+            }
+        }
+        if (shown.size > Bukkit.getOnlinePlayers().size) {
+            shown.keys.removeIf { Bukkit.getPlayer(it) == null }
         }
     }
 }

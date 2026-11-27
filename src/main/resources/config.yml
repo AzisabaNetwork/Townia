@@ -12,12 +12,18 @@ database:
   username: "root"
   password: "password"
   pool-size: 10
+  # Write to the database on a background thread so commands never wait for the disk.
+  async-writes: true
 
 # Prefix displayed before all plugin messages (MiniMessage format)
 prefix: "<gray>[<green>Townia<gray>]<reset> "
 
 # Default language when player locale cannot be determined (ja or en)
 default-language: "ja"
+
+# Seconds the "~ Town - owner" line stays in the action bar after a player enters a plot.
+# Towny showed it for 15 seconds. 0 keeps it on screen all the time (the old Townia behaviour).
+actionbar-duration: 15
 
 # Worlds where claiming land is allowed
 allowed-worlds:
@@ -66,6 +72,102 @@ default-town-tax: 0.0
 
 # Default daily tax for newly created nations
 default-nation-tax: 0.0
+
+# ---------------------------------------------------------------------------------------------
+# Rules Towny kept in its own config.yml. Everything below is OFF until you set it;
+# "/towniaadmin migrate config" copies the values from plugins/Towny/settings/config.yml.
+# ---------------------------------------------------------------------------------------------
+economy:
+  # Each claim costs claim-cost x increase^(plots the town already has). 1.0 = always the same price.
+  claim-cost-increase: 1.0
+  # Price of an outpost. -1 = the same as a normal claim. (Towny: 500)
+  outpost-cost: -1
+  # Price of one bonus claim bought with "/town buy bonus <amount>", paid from the town bank,
+  # and how much each further one costs more. -1 = cannot be bought. (Towny: 25, 1.0)
+  # A town can never hold more bonus claims than max-bonus-claims.
+  bonus-block-cost: -1
+  bonus-block-cost-increase: 1.0
+  # Daily upkeep of a nation; a nation that cannot pay is disbanded. (Towny: 100)
+  nation-upkeep: 0.0
+  # Daily fee while a nation is neutral; it stops being neutral when it cannot pay. (Towny: 100)
+  neutrality-cost: 0.0
+  # Highest tax a town may set: a flat amount (0 = no limit) and, for towns taxing by percentage, a percentage.
+  max-tax-amount: 0.0
+  max-tax-percent: 100.0
+  death:
+    # "fixed": the amounts below. "percentage": a share of the balance (0.05 = 5%).
+    type: fixed
+    percentage-cap: 0.0
+    # true = only when killed by another player.
+    pvp-only: false
+    price: 0.0
+    town-price: 0.0
+    nation-price: 0.0
+  # Fare for /town spawn and /nation spawn, by destination. (Towny: 0 / 5 / 10 / 10)
+  spawn-travel:
+    town: 0.0
+    nation: 0.0
+    ally: 0.0
+    public: 0.0
+    # true = the fare goes into the bank of the town travelled to.
+    paid-to-town: true
+
+spawn:
+  # Seconds before the same player may travel again. (Towny: 30)
+  cooldown: 0
+  # Seconds between the command and the teleport.
+  warmup: 0
+  # Travel to public towns, to towns of the own nation, to towns of allied nations.
+  allow-travel: true
+  allow-travel-nation: true
+  allow-travel-ally: true
+  # Places spawn travel cannot be started from: enemy, outlaw, unclaimed. (Towny: [enemy])
+  prevent-in: []
+
+claiming:
+  # Minimum distance, in chunks, to another town's land and home block. 0 = no rule. (Towny: 5 / 5)
+  min-distance-from-town-plot: 0
+  min-distance-from-town-homeblock: 0
+  # An outpost must be this far from any town land, its own town included. (Towny: 5)
+  min-distance-for-outpost: 0
+  # Largest radius for "/town claim <radius>". (Towny: 4)
+  max-claim-radius: 10
+  # How many plots one resident may own. 0 = no limit. (Towny: 100)
+  max-plots-per-resident: 0
+
+nation:
+  # true = an alliance must be accepted by the other nation ("/nation ally accept") and then holds
+  # both ways. false = "/nation ally add" takes effect at once, for the adding nation only. (Towny: true)
+  require-ally-approval: false
+
+combat:
+  # false = members of the same town, nation or allied nations cannot hurt each other (arenas excepted).
+  friendly-fire: true
+  # Seconds before PvP can be toggled again for a town or plot. (Towny: 30)
+  pvp-toggle-cooldown: 0
+  # Worlds where players can never hurt each other, inside towns too (Towny: "/tw toggle pvp" off).
+  pvp-disabled-worlds: []
+
+protection:
+  # Splash/lingering potions with these effects do nothing to players where PvP is off.
+  # Towny: [BLINDNESS, CONFUSION, HARM, HUNGER, POISON, SLOW, SLOW_DIGGING, WEAKNESS, WITHER]
+  potion-types: []
+  # Remove hostile mobs that walk into a town which has mobs off. Townia already stops them spawning there.
+  town-mob-removal:
+    enabled: false
+    interval: 5
+    skip-named: false
+  # Residents slowly heal while standing in their own or an allied town.
+  health-regen:
+    enabled: false
+    interval: 3
+
+# Show the town's and the nation's board to their members when they log in.
+board-on-login: false
+
+# Time of day ("12:00", server time) at which taxes and upkeep are collected. Needs a restart.
+# Empty = every 24 hours counted from server start, which never comes on a server that restarts daily.
+new-day-time: ""
 
 town_level:
   - numResidents: 0
@@ -151,6 +253,8 @@ pvp:
   embassy: false
   farm: false
   inn: false
+  wilds: false
+  bank: false
 
 # Wilderness rules for unclaimed chunks in allowed worlds.
 # Defaults keep the old Townia behavior. Set values to false to protect wilderness.
@@ -163,9 +267,14 @@ wilderness:
   mobs: true
   explosions: true
   fire: true
+  # Blocks anyone may place, break and use in the wilderness even when the switches above are off.
+  ignore: []
 
 # Defaults applied to newly created towns.
 town-defaults:
+  # A new town starts public (anyone may travel to its spawn) / open (anyone may join). (Towny: true / false)
+  public: false
+  open: false
   pvp: false
   mobs: false
   explosions: false

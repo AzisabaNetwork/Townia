@@ -100,7 +100,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
         val town: Town = Town(
             UUID.randomUUID(), name, mayorUuid, null,
             0.0, plugin.towniaConfig.defaultClaimLimit, 0,
-            false, System.currentTimeMillis(),
+            plugin.towniaConfig.rules.newTownPublic, System.currentTimeMillis(),
             null, plugin.towniaConfig.defaultTownTax, 0.0,
             pvp = plugin.towniaConfig.defaultTownPvp,
             mobs = plugin.towniaConfig.defaultTownMobs,
@@ -108,6 +108,7 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
             fire = plugin.towniaConfig.defaultTownFire,
             spawnWorld = null, spawnX = 0.0, spawnY = 0.0, spawnZ = 0.0, spawnYaw = 0.0f, spawnPitch = 0.0f
         )
+        town.isOpen = plugin.towniaConfig.rules.newTownOpen
         town.dailyUpkeep = plugin.towniaConfig.townUpkeep
         town.permsResident = plugin.towniaConfig.defaultTownPermsResident
         town.permsNation = plugin.towniaConfig.defaultTownPermsNation
@@ -125,6 +126,14 @@ class TownManager(private val plugin: Townia, private val db: DatabaseManager,
         plugin.plotManager.removeTownPlots(townId)
         for (p in residentManager.getResidentsByTown(townId)) {
             residentManager.clearTown(p.uuid!!)
+        }
+        // Its prisoners go free: a jail that no longer exists could never release them.
+        for (p in residentManager.allResidents) {
+            if (p.jailedTownUuid != townId) continue
+            p.jailedTownUuid = null
+            p.jailReleaseAt = 0L
+            p.jailBail = 0.0
+            residentManager.saveResident(p)
         }
         if (town.isInNation) {
             val nation: Optional<Nation> = plugin.nationManager.getNation(town.nationUuid)

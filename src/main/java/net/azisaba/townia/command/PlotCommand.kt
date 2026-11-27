@@ -10,6 +10,7 @@ import net.azisaba.townia.data.TowniaPlayer
 import net.azisaba.townia.manager.PlotManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
+import net.azisaba.townia.permission.Perm
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.Chunk
 import org.bukkit.command.Command
@@ -48,6 +49,11 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             return true
         }
 
+        val node = nodeFor(args)
+        if (node != null && !Perm.has(player, node)) {
+            plugin.messageManager.sendMessage(player, "error.no-permission")
+            return true
+        }
         when (args[0].lowercase(Locale.getDefault())) {
             "info", "perm", "here" -> handleInfo(player)
             "set" -> {
@@ -87,11 +93,39 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             }
 
             "clear" -> handleClear(player)
+            "unclaim" -> handleUnclaim(player)
             "evict" -> handleEvict(player)
             "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, player, "plot", args.drop(1))
             else -> CommandHelp.sendUnknown(plugin.messageManager, player, "plot", args[0])
         }
         return true
+    }
+
+    /** The Towny node a `/plot` invocation needs, or null when it needs none. */
+    private fun nodeFor(args: Array<out String>): String? {
+        val sub = args.getOrNull(1)?.lowercase(Locale.getDefault())
+        return when (args[0].lowercase(Locale.getDefault())) {
+            "info", "perm", "here" -> "towny.command.plot.perm"
+            "forsale", "fs" -> "towny.command.plot.forsale"
+            "notforsale", "nfs" -> "towny.command.plot.notforsale"
+            "buy", "claim" -> "towny.command.plot.claim"
+            "clear" -> "towny.command.plot.clear"
+            "unclaim" -> "towny.command.plot.unclaim"
+            "evict" -> "towny.command.plot.evict"
+            "toggle" -> sub?.let { "towny.command.plot.toggle." + if (it == "explosions") "explosion" else it }
+            "set" -> when (sub) {
+                null -> null
+                "name", "perm", "reset" -> "towny.command.plot.set.$sub"
+                // "/plot set type shop" and the short form "/plot set shop"
+                else -> plotTypeNode(if (sub == "type") args.getOrNull(2) else sub)
+            }
+            else -> null
+        }
+    }
+
+    private fun plotTypeNode(type: String?): String? {
+        val parsed = PlotType.parseOrNull(type ?: return null) ?: return null
+        return "towny.command.plot.set." + if (parsed == PlotType.DEFAULT) "reset" else parsed.name.lowercase(Locale.ROOT)
     }
 
     /** /plot info | perm | here: Towny-style status of the plot the player stands in. */
@@ -387,6 +421,13 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         when (args[1].lowercase(Locale.getDefault())) {
             "pvp" -> {
+                val key = "pvp:" + plot.worldName + ":" + plot.chunkX + ":" + plot.chunkZ
+                val wait = net.azisaba.townia.manager.Cooldowns.remaining(key, plugin.towniaConfig.rules.pvpToggleCooldownSeconds)
+                if (wait > 0 && !Perm.isAdmin(player)) {
+                    plugin.messageManager.sendMessage(player, "error.cooldown", "seconds", wait.toString())
+                    return
+                }
+                net.azisaba.townia.manager.Cooldowns.start(key)
                 plot.setPvp(!plot.hasPvp())
                 savePlotToggle(player, plot, "PvP", plot.hasPvp())
             }
@@ -442,6 +483,11 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
         if (plot.ownerUuid == player.uniqueId) {
             plugin.messageManager.sendMessage(player, "plot.already-owner")
+            return
+        }
+        val maxPlots = plugin.towniaConfig.rules.maxPlotsPerResident
+        if (maxPlots > 0 && plotManager.countPlotsByOwner(player.uniqueId) >= maxPlots && !Perm.isAdmin(player)) {
+            plugin.messageManager.sendMessage(player, "plot.max-plots", "max", maxPlots.toString())
             return
         }
 
@@ -525,7 +571,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         val res: TowniaPlayer = resOpt.get()
         if (!res.isInTown) return true
         if (plotTownId != res.townUuid) return true
-        return !res.isAssistantOrHigher
+        // Towny: managing town land you do not own needs plot.asmayor (mayors and assistants hold it).
+        return !Perm.has(player, "towny.command.plot.asmayor")
     }
 
     private fun formatMoney(amount: Double): String {
@@ -547,7 +594,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         if (args.size == 1) {
             StringUtil.copyPartialMatches(
                 args[0],
-                mutableListOf("help", "info", "here", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "toggle", "clear", "evict", "perm"), completions
+                mutableListOf("help", "info", "here", "set", "forsale", "fs", "notforsale", "nfs", "buy", "claim", "unclaim", "toggle", "clear", "evict", "perm"), completions
             )
         } else if (args.size == 2 && args[0].equals("set", ignoreCase = true)) {
             StringUtil.copyPartialMatches(
@@ -644,6 +691,8 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         if (plot.ownerUuid == player.uniqueId || TowniaAdminCommand.isBypassing(player)) {
             return res
         }
+        // Naming, toggling, resetting and clearing someone else's plot is the mayor's, as in 1.3.3.
+        // (Towny let plot.asmayor holders do it too; here that node only covers perms, type and sale.)
         if (plot.townUuid == res.townUuid && res.isMayorOrHigher) {
             return res
         }
@@ -692,68 +741,68 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
                 plugin.messageManager.sendMessage(player, "plot.not-owned-by-your-town")
                 return
             }
-            if (!res.isAssistantOrHigher) {
+            if (!Perm.has(player, "towny.command.plot.asmayor")) {
                 plugin.messageManager.sendMessage(player, "error.no-permission")
                 return
             }
         }
 
-        if (args.isEmpty()) {
-            plugin.messageManager.sendMessage(player, "error.invalid-args")
+        // [group] [action] <on|off>. The last word has to be the state: reading any other word as
+        // "off" used to switch every permission of the plot off for a forgotten on/off.
+        val words = args.map { it.lowercase(Locale.ROOT) }
+        val state = when (words.lastOrNull()) {
+            "on", "true" -> true
+            "off", "false" -> false
+            else -> null
+        }
+        if (state == null || words.size > 3) {
+            plugin.messageManager.sendMessage(player, "plot.perm-usage")
             return
         }
-
         var groupStr: String? = null
         var actionStr: String? = null
-        var stateStr: String? = null
-
-        if (args.size == 1) {
-            stateStr = args[0]
-        } else if (args.size == 2) {
-            val first = args[0].lowercase(Locale.getDefault())
-            if (first == "friend" || first == "resident" || first == "ally" || first == "outsider" || first == "nation") {
-                groupStr = args[0]
-            } else {
-                actionStr = args[0]
+        when (words.size) {
+            2 -> if (words[0] in PERM_GROUPS) groupStr = words[0] else actionStr = words[0]
+            3 -> {
+                groupStr = words[0]
+                actionStr = words[1]
             }
-            stateStr = args[1]
-        } else if (args.size >= 3) {
-            groupStr = args[0]
-            actionStr = args[1]
-            stateStr = args[2]
         }
 
-        val state = stateStr.equals("on", ignoreCase = true) || stateStr.equals("true", ignoreCase = true)
-
-        val groups: MutableList<String> = ArrayList<String>()
-        if (groupStr == null) {
-            groups.addAll(mutableListOf("friend", "resident", "ally", "outsider", "nation"))
-        } else {
-            if (groupStr.equals("friend", ignoreCase = true)) groups.add("friend")
-            else if (groupStr.equals("resident", ignoreCase = true)) groups.add("resident")
-            else if (groupStr.equals("ally", ignoreCase = true)) groups.add("ally")
-            else if (groupStr.equals("outsider", ignoreCase = true)) groups.add("outsider")
-            else if (groupStr.equals("nation", ignoreCase = true)) groups.add("nation")
-            else {
-                plugin.messageManager.sendMessage(player, "error.invalid-args")
+        // Towny's names for the groups; on a resident's plot "town" is the owner's town. A plot
+        // of the town has no owner and so no friends: a friend setting there would be stored and
+        // never used, so it is refused and nothing changes. Towny 0.96 read "friend" as
+        // "resident" here instead; refusing was chosen so that nobody opens town land to every
+        // resident while meaning a few friends (decided 2026-11-27).
+        val townOwned = plot.ownerUuid == null
+        if (groupStr == "friend" && townOwned) {
+            plugin.messageManager.sendMessage(player, "plot.perm-friend-town-plot")
+            return
+        }
+        val chosen: String? = when (groupStr) {
+            null -> null
+            "town" -> "resident"
+            "friend" -> "friend"
+            in PERM_GROUPS -> groupStr
+            else -> {
+                plugin.messageManager.sendMessage(player, "plot.perm-usage")
                 return
             }
         }
+        val groups: List<String> = when {
+            chosen != null -> listOf(chosen)
+            townOwned -> listOf("resident", "ally", "outsider", "nation")
+            else -> listOf("friend", "resident", "ally", "outsider", "nation")
+        }
 
-        val actions: MutableList<Char?> = ArrayList<Char?>()
-        if (actionStr == null) {
-            actions.addAll(mutableListOf<Char?>('B', 'D', 'S', 'I'))
-        } else {
-            if (actionStr.equals("build", ignoreCase = true)) actions.add('B')
-            else if (actionStr.equals("destroy", ignoreCase = true)) actions.add('D')
-            else if (actionStr.equals("switch", ignoreCase = true)) actions.add('S')
-            else if (actionStr.equals("item", ignoreCase = true) || actionStr.equals(
-                    "itemuse",
-                    ignoreCase = true
-                )
-            ) actions.add('I')
-            else {
-                plugin.messageManager.sendMessage(player, "error.invalid-args")
+        val actions: List<Char> = when (actionStr) {
+            null -> listOf('B', 'D', 'S', 'I')
+            "build" -> listOf('B')
+            "destroy" -> listOf('D')
+            "switch" -> listOf('S')
+            "item", "itemuse" -> listOf('I')
+            else -> {
+                plugin.messageManager.sendMessage(player, "plot.perm-usage")
                 return
             }
         }
@@ -772,7 +821,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             } ?: PermissionMatrix.inheritedPlotPerms(plot, town, owner, group) ?: ""
 
             for (action in actions) {
-                current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action!!, state)
+                current = net.azisaba.townia.data.PermissionMatrix.setPerm(current, action, state)
             }
 
             if (group == "friend") plot.permsFriend = current
@@ -793,7 +842,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
             player,
             "town.perm-set",
             "perm",
-            (if (groupStr != null) "$groupStr " else "") + (actionStr ?: "all"),
+            (if (chosen != null) "$chosen " else "") + (actionStr ?: "all"),
             "state",
             if (state) "ON" else "OFF"
         )
@@ -869,6 +918,27 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
     }
 
+    /** `/plot unclaim`: the owner hands the plot back to the town (a mayor or assistant may do it for them). */
+    private fun handleUnclaim(player: Player) {
+        val plot = plotManager.getPlot(player.location.chunk).orElse(null)
+        if (plot == null) {
+            plugin.messageManager.sendMessage(player, "plot.no-plot-here")
+            return
+        }
+        if (plot.ownerUuid == null) {
+            plugin.messageManager.sendMessage(player, "plot.not-owned")
+            return
+        }
+        requireMayorOrOwner(player, plot) ?: return
+        try {
+            plotManager.transferOwnership(plot.worldName, plot.chunkX, plot.chunkZ, null)
+        } catch (e: TowniaException) {
+            plugin.messageManager.sendMessage(player, e.messageKey ?: "error.database", *e.replacements.filterNotNull().toTypedArray())
+            return
+        }
+        plugin.messageManager.sendMessage(player, "plot.returned")
+    }
+
     private fun handleEvict(player: Player?) {
         if (player == null) return
         val plot = plotManager.getPlot(player.location.chunk).orElse(null)
@@ -878,7 +948,7 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
         }
         val res = residentManager.getResident(player.uniqueId).orElse(null)
         if (!TowniaAdminCommand.isBypassing(player) &&
-            (res == null || res.townUuid != plot.townUuid || !res.isAssistantOrHigher)
+            (res == null || res.townUuid != plot.townUuid || !Perm.has(player, "towny.command.plot.evict"))
         ) {
             plugin.messageManager.sendMessage(player, "error.no-permission")
             return
@@ -900,5 +970,6 @@ class PlotCommand(private val plugin: Townia) : CommandExecutor, TabCompleter {
 
     companion object {
         private const val MAX_RANGE_RADIUS = 10
+        private val PERM_GROUPS = setOf("friend", "town", "resident", "ally", "nation", "outsider")
     }
 }

@@ -26,12 +26,299 @@ object TownyFlatfileMigrator {
     @Volatile
     private var knownUuids: Map<String, UUID> = emptyMap()
 
+    /** Resident files that named a town which does not list them (counted per run, for the log). */
+    @Volatile
+    private var staleTownReferences = 0
+
+    /** Residents a town file still listed although their own, newer file names another town or none. */
+    @Volatile
+    private var staleTownLists = 0
+
+    /** Plots whose owner could not be matched to any resident (counted per run, for the log). */
+    @Volatile
+    private var lostPlotOwners = 0
+
+    private val SUB_MAYOR_NAMES = setOf("co_mayor", "comayor", "submayor", "sub_mayor")
+
     /** Town / nation files to migrate, chosen once per run (see [selectGovernmentFiles]). */
     @Volatile
     private var townFiles: List<File> = emptyList()
 
     @Volatile
     private var nationFiles: List<File> = emptyList()
+
+    /**
+     * Limits a run to one town and/or one resident (`/ta migrate only ...`).
+     * [townUuid] is filled once the town file has been found.
+     */
+    private class Selection(val townName: String?, val residentName: String?, val settingsOnly: Boolean) {
+        var townUuid: UUID? = null
+        var residentUuid: UUID? = null
+
+        fun wantsResident(name: String, uuid: UUID, residentTown: UUID?): Boolean {
+            if (residentName != null && (name.equals(residentName, ignoreCase = true) || uuid == residentUuid)) return true
+            return townName != null && !settingsOnly && residentTown != null && residentTown == townUuid
+        }
+
+        fun wantsPlot(plotTown: UUID?, owner: UUID?): Boolean {
+            if (settingsOnly) return false
+            if (townName != null && plotTown != null && plotTown == townUuid) return true
+            return residentName != null && owner != null && owner == residentUuid
+        }
+    }
+
+    @Volatile
+    private var selection: Selection? = null
+
+    /**
+     * Migrates one town and/or one resident from Towny's flat files, leaving every other
+     * record Townia already has untouched. A town brings its settings, members, land,
+     * outlaws and jails; a resident brings their own settings, friends and the plots they
+     * own. With [settingsOnly] only the town/resident record itself is written.
+     */
+    fun migrateOnly(
+        plugin: Townia,
+        sender: CommandSender,
+        townName: String?,
+        residentName: String?,
+        settingsOnly: Boolean,
+        missingOnly: Boolean
+    ) {
+        val dataDir = findTownyDataDir(plugin)
+        if (dataDir == null) {
+            plugin.messageManager.sendMessage(sender, "admin.migration_failed")
+            plugin.logger.warning("No Towny flatfile data directory was found (plugins/Towny/data).")
+            return
+        }
+        BulkRead.start(plugin, sender, "migrate only", Runnable {
+            val only = Selection(townName, residentName, settingsOnly)
+            plugin.messageManager.sendMessage(sender, "admin.migration_start")
+            val label = listOfNotNull(townName?.let { "town $it" }, residentName?.let { "resident $it" }).joinToString(" + ")
+            plugin.messageManager.sendMessage(sender, "admin.migration-source", "source", "Towny flatfile: ${dataDir.path} ($label)")
+            try {
+                knownUuids = MigrationSupport.knownUuidsByName(plugin)
+                towniaUuidByTownyUuid.clear()
+                selectGovernmentFiles(plugin, dataDir, true)
+                val residentsByName = loadResidentIds(dataDir)
+                val nationsByName = loadNations(plugin, dataDir, residentsByName, false)
+                // Every town is read (not saved) so names in other files still resolve.
+                val townsByName = loadTowns(plugin, dataDir, residentsByName, nationsByName, false)
+
+                if (residentName != null) {
+                    only.residentUuid = residentsByName[residentName.lowercase(Locale.getDefault())]
+                        ?: residentName.toUuidOrNull()
+                    if (only.residentUuid == null) {
+                        plugin.messageManager.sendMessage(sender, "admin.migrate-only-not-found", "kind", "resident", "name", residentName)
+                        return@Runnable
+                    }
+                }
+                val allTownFiles = townFiles
+                // Who belongs where is decided by every town's member list, not only the chosen town's.
+                val memberships = loadTownMemberships(dataDir, townsByName)
+                var towns = 0
+                if (townName != null) {
+                    val wanted = townName.lowercase(Locale.getDefault())
+                    val file = allTownFiles.firstOrNull { f ->
+                        val values = readValues(f)
+                        (values.first("name", "town") ?: fileDisplayName(f)).lowercase(Locale.getDefault()) == wanted ||
+                            f.nameWithoutExtension.lowercase(Locale.getDefault()) == wanted
+                    }
+                    if (file == null) {
+                        plugin.messageManager.sendMessage(sender, "admin.migrate-only-not-found", "kind", "town", "name", townName)
+                        return@Runnable
+                    }
+                    val fileValues = readValues(file)
+                    val fileTownName = (fileValues.first("name", "town") ?: fileDisplayName(file)).lowercase(Locale.getDefault())
+                    only.townUuid = townsByName[fileTownName]
+                        ?: fileValues.uuid("uuid") ?: file.nameWithoutExtension.toUuidOrNull()
+                    // From here on the per-town loaders only see the chosen town.
+                    townFiles = listOf(file)
+                    selection = only
+                    loadTowns(plugin, dataDir, residentsByName, nationsByName, true)
+                    towns = 1
+                    MigrationSupport.progress(plugin, sender, "towns", "1")
+                    if (!settingsOnly) {
+                        MigrationSupport.progress(plugin, sender, "outlaws", loadTownOutlaws(plugin, dataDir, townsByName, residentsByName).toString())
+                    }
+                } else {
+                    townFiles = emptyList()
+                }
+                selection = only
+
+                val residents = loadResidents(plugin, dataDir, residentsByName, townsByName, memberships, missingOnly)
+                MigrationSupport.progress(plugin, sender, "residents", residents.toString())
+
+                var plots = 0
+                if (!settingsOnly) {
+                    plots = loadTownBlocks(plugin, dataDir, townsByName, residentsByName, missingOnly, HashSet())
+                    MigrationSupport.progress(plugin, sender, "townblocks", plots.toString())
+                    if (townName != null) {
+                        MigrationSupport.progress(plugin, sender, "jails", loadJails(plugin, dataDir).toString())
+                    }
+                }
+                plugin.residentManager.repairMayors()
+                plugin.messageManager.sendMessage(
+                    sender, "admin.migration_success",
+                    "towns", towns.toString(), "nations", "0", "residents", residents.toString(), "plots", plots.toString()
+                )
+                plugin.logger.info("Towny flatfile migration of $label finished: $residents resident(s), $plots plot(s).")
+            } catch (e: Exception) {
+                plugin.logger.log(Level.SEVERE, "Towny flatfile migration of $label failed", e)
+                plugin.messageManager.sendMessage(sender, "admin.migration_failed")
+            } finally {
+                selection = null
+            }
+        })
+    }
+
+    /**
+     * `/towniaadmin migrate repair [confirm]`: undoes what an earlier, faulty import left in a
+     * server that is already live, using Towny's files as the reference.
+     *
+     * Only cases that carry the fault's own signature are touched, so nothing a player did since
+     * the import is rolled back:
+     *  - a resident who sits in the town that the stale side of Towny's files named (an old member
+     *    list, or an old resident file; see [resolveMembership]) is moved to the town they belong to;
+     *  - a plot that has no owner and is not for sale, while Towny names an owner who is a member
+     *    of the plot's town today, gets that owner back;
+     *  - whoever holds the mayor rank without being their town's mayor loses the rank.
+     * Residents who sit in a town that no longer lists them are only reported.
+     * Without [apply] nothing is changed; the findings go to towny-compat/repair-report.yml.
+     */
+    fun repair(plugin: Townia, sender: CommandSender, apply: Boolean) {
+        val dataDir = findTownyDataDir(plugin)
+        if (dataDir == null) {
+            plugin.messageManager.sendMessage(sender, "admin.migration_failed")
+            plugin.logger.warning("No Towny flatfile data directory was found (plugins/Towny/data).")
+            return
+        }
+        BulkRead.start(plugin, sender, "repair", Runnable {
+            try {
+                knownUuids = MigrationSupport.knownUuidsByName(plugin)
+                towniaUuidByTownyUuid.clear()
+                selectGovernmentFiles(plugin, dataDir, false)
+                val residentsByName = loadResidentIds(dataDir)
+                val nationsByName = loadNations(plugin, dataDir, residentsByName, false)
+                val townsByName = loadTowns(plugin, dataDir, residentsByName, nationsByName, false)
+                val memberships = loadTownMemberships(dataDir, townsByName)
+                val report = org.bukkit.configuration.file.YamlConfiguration()
+                fun townName(id: UUID?): String = id?.let { plugin.townManager.getTown(it).orElse(null)?.name } ?: "-"
+
+                // ---- residents
+                val moved = ArrayList<String>()
+                val notListed = ArrayList<String>()
+                // Where each moved resident ends up, so a dry run counts the plots they get back too.
+                val plannedTown = HashMap<UUID, UUID>()
+                val diagnosis = RepairDiagnosis(plugin)
+                val renamed = ArrayList<String>()
+                File(dataDir, "residents").listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
+                    val values = readValues(file)
+                    val (name, fileUuid) = residentIdentity(values, file)
+                    val key = name.lowercase(Locale.getDefault())
+                    val found = plugin.residentManager.getResident(residentsByName[key] ?: fileUuid).orElse(null)
+                        ?: plugin.residentManager.getResidentByName(name).orElse(null)
+                    resolveMembership(values, key, (found?.uuid ?: fileUuid).toString().lowercase(Locale.getDefault()), memberships, townsByName).let {
+                        diagnosis.resident(
+                            file.nameWithoutExtension.toUuidOrNull() != null, values.has("uuid"), name, townyIdentity(values, file).second, found,
+                            it.town, it.fileTown, it.listedTown, it.staleFile, it.staleList
+                        )
+                    }
+                    val resident = found ?: return@forEach
+                    // An earlier import named some records after their UUID (see residentIdentity).
+                    if (resident.name?.toUuidOrNull() != null && name.toUuidOrNull() == null) {
+                        renamed.add("${resident.name} -> $name")
+                        if (apply) plugin.residentManager.renameRecord(resident, name)
+                    }
+                    val current = resident.townUuid ?: return@forEach
+                    val uuidKey = resident.uuid.toString().lowercase(Locale.getDefault())
+                    val membership = resolveMembership(values, key, uuidKey, memberships, townsByName)
+                    val expected = membership.town
+                    if (current == expected) return@forEach
+                    // Only the fault's own signature: the resident sits in the town the stale side named.
+                    // Anywhere else, a player or an admin put them there after the import.
+                    if (current != membership.fileTown && current != membership.listedTown) return@forEach
+                    if (expected == null) {
+                        notListed.add("$name: in ${townName(current)}, which Towny no longer had them in")
+                        return@forEach
+                    }
+                    if (plugin.townManager.getTown(expected).isEmpty) return@forEach
+                    val fileRanksApply = membership.fileTown == null || membership.fileTown == expected
+                    val rank = resolveRank(values, key, uuidKey, memberships, expected, fileRanksApply)
+                    moved.add("$name: ${townName(current)} -> ${townName(expected)} ($rank)")
+                    resident.uuid?.let { plannedTown[it] = expected }
+                    if (apply) {
+                        plugin.residentManager.setTown(resident.uuid, expected, rank)
+                        if (fileRanksApply) {
+                            resident.townRanks.addAll(extraTownRanks(values))
+                            resident.nationRanks.addAll(TowniaPlayer.parseRanks(values.list("nationranks", "nation_ranks").joinToString(",")))
+                            plugin.residentManager.saveResident(resident)
+                        }
+                    }
+                }
+
+                // ---- plot owners
+                val restored = ArrayList<String>()
+                File(dataDir, "townblocks").takeIf { it.isDirectory }?.walkTopDown()?.filter { isTownyDataFile(it) }?.forEach { file ->
+                    val values = readValues(file)
+                    val ownerName = values.first("resident")?.takeIf { it.isNotBlank() } ?: return@forEach
+                    val chunk = parseTownBlockChunk(values, file) ?: return@forEach
+                    val plot = plugin.plotManager.getPlot(chunk.world, chunk.x, chunk.z).orElse(null)
+                    val townUuid = resolveGovernmentUuid(values.first("town"), townsByName)
+                    // An owner who has logged in since had their record moved from the UUID Towny
+                    // knew to their own, so that UUID finds nobody: look up the name Towny had for it.
+                    val ownerUuid = resolveResidentUuid(ownerName, residentsByName)
+                    val owner = ownerUuid?.let { plugin.residentManager.getResident(it).orElse(null) }
+                        ?: (ownerUuid?.let { diagnosis.townyNameByUuid[it] } ?: ownerName.takeIf { it.toUuidOrNull() == null })
+                            ?.let { plugin.residentManager.getResidentByName(it).orElse(null) }
+                    diagnosis.plot(chunk.world, chunk.x, chunk.z, ownerName, owner, plot, townUuid, plannedTown)
+                    if (plot == null || townUuid == null || owner == null) return@forEach
+                    if (plot.ownerUuid != null || plot.isForSale) return@forEach
+                    if (plot.townUuid != townUuid) return@forEach
+                    // Whoever has left the town since gave the plot up on purpose.
+                    if ((plannedTown[owner.uuid] ?: owner.townUuid) != townUuid) return@forEach
+                    restored.add("${chunk.world} ${chunk.x},${chunk.z} (${townName(townUuid)}): ${owner.name ?: ownerName}")
+                    if (apply) {
+                        plot.changeOwner(owner.uuid)
+                        plugin.plotManager.persistPlot(plot)
+                    }
+                }
+
+                // ---- mayors
+                val falseMayors = plugin.residentManager.allResidents.filter { resident ->
+                    resident.rank == TownRank.MAYOR &&
+                        resident.townUuid?.let { plugin.townManager.getTown(it).orElse(null) }?.mayorUuid != resident.uuid
+                }.map { "${it.name}: ${townName(it.townUuid)}" }
+                if (apply) plugin.residentManager.repairMayors()
+
+                report.set("applied", apply)
+                report.set("residents-moved-to-their-town", moved)
+                report.set("plot-owners-restored", restored)
+                report.set("mayor-rank-removed", falseMayors)
+                report.set("residents-given-their-name-back", renamed)
+                report.set("residents-in-a-town-towny-no-longer-had-them-in-NOT-changed", notListed)
+                diagnosis.finish(
+                    townFiles.size, memberships.townsWithMemberList.size,
+                    memberships.mayorTownByResident.entries.associate { it.value to it.key }
+                )
+                diagnosis.writeTo(report)
+                val file = File(plugin.dataFolder, "towny-compat/repair-report.yml")
+                file.parentFile.mkdirs()
+                report.save(file)
+                val verb = if (apply) "fixed" else "would fix"
+                for (line in listOf(
+                    "$verb: ${moved.size} resident(s) in the town a stale Towny file named -> the town they belong to",
+                    "$verb: ${restored.size} plot(s) without an owner -> the owner Towny names",
+                    "$verb: ${falseMayors.size} resident(s) holding the mayor rank without being the mayor",
+                    "$verb: ${renamed.size} resident record(s) named after their UUID -> their name",
+                    "reported only: ${notListed.size} resident(s) in a town Towny no longer had them in"
+                ) + diagnosis.summary()) plugin.messageManager.sendMessage(sender, "admin.audit-line", "text", line)
+                plugin.messageManager.sendMessage(sender, if (apply) "admin.repair-done" else "admin.repair-dry-run", "file", file.path)
+            } catch (e: Exception) {
+                plugin.logger.log(Level.SEVERE, "Towny repair failed", e)
+                plugin.messageManager.sendMessage(sender, "admin.migration_failed")
+            }
+        })
+    }
 
     fun migrate(plugin: Townia, sender: CommandSender, requestedParts: Set<String> = emptySet()) {
         val dataDir = findTownyDataDir(plugin)
@@ -42,11 +329,12 @@ object TownyFlatfileMigrator {
         }
         val parts = normalizeParts(requestedParts)
 
-        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+        BulkRead.start(plugin, sender, "migrate", Runnable {
             plugin.messageManager.sendMessage(sender, "admin.migration_start")
             plugin.messageManager.sendMessage(sender, "admin.migration-source", "source", "Towny flatfile: ${dataDir.path} (${parts.joinToString(",")})")
             try {
                 knownUuids = MigrationSupport.knownUuidsByName(plugin)
+                towniaUuidByTownyUuid.clear()
                 selectGovernmentFiles(plugin, dataDir, requestedParts.contains(MigrationSupport.INCLUDE_DELETED))
                 MigrationSupport.progress(plugin, sender, "resident UUID map", "0")
                 val residentsByName = loadResidentIds(dataDir)
@@ -75,7 +363,7 @@ object TownyFlatfileMigrator {
 
                 val townMemberships = loadTownMemberships(dataDir, townsByName)
                 MigrationSupport.progress(plugin, sender, "residents", "0")
-                val residents = if (parts.contains("residents")) loadResidents(plugin, dataDir, residentsByName, townsByName, townMemberships) else 0
+                val residents = if (parts.contains("residents")) loadResidents(plugin, dataDir, residentsByName, townsByName, townMemberships, requestedParts.contains(MigrationSupport.MISSING_ONLY)) else 0
                 MigrationSupport.progress(plugin, sender, "residents", residents.toString())
 
                 MigrationSupport.progress(plugin, sender, "townblocks", "0")
@@ -132,6 +420,12 @@ object TownyFlatfileMigrator {
         return if (result.isEmpty()) allParts else result
     }
 
+    /** Town names found in Towny's flat files, for tab completion. Reads file names only. */
+    fun townyTownNames(plugin: Townia): List<String> {
+        val dir = File(findTownyDataDir(plugin) ?: return emptyList(), "towns")
+        return dir.listFiles { file -> isTownyDataFile(file) }?.map { it.nameWithoutExtension }?.sorted() ?: emptyList()
+    }
+
     fun findTownyDataDir(plugin: Townia): File? {
         val pluginsDir = plugin.dataFolder.parentFile ?: return null
         val townyDir = File(pluginsDir, "Towny")
@@ -167,7 +461,8 @@ object TownyFlatfileMigrator {
         if (!includeDeleted) {
             // deleted/ can hold files that are years old; only use it when explicitly asked.
             townFiles = pickGovernmentFiles(plugin, File(dataDir, "towns"), "town") { false }
-            nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation") { false }
+            val named = nationNamesUsedByTowns()
+            nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation", { it.name.lowercase(Locale.getDefault()) in named }) { false }
             return
         }
         val townsWithResidents = HashSet<String>()
@@ -192,16 +487,33 @@ object TownyFlatfileMigrator {
             listOfNotNull(values.first("nation", "nationuuid", "nation_uuid"), values.first("nationname", "nation_name"))
                 .forEach { nationRefs.add(it.lowercase(Locale.getDefault())) }
         }
-        nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation") { gov ->
+        nationFiles = pickGovernmentFiles(plugin, File(dataDir, "nations"), "nation", { it.name.lowercase(Locale.getDefault()) in nationRefs }) { gov ->
             gov.name.lowercase(Locale.getDefault()) in nationRefs ||
                 (gov.uuid != null && gov.uuid.toString() in nationRefs)
         }
     }
 
+    /** The nation names town files point at: the names that are really in use. */
+    private fun nationNamesUsedByTowns(): Set<String> {
+        val names = HashSet<String>()
+        townFiles.forEach { file ->
+            val values = readValues(file)
+            listOfNotNull(values.first("nation"), values.first("nationname", "nation_name"))
+                .forEach { names.add(it.lowercase(Locale.getDefault())) }
+        }
+        return names
+    }
+
+    /**
+     * [prefer] breaks ties between files of the same UUID. A renamed nation leaves its old file
+     * behind (and a badly re-encoded copy can sit next to the real one); the file whose name the
+     * towns still use is the current one.
+     */
     private fun pickGovernmentFiles(
         plugin: Townia,
         dir: File,
         kind: String,
+        prefer: (GovernmentFile) -> Boolean = { false },
         keepDeleted: (GovernmentFile) -> Boolean
     ): List<File> {
         fun read(folder: File, live: Boolean): List<GovernmentFile> =
@@ -220,7 +532,11 @@ object TownyFlatfileMigrator {
         val seenUuids = HashSet<UUID>()
         val seenNames = HashSet<String>()
         val chosen = (live + restored)
-            .sortedWith(compareByDescending<GovernmentFile> { it.live }.thenByDescending { it.file.lastModified() })
+            .sortedWith(
+                compareByDescending<GovernmentFile> { it.live }
+                    .thenByDescending { prefer(it) }
+                    .thenByDescending { it.file.lastModified() }
+            )
             .filter { gov ->
                 val newUuid = gov.uuid == null || seenUuids.add(gov.uuid)
                 newUuid && seenNames.add(gov.name.lowercase(Locale.getDefault()))
@@ -239,7 +555,34 @@ object TownyFlatfileMigrator {
      * UUIDs in every member list. Such names are looked up instead (EssentialsX
      * userdata, then the server's own player data, neither of which asks Mojang).
      */
+    /** Towny's UUID for a resident -> the UUID of the record Townia already has for that player. */
+    private val towniaUuidByTownyUuid = java.util.concurrent.ConcurrentHashMap<UUID, UUID>()
+
+    /**
+     * A Towny that ran on an offline-mode server gave every resident the offline UUID of their
+     * name. Once such a player has logged in here, their record sits under their real UUID.
+     * Importing the same file again under Towny's UUID gave that player a second record, still
+     * showing the town, rank and plots they had in Towny; at their next login that copy was merged
+     * into their real record and put them back into a town they had left.
+     * So a resident whose Towny UUID is just their name's offline UUID is written to the record
+     * Townia already holds under that name, and everything that refers to them by Towny's UUID
+     * (plot owners, mayors, friends) follows through [towniaUuidByTownyUuid].
+     */
+    private fun ownRecord(name: String, townyUuid: UUID): UUID {
+        if (townyUuid != MigrationSupport.offlineUuid(name)) return townyUuid
+        val existing = runCatching { Townia.instance.residentManager.getResidentByName(name).orElse(null)?.uuid }.getOrNull()
+        if (existing == null || existing == townyUuid) return townyUuid
+        towniaUuidByTownyUuid[townyUuid] = existing
+        return existing
+    }
+
     private fun residentIdentity(values: FlatValues, file: File): Pair<String, UUID> {
+        val (name, uuid) = townyIdentity(values, file)
+        return name to ownRecord(name, uuid)
+    }
+
+    /** The name and UUID exactly as Towny's file gives them. */
+    private fun townyIdentity(values: FlatValues, file: File): Pair<String, UUID> {
         val fileUuid = file.nameWithoutExtension.toUuidOrNull()
         val uuid = values.uuid("uuid", "player_uuid") ?: fileUuid
         val explicitName = values.first("name", "resident")
@@ -247,7 +590,13 @@ object TownyFlatfileMigrator {
             return explicitName to (uuid ?: MigrationSupport.resolveUuidByName(explicitName, knownUuids))
         }
         if (uuid != null) {
-            return (MigrationSupport.nameForUuid(uuid) ?: uuid.toString()) to uuid
+            // A file that carries uuid= but is still named after the player holds the name in its
+            // file name. Asking the server for the name of that UUID fails for everyone who has not
+            // joined since (Towny gave them an offline UUID), and the resident then went by the UUID
+            // text: no town file knew them under that, so the mayor line and the member lists missed
+            // them, and they were created a second time from an old list, over their own record.
+            val nameFromFile = if (fileUuid == null) fileDisplayName(file) else null
+            return (nameFromFile ?: MigrationSupport.nameForUuid(uuid) ?: uuid.toString()) to uuid
         }
         val name = fileDisplayName(file)
         return name to MigrationSupport.resolveUuidByName(name, knownUuids)
@@ -300,6 +649,10 @@ object TownyFlatfileMigrator {
                 spawn?.pitch ?: 0f
             )
             nation.isNeutral = values.boolean("neutral", "isneutral", "is_neutral")
+            nation.tag = values.first("tag")
+            nation.isPublic = values.boolean("ispublic", "is_public", "public")
+            nation.isOpen = values.boolean("isopen", "is_open", "open")
+            values.first("spawncost", "spawn_cost")?.replace(",", "")?.toDoubleOrNull()?.let { nation.spawnCost = it }
             if (save) {
                 plugin.databaseManager.saveNation(nation)
                 plugin.nationManager.cacheNation(nation)
@@ -432,11 +785,11 @@ object TownyFlatfileMigrator {
                 values.long("registered", "registeredat", "createdat"),
                 values.first("board", "townboard", "town_board") ?: "",
                 values.double("taxes", "tax"),
-                values.double("plottax", "plot_tax"),
-                values.boolean("pvp"),
-                values.boolean("mobs"),
-                values.boolean("explosion", "explosions"),
-                values.boolean("fire"),
+                values.double("plotprice", "plot_price"),
+                townFlag(values, "pvp"),
+                townFlag(values, "mobs"),
+                townFlag(values, "explosion", "explosions"),
+                townFlag(values, "fire"),
                 spawn?.world,
                 spawn?.x ?: 0.0,
                 spawn?.y ?: 0.0,
@@ -445,8 +798,42 @@ object TownyFlatfileMigrator {
                 spawn?.pitch ?: 0f
             )
             town.isOpen = values.boolean("open", "is_open")
+            town.tag = values.first("tag")
+            town.isTaxPercent = values.boolean("taxpercent", "tax_percent")
+            town.plotTax = values.double("plottax", "plot_tax")
+            town.shopPrice = values.double("commercialplotprice", "commercial_plot_price", "shopprice")
+            town.shopTax = values.double("commercialplottax", "commercial_plot_tax", "shoptax")
+            town.embassyPrice = values.double("embassyplotprice", "embassy_plot_price", "embassyprice")
+            town.embassyTax = values.double("embassyplottax", "embassy_plot_tax", "embassytax")
+            // Towny charged visitors min(the town's spawn cost, the server's price); most old towns hold 0 = free.
+            values.first("spawncost", "spawn_cost")?.replace(",", "")?.toDoubleOrNull()?.let { town.spawnCost = it }
             applyTownProtection(values, town)
             if (homeBlock != null) town.setHomeBlock(homeBlock.world, homeBlock.x, homeBlock.z)
+
+            // What Townia already holds for this town and Towny's file cannot give back.
+            val existing = if (save) plugin.townManager.getTown(uuid).orElse(null) else null
+            if (existing != null) {
+                town.outlaws.addAll(existing.outlaws)
+                town.jailCells.addAll(existing.jailCells)
+                town.outposts.addAll(existing.outposts)
+                if (existing.hasJail() && !town.hasJail()) {
+                    town.setJail(existing.jailWorld, existing.jailX, existing.jailY, existing.jailZ, existing.jailYaw, existing.jailPitch)
+                }
+                // Money moved since the first migration lives only in Townia; a single-town
+                // re-run must never roll the bank back to the old Towny figure.
+                if (selection != null) town.balance = existing.balance
+                town.isAllowInvisibility = existing.isAllowInvisibility
+                town.isAllowSit = existing.isAllowSit
+                town.isAllowPetPickup = existing.isAllowPetPickup
+                town.isAllowPassenger = existing.isAllowPassenger
+            }
+            if (save && selection != null && town.nationUuid != null && plugin.nationManager.getNation(town.nationUuid).isEmpty) {
+                // A single-town run does not create nations; never point at one Townia does not have.
+                plugin.logger.warning("Towny flatfile: nation of town $name is not in Townia; keeping ${existing?.nationUuid ?: "no nation"}.")
+                town.nationUuid = existing?.nationUuid
+            }
+            // Outposts and jail cells reference the town row, so it has to exist before they are written.
+            if (save) plugin.databaseManager.saveTown(town)
 
             val outpostLine = values.first("outpostspawns", "outpost_spawns")
             if (!outpostLine.isNullOrBlank()) {
@@ -461,13 +848,28 @@ object TownyFlatfileMigrator {
                         val pitch = spawnParts[4].toFloatOrNull() ?: 0f
                         val yaw = spawnParts[5].toFloatOrNull() ?: 0f
                         val outpost = TowniaOutpost(0, w, x, y, z, yaw, pitch, false, "outpost-${index + 1}")
-                        if (save) {
+                        // A re-run must not add the same outposts again.
+                        if (save && existing?.outposts.isNullOrEmpty()) {
                             runCatching {
                                 plugin.databaseManager.saveTownOutpost(town.id!!, outpost)
                                 town.outposts.add(outpost)
                             }
                         }
                     }
+                }
+            }
+
+            // Towny 0.96 kept jail spawns in the town file (`jailspawns=world,x,y,z,pitch,yaw;...`).
+            val jailSpawns = values.first("jailspawns", "jail_spawns")
+                ?.split(';')?.mapNotNull { parseLocation(it) }.orEmpty()
+            if (save && jailSpawns.isNotEmpty() && existing?.jailCells.isNullOrEmpty()) {
+                jailSpawns.forEachIndexed { index, jail ->
+                    val cell = TowniaJailCell(0, "jail-${index + 1}", jail.world, jail.x, jail.y, jail.z, jail.yaw, jail.pitch)
+                    runCatching {
+                        plugin.databaseManager.saveTownJailCell(town.id!!, cell)
+                        town.jailCells.add(cell)
+                    }
+                    if (!town.hasJail()) town.setJail(jail.world, jail.x, jail.y, jail.z, jail.yaw, jail.pitch)
                 }
             }
 
@@ -485,10 +887,14 @@ object TownyFlatfileMigrator {
         dataDir: File,
         residentsByName: Map<String, UUID>,
         townsByName: Map<String, UUID>,
-        townMemberships: TownMemberships
+        townMemberships: TownMemberships,
+        missingOnly: Boolean = false
     ): Int {
         var count = 0
+        staleTownReferences = 0
+        staleTownLists = 0
         val migratedNames = HashSet<String>()
+        val migratedUuids = HashSet<UUID>()
         val friendHolders = ArrayList<TowniaPlayer>()
         val dir = File(dataDir, "residents")
         dir.listFiles { file -> isTownyDataFile(file) }?.forEach { file ->
@@ -496,25 +902,28 @@ object TownyFlatfileMigrator {
             val values = readValues(file)
             val (name, fileUuid) = residentIdentity(values, file)
             val uuid = residentsByName[name.lowercase(Locale.getDefault())] ?: fileUuid
+            // "Only what is missing" leaves a resident Townia already has alone: what they did here
+            // since (left a town, handed the town over) is newer than the Towny file.
+            if (missingOnly && plugin.residentManager.getResident(uuid).isPresent) {
+                migratedNames.add(name.lowercase(Locale.getDefault()))
+                migratedUuids.add(uuid)
+                return@forEach
+            }
             val residentKey = name.lowercase(Locale.getDefault())
             val uuidKey = uuid.toString().lowercase(Locale.getDefault())
-            val townUuid = resolveGovernmentUuid(values.first("town", "townuuid", "town_uuid"), townsByName)
-                ?: resolveGovernmentUuid(values.first("townname", "town_name"), townsByName)
-                ?: townMemberships.townByResident[residentKey]
-                ?: townMemberships.townByResident[uuidKey]
-            val rank = when {
-                // Towny resident files have no "mayor" flag: the mayor is named in the town file.
-                values.boolean("mayor") ||
-                    townMemberships.rankByResident[residentKey] == TownRank.MAYOR ||
-                    townMemberships.rankByResident[uuidKey] == TownRank.MAYOR -> TownRank.MAYOR
-                hasAnyRank(values, "co-mayor", "co_mayor", "comayor", "submayor", "sub_mayor", "sub-mayor") ||
-                    townMemberships.rankByResident[residentKey] == TownRank.SUB_MAYOR ||
-                    townMemberships.rankByResident[uuidKey] == TownRank.SUB_MAYOR -> TownRank.SUB_MAYOR
-                hasAnyRank(values, "assistant") ||
-                    townMemberships.rankByResident[residentKey] == TownRank.ASSISTANT ||
-                    townMemberships.rankByResident[uuidKey] == TownRank.ASSISTANT -> TownRank.ASSISTANT
-                else -> TownRank.RESIDENT
+            val membership = resolveMembership(values, residentKey, uuidKey, townMemberships, townsByName)
+            val fileTown = membership.fileTown
+            if (membership.staleFile) staleTownReferences++
+            if (membership.staleList) staleTownLists++
+            var townUuid = membership.town
+            if (selection != null && townUuid != null && plugin.townManager.getTown(townUuid).isEmpty) {
+                plugin.logger.warning("Towny flatfile: the town of $name is not in Townia; migrated without a town.")
+                townUuid = null
             }
+            // Ranks written in the resident file belong to the town that file names.
+            val fileRanksApply = townUuid != null && (fileTown == null || fileTown == townUuid)
+            if (selection?.wantsResident(name, uuid, townUuid) == false) return@forEach
+            val rank = resolveRank(values, residentKey, uuidKey, townMemberships, townUuid, fileRanksApply)
             val resident = TowniaPlayer(
                 uuid,
                 name,
@@ -523,12 +932,17 @@ object TownyFlatfileMigrator {
                 values.long("lastonline", "last_online", "lastonlineat"),
                 null,
                 values.list("friends").mapNotNull { friend ->
-                    friend.toUuidOrNull() ?: residentsByName[friend.lowercase(Locale.getDefault())]
+                    friend.toUuidOrNull()?.let { towniaUuidByTownyUuid[it] ?: it } ?: residentsByName[friend.lowercase(Locale.getDefault())]
                 }.map { it.toString() }.toMutableList()
             )
             resident.registeredAt = values.long("registered", "registeredat", "createdat")
             values.first("about")?.takeIf { it.isNotBlank() }?.let { resident.about = it.take(255) }
             applyResidentProtection(values, resident)
+            // Every other rank (helper, sheriff, a server's own ones) only carries permission nodes.
+            if (fileRanksApply) {
+                extraTownRanks(values).forEach(resident.townRanks::add)
+                resident.nationRanks.addAll(TowniaPlayer.parseRanks(values.list("nationranks", "nation_ranks").joinToString(",")))
+            }
 
             val title = values.first("title")
             val surname = values.first("surname")
@@ -548,6 +962,7 @@ object TownyFlatfileMigrator {
             plugin.residentManager.cacheResident(resident)
             if (!resident.friends.isNullOrEmpty()) friendHolders.add(resident)
             migratedNames.add(residentKey)
+            migratedUuids.add(uuid)
             count++
             } catch (e: Exception) {
                 // One bad record must not abort the whole migration (and leave every later stage unrun).
@@ -561,8 +976,12 @@ object TownyFlatfileMigrator {
         townMemberships.townByResident.forEach { (key, townUuid) ->
             if (key in migratedNames || key.toUuidOrNull() != null) return@forEach
             val displayName = townMemberships.displayNames[key] ?: return@forEach
+            if (selection?.settingsOnly == true) return@forEach
             try {
                 val uuid = residentsByName[key] ?: MigrationSupport.resolveUuidByName(displayName, knownUuids)
+                // Never over a record this run has just written from the resident's own file.
+                if (uuid in migratedUuids) return@forEach
+                if (selection?.wantsResident(displayName, uuid, townUuid) == false) return@forEach
                 val resident = TowniaPlayer(
                     uuid,
                     displayName,
@@ -582,6 +1001,18 @@ object TownyFlatfileMigrator {
         }
         if (fromTownLists > 0) {
             plugin.logger.info("Towny flatfile: created $fromTownLists residents listed by a town but without a resident file.")
+        }
+        if (staleTownLists > 0) {
+            plugin.logger.info(
+                "Towny flatfile: $staleTownLists resident(s) were still on the member list of a town file from an older Towny; " +
+                    "their own, newer file decided where they belong."
+            )
+        }
+        if (staleTownReferences > 0) {
+            plugin.logger.info(
+                "Towny flatfile: $staleTownReferences resident file(s) named a town that does not list them; " +
+                    "those residents were left townless, as they were in Towny."
+            )
         }
 
         // saveResident does not write friends, and the friend table has a foreign key to residents,
@@ -611,15 +1042,26 @@ object TownyFlatfileMigrator {
         val townByResident = LinkedHashMap<String, UUID>()
         val rankByResident = LinkedHashMap<String, TownRank>()
         val displayNames = LinkedHashMap<String, String>()
+        val townsWithMemberList = HashSet<UUID>()
+        val mayorTownByResident = HashMap<String, UUID>()
+        val rankTownByResident = HashMap<String, UUID>()
+        fun grant(key: String, townUuid: UUID, rank: TownRank) {
+            if (maxRank(rankByResident[key], rank) == rankByResident[key]) return
+            rankByResident[key] = rank
+            rankTownByResident[key] = townUuid
+        }
         townFiles.forEach { file ->
             val values = readValues(file)
             val townName = values.first("name", "town") ?: fileDisplayName(file)
             val townUuid = townsByName[townName.lowercase(Locale.getDefault())] ?: return@forEach
+            if (values.has("residents", "resident", "members")) townsWithMemberList.add(townUuid)
             val mayor = values.first("mayor", "mayorname", "king", "kingname")
             for (keyValue in listOfNotNull(mayor, values.first("mayorname", "kingname")).distinct()) {
                 val key = keyValue.lowercase(Locale.getDefault())
                 townByResident[key] = townUuid
+                mayorTownByResident[key] = townUuid
                 rankByResident[key] = TownRank.MAYOR
+                rankTownByResident[key] = townUuid
                 displayNames.putIfAbsent(key, keyValue)
             }
             // "trusted" residents are outsiders the town trusts, not members.
@@ -630,15 +1072,15 @@ object TownyFlatfileMigrator {
             values.list("assistants", "assistant").forEach {
                 val key = it.lowercase(Locale.getDefault())
                 townByResident[key] = townUuid
-                rankByResident[key] = maxRank(rankByResident[key], TownRank.ASSISTANT)
+                grant(key, townUuid, TownRank.ASSISTANT)
             }
             values.list("comayors", "co_mayors", "co-mayors", "submayors", "sub_mayors").forEach {
                 val key = it.lowercase(Locale.getDefault())
                 townByResident[key] = townUuid
-                rankByResident[key] = maxRank(rankByResident[key], TownRank.SUB_MAYOR)
+                grant(key, townUuid, TownRank.SUB_MAYOR)
             }
         }
-        return TownMemberships(townByResident, rankByResident, displayNames)
+        return TownMemberships(townByResident, rankByResident, displayNames, townsWithMemberList, mayorTownByResident, rankTownByResident)
     }
 
     private fun loadTownBlocks(
@@ -660,6 +1102,7 @@ object TownyFlatfileMigrator {
                 // The townblocks folder was loaded first and carries the owner, type, price and
                 // permissions; the town file only lists coordinates, so never overwrite a plot.
                 if (plugin.plotManager.isClaimed(chunk.world, chunk.x, chunk.z)) return@forEach
+                if (selection?.wantsPlot(townUuid, null) == false) return@forEach
                 savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, null, PlotType.DEFAULT, false, 0.0, null)
                 count++
             }
@@ -677,6 +1120,7 @@ object TownyFlatfileMigrator {
     ): Int {
         if (!dir.isDirectory) return 0
         var count = 0
+        lostPlotOwners = 0
         dir.walkTopDown().filter { isTownyDataFile(it) }.forEach { file ->
             try {
             val values = readValues(file)
@@ -688,15 +1132,28 @@ object TownyFlatfileMigrator {
             if (missingOnly && plugin.plotManager.isClaimed(chunk.world, chunk.x, chunk.z)) return@forEach
             val townUuid = resolveGovernmentUuid(townName, townsByName) ?: return@forEach
             if (plugin.townManager.getTown(townUuid).isEmpty) return@forEach
-            val ownerUuid = resolveResidentUuid(values.first("resident", "residentuuid", "resident_uuid", "owner", "owneruuid", "owner_uuid"), residentsByName)
+            val ownerName = values.first("resident", "residentuuid", "resident_uuid", "owner", "owneruuid", "owner_uuid")
+            // residentsByName only knows residents that have a file; a member the town merely lists
+            // was created from that list, so look the name up among Townia's residents as well.
+            // Without this the plot silently became town land again.
+            val ownerUuid = resolveResidentUuid(ownerName, residentsByName)
+                ?: ownerName?.takeIf { it.isNotBlank() }?.let { plugin.residentManager.getResidentByName(it).orElse(null)?.uuid }
+            if (ownerUuid == null && !ownerName.isNullOrBlank()) lostPlotOwners++
+            if (selection?.wantsPlot(townUuid, ownerUuid) == false) return@forEach
             val type = parsePlotType(values.first("type"))
-            val price = values.double("plotprice", "price")
-            savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, ownerUuid, type, price > 0.0, price, values.first("name"), values)
+            // Towny writes price=-1.0 for a plot that is not for sale; 0 is a free plot.
+            val rawPrice = values.first("plotprice", "price")?.replace(",", "")?.toDoubleOrNull()
+            val forSale = rawPrice != null && rawPrice >= 0.0
+            val price = maxOf(0.0, rawPrice ?: 0.0)
+            savePlot(plugin, chunk.world, chunk.x, chunk.z, townUuid, ownerUuid, type, forSale, price, values.first("name"), values)
             count++
             } catch (e: Exception) {
                 // One bad record must not abort the whole migration (and leave every later stage unrun).
                 plugin.logger.log(Level.WARNING, "Towny flatfile: skipped town block ${file.name}: ${e.message}")
             }
+        }
+        if (lostPlotOwners > 0) {
+            plugin.logger.warning("Towny flatfile: $lostPlotOwners plot(s) name an owner Townia has no resident for; they were migrated without an owner.")
         }
         return count
     }
@@ -774,12 +1231,24 @@ object TownyFlatfileMigrator {
     }
 
     private fun readText(file: File): String {
+        BulkRead.fileRead()
         val bytes = file.readBytes()
         return runCatching { String(bytes, StandardCharsets.UTF_8) }
             .getOrElse { String(bytes, Charset.forName("MS932")) }
     }
 
     private fun parsePlotType(value: String?): PlotType {
+        // Towny 0.96 wrote the type's number; 7 (jail) is a normal plot here, jails are kept per town.
+        when (value?.trim()) {
+            "0", "5", "7" -> return PlotType.DEFAULT
+            "1" -> return PlotType.SHOP
+            "2" -> return PlotType.ARENA
+            "3" -> return PlotType.EMBASSY
+            "4" -> return PlotType.WILDS
+            "6" -> return PlotType.INN
+            "8" -> return PlotType.FARM
+            "9" -> return PlotType.BANK
+        }
         val name = value?.uppercase(Locale.getDefault()) ?: return PlotType.DEFAULT
         return runCatching {
             PlotType.valueOf(if (name == "COMMERCIAL" || name == "SHOP") "SHOP" else name)
@@ -879,7 +1348,7 @@ object TownyFlatfileMigrator {
 
     private fun resolveResidentUuid(value: String?, residentsByName: Map<String, UUID>): UUID? {
         if (value.isNullOrBlank()) return null
-        return value.toUuidOrNull() ?: residentsByName[value.lowercase(Locale.getDefault())]
+        return value.toUuidOrNull()?.let { towniaUuidByTownyUuid[it] ?: it } ?: residentsByName[value.lowercase(Locale.getDefault())]
     }
 
     private fun resolveGovernmentUuid(value: String?, governmentsByName: Map<String, UUID>): UUID? {
@@ -906,6 +1375,13 @@ object TownyFlatfileMigrator {
     private fun applyPlotProtection(values: FlatValues?, plot: Plot) {
         val status = values?.list("permissions", "protectionstatus", "protection_status")
             ?.map { it.lowercase(Locale.getDefault()) }?.toSet() ?: return
+        // Towny 0.96 marks a plot whose permissions were never set by hand with changed=false;
+        // such a plot follows its town (or its owner's defaults), which is Townia's "unset".
+        if (values.first("changed")?.equals("false", ignoreCase = true) == true) return
+        if ("pvp" in status) plot.setPvp(true)
+        if ("mobs" in status) plot.setMobs(true)
+        if ("explosion" in status) plot.setExplosions(true)
+        if ("fire" in status) plot.setFire(true)
         val hasFlags = status.any { it.endsWith("build") || it.endsWith("destroy") || it.endsWith("switch") || it.endsWith("itemuse") }
         if (!hasFlags) return
         if (plot.ownerUuid != null) {
@@ -921,6 +1397,13 @@ object TownyFlatfileMigrator {
         }
         plot.permsAlly = permissionString(status, "ally")
         plot.permsOutsider = permissionString(status, "outsider")
+    }
+
+    /** Towny 0.96 stores pvp/fire/explosion/mobs inside protectionStatus; newer files use their own key. */
+    private fun townFlag(values: FlatValues, vararg keys: String): Boolean {
+        if (values.boolean(*keys)) return true
+        val status = values.list("protectionstatus", "protection_status")
+        return keys.any { key -> status.any { it.equals(key, ignoreCase = true) } }
     }
 
     private fun applyTownProtection(values: FlatValues, town: Town) {
@@ -949,10 +1432,94 @@ object TownyFlatfileMigrator {
     private data class TownMemberships(
         val townByResident: Map<String, UUID>,
         val rankByResident: Map<String, TownRank>,
-        val displayNames: Map<String, String>
+        val displayNames: Map<String, String>,
+        /** Towns whose file names its members. For these the list decides who belongs to the town. */
+        val townsWithMemberList: Set<UUID> = emptySet(),
+        /** The town whose file names this resident as its mayor. Every Towny rewrites that line at once. */
+        val mayorTownByResident: Map<String, UUID> = emptyMap(),
+        /** The town that [rankByResident] comes from: a rank only counts in that town. */
+        val rankTownByResident: Map<String, UUID> = emptyMap()
     )
 
+    /** Where a resident belongs and what the files said about it. */
+    private class Membership(
+        val town: UUID?,
+        val fileTown: UUID?,
+        val listedTown: UUID?,
+        /** An old-format resident file named a town that does not list them. */
+        val staleFile: Boolean,
+        /** A town file still listed them although their own, newer file says otherwise. */
+        val staleList: Boolean
+    )
+
+    /**
+     * Decides a resident's town from Towny's files. The two places that can name it are not equally
+     * fresh, and which one is depends on the Towny that last wrote the file:
+     *  - Towny up to 0.96.1 kept the member list in the town file and loaded membership from it; a
+     *    resident file could go on naming a town the player had left.
+     *  - Later versions dropped that list and keep membership in the resident file only. They also
+     *    began writing `uuid=` into resident files, so a resident file with that key is such a
+     *    record, and a list still found in a town file that was never saved again is years old.
+     * A data folder that an old server handed to a newer Towny holds both kinds side by side, so
+     * the choice is made per resident file rather than once for the folder. Trusting the old
+     * lists there is what put players back into towns they had left.
+     * The mayor line of a town file is rewritten by every version the moment it changes, so it wins.
+     */
+    private fun resolveMembership(
+        values: FlatValues,
+        residentKey: String,
+        uuidKey: String,
+        memberships: TownMemberships,
+        townsByName: Map<String, UUID>
+    ): Membership {
+        val listedTown = memberships.townByResident[residentKey] ?: memberships.townByResident[uuidKey]
+        val rawFileTown = values.first("town", "townuuid", "town_uuid") ?: values.first("townname", "town_name")
+        val fileTown = resolveGovernmentUuid(values.first("town", "townuuid", "town_uuid"), townsByName)
+            ?: resolveGovernmentUuid(values.first("townname", "town_name"), townsByName)
+        val mayorTown = memberships.mayorTownByResident[residentKey] ?: memberships.mayorTownByResident[uuidKey]
+        // A newer file naming a town that cannot be found tells us nothing; fall back to the lists.
+        val newerFile = values.has("uuid") && (fileTown != null || rawFileTown.isNullOrBlank())
+        return when {
+            mayorTown != null -> Membership(mayorTown, fileTown, listedTown, false, false)
+            newerFile -> Membership(fileTown, fileTown, listedTown, false, listedTown != null && listedTown != fileTown)
+            else -> {
+                val staleFile = listedTown == null && fileTown != null && fileTown in memberships.townsWithMemberList
+                Membership(listedTown ?: fileTown?.takeIf { !staleFile }, fileTown, listedTown, staleFile, false)
+            }
+        }
+    }
+
+    /** The built-in rank (mayor, sub-mayor, assistant) a resident holds in [townUuid]. */
+    private fun resolveRank(
+        values: FlatValues,
+        residentKey: String,
+        uuidKey: String,
+        memberships: TownMemberships,
+        townUuid: UUID?,
+        fileRanksApply: Boolean
+    ): TownRank {
+        if (townUuid == null) return TownRank.RESIDENT
+        // What a town file says about a resident only counts in that town.
+        val key = listOf(residentKey, uuidKey).firstOrNull { memberships.rankTownByResident[it] == townUuid }
+        val townSays = key?.let { memberships.rankByResident[it] }
+        return when {
+            // Towny resident files have no "mayor" flag: the mayor is named in the town file.
+            (fileRanksApply && values.boolean("mayor")) || townSays == TownRank.MAYOR -> TownRank.MAYOR
+            (fileRanksApply && hasAnyRank(values, "co-mayor", "co_mayor", "comayor", "submayor", "sub_mayor", "sub-mayor")) ||
+                townSays == TownRank.SUB_MAYOR -> TownRank.SUB_MAYOR
+            (fileRanksApply && hasAnyRank(values, "assistant")) || townSays == TownRank.ASSISTANT -> TownRank.ASSISTANT
+            else -> TownRank.RESIDENT
+        }
+    }
+
+    /** helper, sheriff and a server's own ranks from the resident file, without the built-in ones. */
+    private fun extraTownRanks(values: FlatValues): List<String> =
+        TowniaPlayer.parseRanks(values.list("townranks", "town_ranks", "ranks").joinToString(","))
+            .map { it.replace('-', '_') }
+            .filter { it != "assistant" && it !in SUB_MAYOR_NAMES && it != "mayor" }
+
     private class FlatValues(private val values: Map<String, List<String>>) {
+        fun has(vararg keys: String): Boolean = keys.any { values.containsKey(it.lowercase(Locale.getDefault()).replace("-", "_")) }
         fun first(vararg keys: String): String? = keys.firstNotNullOfOrNull { values[it.lowercase(Locale.getDefault()).replace("-", "_")]?.firstOrNull() }?.takeIf { it.isNotBlank() }
         fun uuid(vararg keys: String): UUID? = first(*keys)?.toUuidOrNull()
         fun double(vararg keys: String): Double = first(*keys)?.replace(",", "")?.toDoubleOrNull() ?: 0.0

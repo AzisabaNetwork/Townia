@@ -15,13 +15,38 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     private val cache: ConcurrentHashMap<UUID, TowniaPlayer> = ConcurrentHashMap<UUID, TowniaPlayer>()
     private val nameIndex: ConcurrentHashMap<String, UUID> = ConcurrentHashMap<String, UUID>()
 
+    private class MemberIndex(val version: Long, val byTown: Map<UUID, List<TowniaPlayer>>)
+
+    @Volatile
+    private var memberIndex: MemberIndex? = null
+
     init {
         loadAll()
+    }
+
+    /** The set of records changed: the member lists must be rebuilt. */
+    private fun touch() {
+        TowniaPlayer.membershipVersion.incrementAndGet()
+    }
+
+    /**
+     * Members per town. Walking every resident for each lookup made "/town list" cost a second on
+     * a large server; the lists are now rebuilt only after someone joined or left a town.
+     * A change made while a rebuild runs leaves the version behind, so the next call rebuilds again.
+     */
+    private fun membersByTown(): Map<UUID, List<TowniaPlayer>> {
+        val version = TowniaPlayer.membershipVersion.get()
+        memberIndex?.let { if (it.version == version) return it.byTown }
+        val grouped = HashMap<UUID, MutableList<TowniaPlayer>>()
+        for (p in cache.values) grouped.getOrPut(p.townUuid ?: continue) { ArrayList() }.add(p)
+        memberIndex = MemberIndex(version, grouped)
+        return grouped
     }
 
     fun cacheResident(res: TowniaPlayer) {
         res.uuid?.let { cache.put(it, res) }
         res.uuid?.let { nameIndex.put(res.name!!.lowercase(Locale.getDefault()), it) }
+        touch()
     }
 
     private fun loadAll() {
@@ -38,6 +63,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
                 val indexed = nameIndex[key]?.let { cache[it] }
                 if (indexed == null || p.lastSeen > indexed.lastSeen) nameIndex[key] = uuid
             }
+            touch()
             plugin.logger.info("Loaded " + cache.size + " residents.")
         } catch (e: SQLException) {
             plugin.logger.log(Level.SEVERE, "Failed to load residents from database", e)
@@ -65,10 +91,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         get() = ArrayList(cache.values.toList())
 
     fun getResidentsByTown(townUuid: UUID): MutableList<TowniaPlayer> {
-        val list: MutableList<TowniaPlayer> = ArrayList<TowniaPlayer>()
-        for (p in cache.values) {
-            if (townUuid == p.townUuid) list.add(p)
-        }
+        val list: MutableList<TowniaPlayer> = ArrayList(membersByTown()[townUuid] ?: emptyList())
         list.sortBy { it.name }
         return list
     }
@@ -80,8 +103,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     fun countResidentsByTown(townUuid: UUID): Int {
         val names = HashSet<String>()
         var unnamed = 0
-        for (p in cache.values) {
-            if (townUuid != p.townUuid) continue
+        for (p in membersByTown()[townUuid] ?: return 0) {
             val name = p.name
             if (name.isNullOrBlank()) unnamed++ else names.add(name.lowercase(Locale.ROOT))
         }
@@ -90,12 +112,9 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
 
     fun getResidentsByNation(nationUuid: UUID): MutableList<TowniaPlayer> {
         val list: MutableList<TowniaPlayer> = ArrayList<TowniaPlayer>()
-        for (p in cache.values) {
-            val townUuid = p.townUuid ?: continue
-            val townOpt = plugin.townManager.getTown(townUuid)
-            if (townOpt.isPresent && townOpt.get().nationUuid == nationUuid) {
-                list.add(p)
-            }
+        val members = membersByTown()
+        for (town in plugin.townManager.allTowns) {
+            if (town.nationUuid == nationUuid) members[town.id]?.let(list::addAll)
         }
         list.sortBy { it.name }
         return list
@@ -142,6 +161,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
             legacy.name = name
             cache[uuid] = legacy
             nameIndex[name.lowercase(Locale.getDefault())] = uuid
+            touch()
             moveReferencesInMemory(legacyUuid, uuid)
             persistUuidRemap(legacyUuid, legacy)
             absorbRenamedRecords(legacy)
@@ -164,6 +184,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         newPlayer.defaultPermsResident = plugin.towniaConfig.defaultResidentPermsResident
         newPlayer.uuid?.let { cache.put(it, newPlayer) }
         newPlayer.uuid?.let { nameIndex.put(newPlayer.name!!.lowercase(Locale.getDefault()), it) }
+        touch()
         persist(newPlayer)
         absorbRenamedRecords(newPlayer)
         repairMayor(newPlayer)
@@ -218,9 +239,31 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
     /** Copies what [current] lacks from [legacy] and drops [legacy] from the cache. References are not moved. */
     private fun absorbLegacy(legacyUuid: UUID, legacy: TowniaPlayer, current: TowniaPlayer) {
         val currentUuid = current.uuid ?: return
-        // Only a town that still exists is carried over; a dangling reference would leave the
-        // player "in" a town nobody can find.
-        if (current.townUuid == null && legacy.townUuid != null && plugin.townManager.getTown(legacy.townUuid).isPresent) {
+        // Two kinds of legacy record reach this point, and they need opposite treatment.
+        //
+        // A stranger's first login: [current] is a record made here a moment (or a while) ago, and
+        // [legacy] is the resident who came over from Towny. Their town is the legacy one.
+        //
+        // A copy: [current] already is that resident (the record moved to the real UUID at an
+        // earlier login, which keeps the registration time), and [legacy] is a second record of the
+        // same resident left behind or imported again since. A copy holds an old state. Taking its
+        // town "because the player has none" is what put players who had left a town back into it.
+        // Of two records of one resident, the one used last is the one that is right.
+        val sameResident = legacy.registeredAt > 0L && legacy.registeredAt == current.registeredAt
+        val legacyTownExists = legacy.townUuid == null || plugin.townManager.getTown(legacy.townUuid).isPresent
+        if (sameResident) {
+            if (legacy.lastSeen > current.lastSeen && legacyTownExists) {
+                current.townUuid = legacy.townUuid
+                current.rank = legacy.rank
+                current.townRanks.clear()
+                current.townRanks.addAll(legacy.townRanks)
+                current.nationRanks.clear()
+                current.nationRanks.addAll(legacy.nationRanks)
+                current.lastSeen = legacy.lastSeen
+            }
+        } else if (current.townUuid == null && legacy.townUuid != null && legacyTownExists) {
+            // Only a town that still exists is carried over; a dangling reference would leave the
+            // player "in" a town nobody can find.
             current.townUuid = legacy.townUuid
             current.rank = legacy.rank
         }
@@ -238,6 +281,7 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         }
 
         cache.remove(legacyUuid)
+        touch()
         nameIndex[current.name!!.lowercase(Locale.getDefault())] = currentUuid
     }
 
@@ -328,6 +372,13 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         // Do not rely only on nameIndex: after an interrupted migration both
         // UUID rows can have the same name, and map iteration order decides
         // which row nameIndex happens to retain.
+        // A record stored under this name's offline UUID belongs to this player whatever it is
+        // called: an import once named such records after their UUID, so the name never matched
+        // and the player joined as a stranger, outside their town and without their plots.
+        val byOfflineUuid = offlineUuid(name)
+        if (byOfflineUuid != currentUuid && cache[byOfflineUuid]?.name?.equals(name, ignoreCase = true) == false) {
+            return byOfflineUuid
+        }
         val candidates = cache.entries
             .filter { (uuid, resident) -> uuid != currentUuid && resident.name.equals(name, ignoreCase = true) }
             .sortedByDescending { it.value.townUuid != null }
@@ -411,18 +462,51 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         return changed
     }
 
-    /** Runs [repairMayor] for every town's mayor. Returns how many residents were changed. */
+    /**
+     * Runs [repairMayor] for every town's mayor, then takes the mayor rank away from anyone who
+     * holds it without being the mayor their town names. A town has exactly one mayor; an import
+     * that put a mayor into the wrong town left that town with two.
+     * The rank is only taken where the town does have its mayor among its members. Where the
+     * town names nobody, or somebody who is not there, the holder of the rank may be the only
+     * one who can still run the town, and which of the two records is wrong is for staff to say.
+     * Returns how many residents were changed.
+     */
     fun repairMayors(): Int {
         var repaired = 0
         for (town in plugin.townManager.allTowns) {
             val mayor = cache[town.mayorUuid ?: continue] ?: continue
             if (repairMayor(mayor)) repaired++
         }
+        for (resident in cache.values) {
+            if (resident.rank != TownRank.MAYOR) continue
+            val town = resident.townUuid?.let { plugin.townManager.getTown(it).orElse(null) }
+            if (town != null && town.mayorUuid == resident.uuid) continue
+            // The mayor the town names can be a second record of this very player (same name, the
+            // other UUID). They are one person; merging the two records settles who holds the rank.
+            val named = town?.mayorUuid?.let { cache[it] }
+            if (town != null && named?.name.equals(resident.name, ignoreCase = true)) continue
+            if (town != null && named?.townUuid != town.id) {
+                plugin.logger.warning("${resident.name} holds the mayor rank in ${town.name}, but the town names " +
+                    (named?.name ?: "nobody known") + " as its mayor, who is not one of its members. Left as it is; " +
+                    "settle it with /towniaadmin setmayor ${town.name} <player>.")
+                continue
+            }
+            plugin.logger.info("Removed the mayor rank from ${resident.name}: " +
+                (if (town == null) "not in a town" else "the mayor of ${town.name} is someone else"))
+            resident.rank = TownRank.RESIDENT
+            persist(resident)
+            repaired++
+        }
         return repaired
     }
 
     fun setTown(playerUuid: UUID?, townUuid: UUID?, rank: TownRank?) {
         val p: TowniaPlayer = cache[playerUuid] ?: return
+        if (p.townUuid != townUuid) {
+            // Ranks belong to the town that granted them.
+            p.townRanks.clear()
+            p.nationRanks.clear()
+        }
         p.townUuid = townUuid
         p.rank = rank ?: TownRank.RESIDENT
         persist(p)
@@ -430,11 +514,16 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
 
     fun clearTown(playerUuid: UUID?) {
         val p: TowniaPlayer = cache[playerUuid] ?: return
+        val leftTown = p.townUuid
         p.townUuid = null
         p.rank = TownRank.RESIDENT
+        p.townRanks.clear()
+        p.nationRanks.clear()
         persist(p)
-        // Plots are only owned by town members: a resident who leaves or is kicked loses them (as in Towny).
-        playerUuid?.let { plugin.plotManager.releaseOwnedPlots(it) }
+        // A resident who leaves or is kicked loses the plots they held in that town (as in Towny).
+        // Only that town's: a record that sat in the wrong town must not cost the player the plots
+        // of the town they really belong to when it is moved out of the wrong one.
+        if (playerUuid != null && leftTown != null) plugin.plotManager.releaseOwnedPlots(playerUuid, leftTown)
     }
 
     fun setRank(playerUuid: UUID?, rank: TownRank?) {
@@ -453,39 +542,47 @@ class ResidentManager(private val plugin: Townia, private val db: DatabaseManage
         persist(player)
     }
 
-    private fun persist(player: TowniaPlayer) {
-        plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+    /** Gives a record another name. A record that already goes by that name keeps being found by it. */
+    fun renameRecord(resident: TowniaPlayer, name: String) {
+        val uuid = resident.uuid ?: return
+        resident.name?.lowercase(Locale.getDefault())?.let { if (nameIndex[it] == uuid) nameIndex.remove(it) }
+        resident.name = name
+        nameIndex.putIfAbsent(name.lowercase(Locale.getDefault()), uuid)
+        persist(resident)
+    }
+
+    /**
+     * Runs a write. With the write queue (the default) it is recorded at once: handing it to
+     * another thread first let two saves of one resident overtake each other, saved whatever the
+     * resident looked like a moment later, and dropped the write when the server was stopping.
+     * Without the queue the write really talks to the database, so it leaves the main thread.
+     */
+    private fun write(what: String, action: () -> Unit) {
+        val guarded = Runnable {
             try {
-                db.saveResident(player)
+                action()
             } catch (e: SQLException) {
-                plugin.logger.log(Level.SEVERE, "Failed to save resident " + player.name, e)
+                plugin.logger.log(Level.SEVERE, "Failed to $what", e)
             }
-        })
+        }
+        if (db.writesAreQueued) guarded.run() else plugin.server.scheduler.runTaskAsynchronously(plugin, guarded)
+    }
+
+    private fun persist(player: TowniaPlayer) {
+        write("save resident " + player.name) { db.saveResident(player) }
     }
 
     fun addFriend(player: TowniaPlayer, friend: TowniaPlayer) {
         if (!player.friends!!.contains(friend.uuid.toString())) {
             player.friends!!.add(friend.uuid.toString())
-            plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                try {
-                    db.addFriend(player.uuid!!, friend.uuid!!)
-                } catch (e: SQLException) {
-                    plugin.logger.log(Level.SEVERE, "Failed to add friend for resident " + player.name, e)
-                }
-            })
+            write("add friend for resident " + player.name) { db.addFriend(player.uuid!!, friend.uuid!!) }
         }
     }
 
     fun removeFriend(player: TowniaPlayer, friend: TowniaPlayer) {
         if (player.friends!!.contains(friend.uuid.toString())) {
             player.friends!!.remove(friend.uuid.toString())
-            plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                try {
-                    db.removeFriend(player.uuid!!, friend.uuid!!)
-                } catch (e: SQLException) {
-                    plugin.logger.log(Level.SEVERE, "Failed to remove friend for resident " + player.name, e)
-                }
-            })
+            write("remove friend for resident " + player.name) { db.removeFriend(player.uuid!!, friend.uuid!!) }
         }
     }
 }

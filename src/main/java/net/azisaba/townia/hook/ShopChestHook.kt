@@ -56,7 +56,22 @@ object ShopChestHook {
     }
 
     fun register(plugin: Townia, protectionListener: PlotProtectionListener) {
-        if (!plugin.server.pluginManager.isPluginEnabled("ShopChest")) return
+        if (plugin.server.pluginManager.isPluginEnabled("ShopChest")) {
+            hook(plugin, protectionListener)
+            return
+        }
+        // On a full server start ShopChest is enabled after Townia (the softdepend does not win
+        // against the order the server picks there), so SHOP plots were only wired up after a
+        // manual reload of Townia. A task scheduled now runs once every plugin is enabled.
+        if (plugin.server.pluginManager.getPlugin("ShopChest") == null) return
+        runCatching {
+            plugin.server.scheduler.runTask(plugin, Runnable {
+                if (plugin.server.pluginManager.isPluginEnabled("ShopChest")) hook(plugin, protectionListener)
+            })
+        }
+    }
+
+    private fun hook(plugin: Townia, protectionListener: PlotProtectionListener) {
         plugin.server.pluginManager.registerEvents(ShopChestListener(plugin, protectionListener), plugin)
         plugin.logger.info("Hooked into ShopChest for SHOP plot integration.")
     }

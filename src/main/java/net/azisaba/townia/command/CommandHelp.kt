@@ -22,6 +22,9 @@ object CommandHelp {
             "invite", "kick", "rank.add", "rank.remove",
             "set.spawn", "set.homeblock", "set.name", "set.board", "set.taxes", "set.plotprice",
             "set.public", "set.private", "set.perm", "set.jail",
+            "set.mayor", "set.tag", "set.plottax", "set.shoptax", "set.embassytax",
+            "set.shopprice", "set.embassyprice", "set.spawncost",
+            "buy", "say",
             "toggle", "deposit", "withdraw", "bankhistory",
             "outlaw", "outlawlist", "jail", "unjail", "jailcell",
             "map", "menu", "delete"
@@ -30,20 +33,22 @@ object CommandHelp {
             "info", "list", "new", "join", "leave", "invite", "kick", "spawn", "setspawn", "online",
             "deposit", "withdraw", "bankhistory",
             "set.board", "set.name", "set.taxes", "set.king", "set.capital", "set.title", "set.surname",
-            "ally", "enemy", "toggle", "delete"
+            "set.tag", "set.spawncost",
+            "ally", "enemy", "allylist", "enemylist", "rank", "say", "toggle", "delete"
         ),
         "plot" to listOf(
             "info", "set.type", "set.name", "set.perm", "set.reset", "toggle",
-            "forsale", "notforsale", "buy", "clear", "evict"
+            "forsale", "notforsale", "buy", "unclaim", "clear", "evict"
         ),
         "resident" to listOf(
             "info", "list", "plotlist", "set.about", "set.perm", "set.mode", "toggle", "friend", "spawn", "tax", "jail"
         ),
-        "townia" to listOf("info", "map", "price", "time", "top", "reload", "debug"),
+        "townia" to listOf("info", "map", "price", "time", "top", "universe", "reload", "debug"),
         "towniaadmin" to listOf(
             "reload", "bypass", "forceclaim", "forceunclaim", "deletetown", "deletenation", "givebonus",
             "setmayor", "addresident", "setsubmayor", "setassistant", "setrank", "moveresident", "kickresident",
-            "mergeresident", "dedupe", "migrate"
+            "mergeresident", "dedupe", "migrate",
+            "newday", "checkperm", "town", "nation", "plot", "set"
         ),
         "towniaworld" to listOf("list", "add", "remove"),
         "invite" to listOf("list", "accept", "decline"),

@@ -32,7 +32,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         CommandHelp.withCommand("towniaadmin", args) { execute(sender, command, label, args) }
 
     private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
-        if (!sender.hasPermission("townia.admin")) {
+        if (!net.azisaba.townia.permission.Perm.isAdmin(sender)) {
             plugin.messageManager.sendMessage(sender, "error.no-permission")
             return true
         }
@@ -60,6 +60,15 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             "setrank" -> handleSetRank(sender, args, null)
             "moveresident" -> handleMoveResident(sender, args)
             "kickresident" -> handleKickResident(sender, args)
+            "newday" -> {
+                net.azisaba.townia.manager.DailyTask(plugin).run()
+                plugin.messageManager.sendMessage(sender, "admin.newday-done")
+            }
+            "checkperm" -> handleCheckPerm(sender, args)
+            "town" -> handleTownAdmin(sender, args)
+            "nation" -> handleNationAdmin(sender, args)
+            "plot" -> handlePlotAdmin(sender, args)
+            "set" -> handleSetAdmin(sender, args)
             "?", "help" -> CommandHelp.handleHelp(plugin.messageManager, sender, "towniaadmin", args.drop(1))
             else -> CommandHelp.sendUnknown(plugin.messageManager, sender, "towniaadmin", args[0])
         }
@@ -68,6 +77,8 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
 
     private fun handleReload(sender: CommandSender) {
         plugin.towniaConfig.reload()
+        plugin.townyPerms.load()
+        plugin.townTimers.restart()
         plugin.messageManager.loadAllMessages()
         plugin.messageManager.sendMessage(sender, "admin.reloaded")
     }
@@ -189,6 +200,215 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             plugin.messageManager.sendMessage(sender, (e.messageKey ?: ""), *e.replacements.filterNotNull()
                 .toTypedArray()
             )
+        }
+    }
+
+    /** `/ta checkperm <player> <node>`: does an online player hold a node, townyperms included? */
+    private fun handleCheckPerm(sender: CommandSender, args: Array<out String>) {
+        val target = args.getOrNull(1)?.let { plugin.server.getPlayerExact(it) }
+        val node = args.getOrNull(2)
+        if (target == null || node == null) {
+            plugin.messageManager.sendMessage(sender, if (args.size < 3) "error.invalid-args" else "admin.diagnose-target-offline")
+            return
+        }
+        val has = net.azisaba.townia.permission.Perm.has(target, node)
+        plugin.messageManager.sendMessage(sender, "admin.checkperm", "player", target.name, "node", node, "result", if (has) "true" else "false")
+    }
+
+    private fun amountOrNull(sender: CommandSender, raw: String?): Double? {
+        val amount = raw?.toDoubleOrNull()
+        if (amount == null || amount <= 0.0 || amount.isNaN() || amount.isInfinite()) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-amount")
+            return null
+        }
+        return amount
+    }
+
+    /** `/ta town <town> deposit|withdraw <amount> | rename <name> | spawn | rank add|remove <player> <rank>`. */
+    private fun handleTownAdmin(sender: CommandSender, args: Array<out String>) {
+        val town = args.getOrNull(1)?.let { townManager.getTownByName(it).orElse(null) }
+        val action = args.getOrNull(2)?.lowercase(Locale.getDefault())
+        if (town == null || action == null) {
+            plugin.messageManager.sendMessage(sender, if (args.size < 3) "error.invalid-args" else "error.town-not-found", "town", args.getOrNull(1) ?: "")
+            return
+        }
+        try {
+            when (action) {
+                "deposit", "withdraw" -> {
+                    val amount = amountOrNull(sender, args.getOrNull(3)) ?: return
+                    if (action == "deposit") townManager.addBalance(town.id, amount) else townManager.subtractBalance(town.id, amount)
+                    runCatching {
+                        plugin.databaseManager.recordBankTransaction(
+                            "TOWN", town.id!!, (sender as? Player)?.uniqueId, if (action == "deposit") amount else -amount, "admin", town.balance
+                        )
+                    }
+                    plugin.messageManager.sendMessage(sender, "admin.bank-changed", "name", town.name ?: "", "balance", String.format("%.2f", town.balance))
+                }
+                "rename" -> {
+                    val name = args.getOrNull(3)
+                    if (name == null) {
+                        plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                        return
+                    }
+                    townManager.renameTown(town.id, name)
+                    plugin.messageManager.sendMessage(sender, "admin.renamed", "name", name)
+                }
+                "spawn" -> {
+                    val player = requirePlayer(sender) ?: return
+                    val world = town.spawnWorld?.let { plugin.server.getWorld(it) }
+                    if (!town.hasSpawn() || world == null) {
+                        plugin.messageManager.sendMessage(sender, "town.spawn-not-set")
+                        return
+                    }
+                    player.teleport(org.bukkit.Location(world, town.spawnX, town.spawnY, town.spawnZ, town.spawnYaw, town.spawnPitch))
+                }
+                "rank" -> {
+                    val add = args.getOrNull(3)?.equals("add", ignoreCase = true)
+                    val target = args.getOrNull(4)?.let { residentManager.getResidentByName(it).orElse(null) }
+                    val rank = args.getOrNull(5)?.trim()?.lowercase(Locale.ROOT)
+                    if (add == null || rank == null || (add == false && !args[3].equals("remove", ignoreCase = true))) {
+                        plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                        return
+                    }
+                    if (target == null || target.townUuid != town.id) {
+                        plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", args.getOrNull(4) ?: "")
+                        return
+                    }
+                    if (rank !in plugin.townyPerms.townRankNames()) {
+                        plugin.messageManager.sendMessage(sender, "error.rank-not-found", "{rank}", rank)
+                        return
+                    }
+                    if (add) target.townRanks.add(rank) else target.townRanks.remove(rank)
+                    residentManager.saveResident(target)
+                    plugin.messageManager.sendMessage(
+                        sender, if (add) "town.rank-set" else "town.rank-removed", "player", target.name ?: "", "rank", rank
+                    )
+                }
+                else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            }
+        } catch (e: TowniaException) {
+            sendFailure(sender, e)
+        }
+    }
+
+    /** `/ta nation <nation> deposit|withdraw <amount> | rename <name>`. */
+    private fun handleNationAdmin(sender: CommandSender, args: Array<out String>) {
+        val nation = args.getOrNull(1)?.let { plugin.nationManager.getNationByName(it).orElse(null) }
+        val action = args.getOrNull(2)?.lowercase(Locale.getDefault())
+        if (nation == null || action == null) {
+            plugin.messageManager.sendMessage(sender, if (args.size < 3) "error.invalid-args" else "error.nation-not-found", "nation", args.getOrNull(1) ?: "")
+            return
+        }
+        try {
+            when (action) {
+                "deposit", "withdraw" -> {
+                    val amount = amountOrNull(sender, args.getOrNull(3)) ?: return
+                    if (action == "deposit") plugin.nationManager.addBalance(nation.id, amount) else plugin.nationManager.subtractBalance(nation.id, amount)
+                    plugin.messageManager.sendMessage(sender, "admin.bank-changed", "name", nation.name ?: "", "balance", String.format("%.2f", nation.balance))
+                }
+                "rename" -> {
+                    val name = args.getOrNull(3)
+                    if (name == null) {
+                        plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                        return
+                    }
+                    plugin.nationManager.renameNation(nation.id, name)
+                    plugin.messageManager.sendMessage(sender, "admin.renamed", "name", name)
+                }
+                else -> plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            }
+        } catch (e: TowniaException) {
+            sendFailure(sender, e)
+        }
+    }
+
+    /**
+     * `/ta plot claim|owner <player|UUID|none> [<world> <x> <z>]`: makes a player the owner of a
+     * plot, or (`owner none`) gives the plot back to its town. The plot is the one the sender
+     * stands in, or the one holding the given block coordinates, so the console can use it too.
+     * As with Towny's `/townyadmin plot claim`, anyone can be made the owner; someone who is not
+     * a member of the plot's town is pointed out, since they could lose it again on leaving.
+     */
+    private fun handlePlotAdmin(sender: CommandSender, args: Array<out String>) {
+        val action = args.getOrNull(1)?.lowercase(Locale.ROOT)
+        val who = args.getOrNull(2)
+        if ((action != "claim" && action != "owner") || who == null || (args.size != 3 && args.size != 6)) {
+            plugin.messageManager.sendMessage(sender, "admin.plot-owner-usage")
+            return
+        }
+        val world: String
+        val chunkX: Int
+        val chunkZ: Int
+        if (args.size == 6) {
+            val x = args[4].toIntOrNull()
+            val z = args[5].toIntOrNull()
+            if (x == null || z == null) {
+                plugin.messageManager.sendMessage(sender, "admin.plot-owner-usage")
+                return
+            }
+            world = args[3]
+            chunkX = Math.floorDiv(x, 16)
+            chunkZ = Math.floorDiv(z, 16)
+        } else {
+            val player = sender as? Player
+            if (player == null) {
+                // The console stands nowhere: it has to say where.
+                plugin.messageManager.sendMessage(sender, "admin.plot-owner-usage")
+                return
+            }
+            val chunk = player.location.chunk
+            world = chunk.world.name
+            chunkX = chunk.x
+            chunkZ = chunk.z
+        }
+        val plot = plugin.plotManager.getPlot(world, chunkX, chunkZ).orElse(null)
+        if (plot == null) {
+            plugin.messageManager.sendMessage(sender, "plot.no-plot-here")
+            return
+        }
+        val toTown = action == "owner" && who.lowercase(Locale.ROOT) in setOf("none", "town", "-")
+        val target = if (toTown) null else resolveTargetResident(who)
+        if (!toTown && target == null) {
+            plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", who)
+            return
+        }
+        val townName = townManager.getTown(plot.townUuid).map { it.name ?: "" }.orElse("")
+        try {
+            plugin.plotManager.transferOwnership(plot.worldName, plot.chunkX, plot.chunkZ, target?.uuid)
+        } catch (e: TowniaException) {
+            sendFailure(sender, e)
+            return
+        }
+        plugin.logger.info(
+            "${sender.name} set the owner of the plot at ${plot.worldName} (chunk ${plot.chunkX}, ${plot.chunkZ}) of $townName to " +
+                (target?.let { "${it.name} (${it.uuid})" } ?: "the town")
+        )
+        if (target == null) {
+            plugin.messageManager.sendMessage(sender, "admin.plot-owner-cleared", "town", townName)
+            return
+        }
+        plugin.messageManager.sendMessage(sender, "admin.plot-given", "player", target.name ?: who)
+        if (target.townUuid != plot.townUuid) {
+            plugin.messageManager.sendMessage(sender, "admin.plot-owner-not-member", "player", target.name ?: who, "town", townName)
+        }
+    }
+
+    /** `/ta set capital <town>`: makes a town the capital of the nation it is in. */
+    private fun handleSetAdmin(sender: CommandSender, args: Array<out String>) {
+        if (args.size < 3 || !args[1].equals("capital", ignoreCase = true)) {
+            plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val town = townManager.getTownByName(args[2]).orElse(null)
+        if (town == null || town.nationUuid == null) {
+            plugin.messageManager.sendMessage(sender, if (town == null) "error.town-not-found" else "town.not-in-nation", "town", args[2])
+            return
+        }
+        try {
+            plugin.nationManager.setCapital(town.nationUuid, town.id)
+            plugin.messageManager.sendMessage(sender, "nation.capital-set", "town", town.name ?: args[2])
+        } catch (e: TowniaException) {
+            sendFailure(sender, e)
         }
     }
 
@@ -469,6 +689,12 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
             net.azisaba.townia.migration.TownyConfigMigrator.migrate(plugin, sender)
         } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
             diagnoseTownyResident(sender, args.getOrNull(2))
+        } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "repair") {
+            net.azisaba.townia.migration.TownyFlatfileMigrator.repair(plugin, sender, args.getOrNull(2).equals("confirm", ignoreCase = true))
+        } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "audit") {
+            net.azisaba.townia.migration.TownyAudit.run(plugin, sender)
+        } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "only") {
+            migrateOnly(sender, args.drop(2))
         } else if (args.size > 1 && args[1].lowercase(Locale.getDefault()) == "data") {
             migrateTownyData(sender, parseMigrationParts(args.drop(2)))
         } else {
@@ -485,6 +711,37 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 }
             }
         }
+    }
+
+    /**
+     * `/ta migrate only town <name> [resident <name>] [settings-only] [missing-only]`:
+     * brings one town and/or one resident over from Towny's flat files without touching
+     * anything else Townia already has.
+     */
+    private fun migrateOnly(sender: CommandSender, tokens: List<String>) {
+        var town: String? = null
+        var resident: String? = null
+        var settingsOnly = false
+        var missingOnly = false
+        var index = 0
+        while (index < tokens.size) {
+            when (tokens[index].lowercase(Locale.getDefault())) {
+                "town", "t" -> town = tokens.getOrNull(++index)
+                "resident", "res", "user", "player" -> resident = tokens.getOrNull(++index)
+                "settings-only", "settings" -> settingsOnly = true
+                "missing-only" -> missingOnly = true
+                else -> {
+                    plugin.messageManager.sendMessage(sender, "admin.migrate-only-usage")
+                    return
+                }
+            }
+            index++
+        }
+        if (town.isNullOrBlank() && resident.isNullOrBlank()) {
+            plugin.messageManager.sendMessage(sender, "admin.migrate-only-usage")
+            return
+        }
+        net.azisaba.townia.migration.TownyFlatfileMigrator.migrateOnly(plugin, sender, town, resident, settingsOnly, missingOnly)
     }
 
     /**
@@ -603,7 +860,7 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         label: String,
         args: Array<out String>
     ): MutableList<String> {
-        if (!sender.hasPermission("townia.admin")) return mutableListOf<String>()
+        if (!net.azisaba.townia.permission.Perm.isAdmin(sender)) return mutableListOf<String>()
 
         val completions = ArrayList<String>()
         if (args.size == 1) {
@@ -618,6 +875,12 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                     "deletenation",
                     "givebonus",
                     "migrate",
+                    "newday",
+                    "checkperm",
+                    "town",
+                    "nation",
+                    "plot",
+                    "set",
                     "dedupe",
                     "mergeresident",
                     "setmayor",
@@ -633,11 +896,17 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
         } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "migrate") {
             StringUtil.copyPartialMatches(
                 args[1],
-                mutableListOf("data", "config", "diagnose", "all", "towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations", "flatfile", "api"),
+                mutableListOf("data", "only", "audit", "repair", "config", "diagnose", "all", "towns", "nations", "residents", "townblocks", "jails", "outlaws", "relations", "flatfile", "api"),
                 completions
             )
         } else if (args.size == 2 && args[0].lowercase(Locale.getDefault()) == "dedupe") {
             StringUtil.copyPartialMatches(args[1], mutableListOf("confirm"), completions)
+        } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) == "only") {
+            when (args[args.size - 2].lowercase(Locale.getDefault())) {
+                "town", "t" -> StringUtil.copyPartialMatches(args.last(), net.azisaba.townia.migration.TownyFlatfileMigrator.townyTownNames(plugin), completions)
+                "resident", "res", "user", "player" -> StringUtil.copyPartialMatches(args.last(), plugin.server.onlinePlayers.map { it.name }, completions)
+                else -> StringUtil.copyPartialMatches(args.last(), mutableListOf("town", "resident", "settings-only", "missing-only"), completions)
+            }
         } else if (args.size == 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && args[1].lowercase(Locale.getDefault()) in setOf("diagnose", "debug")) {
             StringUtil.copyPartialMatches(args[2], plugin.server.onlinePlayers.map { it.name }, completions)
         } else if (args.size >= 3 && args[0].lowercase(Locale.getDefault()) == "migrate" && (args[1].lowercase(Locale.getDefault()) == "data" || args[1].lowercase(Locale.getDefault()) in setOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api"))) {
@@ -646,6 +915,13 @@ class TowniaAdminCommand(private val plugin: Townia) : CommandExecutor, TabCompl
                 mutableListOf("all", "towns", "nations", "residents", "townblocks", "plots", "jails", "outlaws", "relations", "flatfile", "api", "skip-profiles", "missing-only", "prune", "include-deleted"),
                 completions
             )
+        } else if (args[0].equals("plot", ignoreCase = true) && args.size in 2..4) {
+            val options = when (args.size) {
+                2 -> listOf("claim", "owner")
+                3 -> residentManager.allResidents.mapNotNull { it.name } + if (args[1].equals("owner", ignoreCase = true)) listOf("none") else emptyList()
+                else -> plugin.server.worlds.map { it.name }
+            }
+            StringUtil.copyPartialMatches(args.last(), options, completions)
         } else if (args.size == 2) {
             when (args[0].lowercase(Locale.getDefault())) {
                 "forceclaim", "deletetown", "givebonus", "setmayor", "addresident",

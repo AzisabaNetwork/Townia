@@ -16,6 +16,7 @@ import net.azisaba.townia.manager.NationManager
 import net.azisaba.townia.manager.PlotManager
 import net.azisaba.townia.manager.ResidentManager
 import net.azisaba.townia.manager.TownManager
+import net.azisaba.townia.permission.Perm
 import net.azisaba.townia.ui.TownMenuUi
 import net.kyori.adventure.text.minimessage.MiniMessage
 import net.milkbowl.vault.economy.Economy
@@ -74,6 +75,11 @@ class TownCommand
     private fun execute(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (args.isEmpty()) {
             this.handleInfo(sender, arrayOf("info"))
+            return true
+        }
+        val gate = TOP_NODES[args[0].lowercase(Locale.getDefault())]
+        if (gate != null && !Perm.has(sender, gate)) {
+            this.plugin.messageManager.sendMessage(sender, "error.no-permission")
             return true
         }
         when (args[0].lowercase(Locale.getDefault())) {
@@ -189,6 +195,14 @@ class TownCommand
                 this.handleMap(sender)
             }
 
+            "say" -> {
+                this.handleSay(sender, args)
+            }
+
+            "buy" -> {
+                this.handleBuy(sender, args)
+            }
+
             "menu", "gui" -> {
                 val player = this.requirePlayer(sender) ?: return true
                 TownMenuUi.open(plugin, player)
@@ -269,6 +283,21 @@ class TownCommand
         }
     }
 
+    /** Towny: an outpost needs claim.outpost; land needs claim.town, and more than one chunk also claim.town.multiple. */
+    private fun mayClaim(sender: CommandSender, args: Array<out String>): Boolean {
+        if (args.size > 1 && args[1].equals("outpost", ignoreCase = true)) {
+            return Perm.has(sender, "towny.command.town.claim.outpost")
+        }
+        if (!Perm.has(sender, "towny.command.town.claim.town")) return false
+        val single = args.size < 2 || args[1] == "1"
+        return single || Perm.has(sender, "towny.command.town.claim.town.multiple")
+    }
+
+    private fun toggleNode(setting: String): String = when (val name = setting.lowercase(Locale.getDefault())) {
+        "explosions" -> "explosion"
+        else -> name
+    }
+
     private fun handleClaim(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
         if (!this.plugin.towniaConfig.isWorldAllowed(player.world.name)) {
@@ -277,8 +306,11 @@ class TownCommand
             return
         }
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
-            this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
+        if (!mayClaim(sender, args)) {
+            // Someone who may claim one chunk but not several is told so, instead of "be an assistant".
+            val onlyMultipleMissing = Perm.has(sender, "towny.command.town.claim.town") &&
+                !(args.size > 1 && args[1].equals("outpost", ignoreCase = true))
+            this.plugin.messageManager.sendMessage(sender, if (onlyMultipleMissing) "town.claim-multiple-denied" else "town.not-assistant")
             return
         }
         val townUuid = res.townUuid!!
@@ -289,10 +321,13 @@ class TownCommand
         }
         val town = townOpt.get()
 
-        val claimCost = this.plugin.towniaConfig.claimCost
-        val hasEco = this.plugin.hasEconomy() && claimCost > 0.0
-
         val isOutpost = args.size > 1 && args[1].toString().equals("outpost", ignoreCase = true)
+        val rules = this.plugin.towniaConfig.rules
+        // Towny: the price grows with the land the town already holds; an outpost has its own price.
+        fun priceNow(): Double =
+            rules.claimPrice(this.plugin.towniaConfig.claimCost, this.plotManager.countPlotsByTown(townUuid))
+        val claimCost = if (isOutpost && rules.outpostCost >= 0.0) rules.outpostCost else priceNow()
+        val hasEco = this.plugin.hasEconomy() && claimCost > 0.0
         try {
             if (isOutpost) {
                 if (hasEco && town.balance < claimCost) {
@@ -370,6 +405,7 @@ class TownCommand
                     // were claimed are not reported as failures just because of iteration order.
                     var pending = collectSquareChunks(player.location.chunk, radius)
                     var claimed = 0
+                    var spent = 0.0
                     var outOfFunds = false
                     var progress = true
                     while (progress && pending.isNotEmpty() && !outOfFunds) {
@@ -377,7 +413,8 @@ class TownCommand
                         val remaining = ArrayList<Chunk>()
                         for (chunk in pending) {
                             val currentTown = this.townManager.getTown(townUuid).orElse(null)
-                            if (hasEco && (currentTown == null || currentTown.balance < claimCost)) {
+                            val price = priceNow()
+                            if (hasEco && (currentTown == null || currentTown.balance < price)) {
                                 outOfFunds = true
                                 remaining.add(chunk)
                                 continue
@@ -385,7 +422,8 @@ class TownCommand
                             try {
                                 this.plotManager.claimChunk(townUuid, chunk)
                                 if (hasEco) {
-                                    this.townManager.subtractBalance(townUuid, claimCost)
+                                    this.townManager.subtractBalance(townUuid, price)
+                                    spent += price
                                 }
                                 claimed++
                                 progress = true
@@ -403,7 +441,7 @@ class TownCommand
                                 "TOWN",
                                 townUuid,
                                 player.uniqueId,
-                                -(claimCost * claimed),
+                                -spent,
                                 "claim_range",
                                 finalBalance
                             )
@@ -462,7 +500,7 @@ class TownCommand
     private fun handleUnclaim(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
+        if (!Perm.has(sender, if (args.size > 1 && args[1].equals("all", ignoreCase = true)) "towny.command.town.unclaim.all" else "towny.command.town.unclaim")) {
             this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
@@ -608,7 +646,7 @@ class TownCommand
                     this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
                     return
                 }
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.outpost")) {
                     this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
                     return
                 }
@@ -643,7 +681,7 @@ class TownCommand
                     this.plugin.messageManager.sendMessage(sender, "error.not-in-town")
                     return
                 }
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.outpost")) {
                     this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
                     return
                 }
@@ -788,6 +826,14 @@ class TownCommand
                 "rank", rank.name, "players", names.joinToString(", ")
             )
         }
+        for (rank in this.plugin.townyPerms.townRankNames()) {
+            val names = residents.filter { rank in it.townRanks }.mapNotNull { it.name }
+            if (names.isEmpty()) continue
+            this.plugin.messageManager.sendMessageWithoutPrefix(
+                sender, "town.ranklist-entry",
+                "rank", rank, "players", names.joinToString(", ")
+            )
+        }
     }
 
     private fun handleResList(sender: CommandSender, args: Array<out String>) {
@@ -837,7 +883,11 @@ class TownCommand
             return
         }
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
+        if (args[1].equals("sent", ignoreCase = true)) {
+            this.handleInvitesSent(sender, res)
+            return
+        }
+        if (!Perm.has(sender, "towny.command.town.invite.add")) {
             this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
@@ -894,7 +944,7 @@ class TownCommand
             return
         }
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isMayorOrHigher) {
+        if (!Perm.has(sender, "towny.command.town.kick")) {
             this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return
         }
@@ -941,11 +991,15 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return
         }
-        val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
+        // Kept before leaving: clearTown() empties res.townUuid, and reading it afterwards threw a
+        // NullPointerException on every "/town leave" - the player had left, was then told that an
+        // internal error occurred, and the town never heard that they were gone.
+        val townId: UUID = res.townUuid!!
+        val townOpt: Optional<Town> = this.townManager.getTown(townId)
         val townName = townOpt.map { it.name ?: "Unknown" }.orElse("Unknown")
         this.residentManager.clearTown(player.uniqueId)
         this.plugin.messageManager.sendMessage(sender, "town.left", "town", townName)
-        val remaining: MutableList<TowniaPlayer> = this.residentManager.getResidentsByTown(res.townUuid!!)
+        val remaining: MutableList<TowniaPlayer> = this.residentManager.getResidentsByTown(townId)
         for (member in remaining) {
             val memberPlayer = Bukkit.getPlayer(member.uuid!!) ?: continue
             this.plugin.messageManager.sendMessage(
@@ -962,6 +1016,7 @@ class TownCommand
     private fun handleSpawn(sender: CommandSender, args: Array<out String>) {
         val town: Town?
         val player: Player = this.requirePlayer(sender) ?: return
+        var travelKind = net.azisaba.townia.manager.SpawnTravel.Kind.TOWN
         if (args.size >= 2) {
             val townOpt: Optional<Town> = runCatching { UUID.fromString(args[1]) }
                 .map { this.townManager.getTown(it) }
@@ -996,7 +1051,29 @@ class TownCommand
                 this.plugin.messageManager.sendMessage(sender, "error.town-not-public", "town", town.name ?: "Unknown")
                 return
             }
+            // Towny: which towns a player may travel to is a permission of its own.
+            val sameNation = isSameNationOrAlly && playerRes?.townUuid?.let { this.townManager.getTown(it).orElse(null)?.nationUuid } == town.nationUuid
+            val spawnNode = when {
+                isMember -> "towny.town.spawn.town"
+                sameNation -> "towny.town.spawn.nation"
+                isSameNationOrAlly -> "towny.town.spawn.ally"
+                else -> "towny.town.spawn.public"
+            }
+            if (!Perm.has(sender, spawnNode)) {
+                this.plugin.messageManager.sendMessage(sender, "error.no-permission")
+                return
+            }
+            travelKind = when {
+                isMember -> net.azisaba.townia.manager.SpawnTravel.Kind.TOWN
+                sameNation -> net.azisaba.townia.manager.SpawnTravel.Kind.NATION
+                isSameNationOrAlly -> net.azisaba.townia.manager.SpawnTravel.Kind.ALLY
+                else -> net.azisaba.townia.manager.SpawnTravel.Kind.PUBLIC
+            }
         } else {
+            if (!Perm.has(sender, "towny.town.spawn.town")) {
+                this.plugin.messageManager.sendMessage(sender, "error.no-permission")
+                return
+            }
             val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
             val townOpt: Optional<Town> = this.townManager.getTown(res.townUuid)
             if (townOpt.isEmpty) {
@@ -1022,8 +1099,9 @@ class TownCommand
             town.spawnYaw,
             town.spawnPitch
         )
-        this.plugin.messageManager.sendMessage(sender, "town.teleporting", "town", (town.name ?: ""))
-        player.teleport(loc)
+        net.azisaba.townia.manager.SpawnTravel.go(this.plugin, player, travelKind, town, loc) {
+            this.plugin.messageManager.sendMessage(sender, "town.teleporting", "town", (town.name ?: ""))
+        }
     }
 
     private fun handleSet(sender: CommandSender, args: Array<out String>) {
@@ -1035,7 +1113,7 @@ class TownCommand
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
         when (args[1].lowercase(Locale.getDefault())) {
             "spawn" -> {
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.spawn")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-assistant")
                     return
@@ -1060,7 +1138,7 @@ class TownCommand
             }
 
             "jail" -> {
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.jail")) {
                     this.plugin.messageManager.sendMessage(sender, "town.not-assistant")
                     return
                 }
@@ -1072,7 +1150,7 @@ class TownCommand
             }
 
             "homeblock" -> {
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.homeblock")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-assistant")
                     return
@@ -1093,7 +1171,7 @@ class TownCommand
             }
 
             "name" -> {
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.name")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1133,7 +1211,7 @@ class TownCommand
                     )
                     return
                 }
-                if (!res.isAssistantOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.perm")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-assistant")
                     return
@@ -1242,7 +1320,7 @@ class TownCommand
             }
 
             "public" -> {
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.toggle.public")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1261,7 +1339,7 @@ class TownCommand
 
             "taxes" -> {
                 val amount: Double
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.taxes")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1281,6 +1359,14 @@ class TownCommand
                         .sendMessage(sender, "error.invalid-amount")
                     return
                 }
+                // Towny caps taxes server-wide: a flat amount, or a percentage for percent-taxing towns.
+                val taxRules = this.plugin.towniaConfig.rules
+                val percentTown = this.townManager.getTown(res.townUuid).map { it.isTaxPercent }.orElse(false)
+                val cap = if (percentTown) taxRules.maxTaxPercent else taxRules.maxTaxAmount
+                if (cap > 0.0 && amount > cap) {
+                    this.plugin.messageManager.sendMessage(sender, "town.taxes-too-high", "max", (this.formatMoney(cap) ?: cap.toString()))
+                    return
+                }
                 this.townManager.getTown(res.townUuid).ifPresent({ t ->
                     t.taxes = amount
                     this.townManager.saveTown(t)
@@ -1290,7 +1376,7 @@ class TownCommand
             }
 
             "private" -> {
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.toggle.public")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1308,7 +1394,7 @@ class TownCommand
             }
 
             "board" -> {
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.board")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1327,7 +1413,7 @@ class TownCommand
             }
 
             "plotprice" -> {
-                if (!res.isMayorOrHigher) {
+                if (!Perm.has(sender, "towny.command.town.set.plotprice")) {
                     this.plugin.messageManager
                         .sendMessage(sender, "town.not-mayor")
                     return
@@ -1351,16 +1437,181 @@ class TownCommand
                 }
             }
 
+            "mayor", "tag", "plottax", "shoptax", "embassytax", "shopprice", "embassyprice", "spawncost" -> {
+                this.handleSetMore(sender, res, args)
+            }
+
             else -> {
                 this.handleHelp(sender)
             }
         }
     }
 
+    /** The `/town set` settings Towny had and Townia lacked. Each has its own node, as in Towny. */
+    private fun handleSetMore(sender: CommandSender, res: TowniaPlayer, args: Array<out String>) {
+        val setting = args[1].lowercase(Locale.getDefault())
+        if (!Perm.has(sender, "towny.command.town.set.$setting")) {
+            this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
+            return
+        }
+        val town = this.townManager.getTown(res.townUuid).orElse(null) ?: return
+        if (args.size < 3) {
+            this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        when (setting) {
+            "mayor" -> {
+                val target = this.residentManager.getResidentByName(args[2]).orElse(null)
+                if (target == null || target.townUuid != town.id) {
+                    this.plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", args[2])
+                    return
+                }
+                if (target.uuid == town.mayorUuid) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+                    return
+                }
+                try {
+                    this.townManager.setMayor(town.id, target.uuid)
+                } catch (e: TowniaException) {
+                    this.plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.database", *e.replacements.filterNotNull().toTypedArray())
+                    return
+                }
+                this.broadcastToTown(town.id!!, "town.mayor-changed", "player", target.name ?: args[2], "town", town.name ?: "")
+            }
+
+            "tag" -> {
+                val raw = args[2]
+                val tag = if (raw.equals("clear", ignoreCase = true) || raw.equals("none", ignoreCase = true)) null else raw
+                if (tag != null && (tag.length > MAX_TAG_LENGTH || !TAG_REGEX.matches(tag))) {
+                    this.plugin.messageManager.sendMessage(sender, "town.tag-invalid", "max", MAX_TAG_LENGTH.toString())
+                    return
+                }
+                town.tag = tag
+                this.townManager.saveTown(town)
+                this.plugin.messageManager.sendMessage(sender, "town.tag-set", "tag", tag ?: "-")
+            }
+
+            else -> {
+                val amount = args[2].toDoubleOrNull()
+                if (amount == null || amount < 0.0 || amount.isNaN() || amount.isInfinite()) {
+                    this.plugin.messageManager.sendMessage(sender, "error.invalid-amount")
+                    return
+                }
+                val rules = this.plugin.towniaConfig.rules
+                val cap = when (setting) {
+                    "plottax", "shoptax", "embassytax" -> rules.maxTaxAmount
+                    "spawncost" -> rules.spawnPricePublic
+                    else -> this.plugin.towniaConfig.maxPlotPrice
+                }
+                // The spawn cost is capped even at 0: a town can only ask for less than the server's price.
+                if (amount > cap && (cap > 0.0 || setting == "spawncost")) {
+                    this.plugin.messageManager.sendMessage(sender, "town.taxes-too-high", "max", (this.formatMoney(cap) ?: cap.toString()))
+                    return
+                }
+                when (setting) {
+                    "plottax" -> town.plotTax = amount
+                    "shoptax" -> town.shopTax = amount
+                    "embassytax" -> town.embassyTax = amount
+                    "shopprice" -> town.shopPrice = amount
+                    "embassyprice" -> town.embassyPrice = amount
+                    "spawncost" -> town.spawnCost = amount
+                }
+                this.townManager.saveTown(town)
+                this.plugin.messageManager.sendMessage(sender, "town.value-set", "setting", setting, "amount", (this.formatMoney(amount) ?: amount.toString()))
+            }
+        }
+    }
+
+    private fun broadcastToTown(townId: UUID, key: String, vararg replacements: String) {
+        for (member in this.residentManager.getResidentsByTown(townId)) {
+            val online = member.uuid?.let { Bukkit.getPlayer(it) } ?: continue
+            this.plugin.messageManager.sendMessage(online, key, *replacements)
+        }
+    }
+
+    /** `/town say <message>`: a message to every member of the town who is online. */
+    private fun handleSay(sender: CommandSender, args: Array<out String>) {
+        val player: Player = this.requirePlayer(sender) ?: return
+        val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
+        if (args.size < 2) {
+            this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val town = this.townManager.getTown(res.townUuid).orElse(null) ?: return
+        val text = args.drop(1).joinToString(" ").replace("<", "\\<")
+        this.broadcastToTown(town.id!!, "town.say", "town", town.name ?: "", "player", player.name, "message", text)
+    }
+
+    /** `/town buy bonus <amount>`: more claims for the town, paid from its bank. */
+    private fun handleBuy(sender: CommandSender, args: Array<out String>) {
+        val player: Player = this.requirePlayer(sender) ?: return
+        val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
+        val amount = args.getOrNull(2)?.toIntOrNull()
+        if (args.size < 3 || !args[1].equals("bonus", ignoreCase = true) || amount == null || amount <= 0) {
+            this.plugin.messageManager.sendMessage(sender, "error.invalid-args")
+            return
+        }
+        val rules = this.plugin.towniaConfig.rules
+        if (rules.bonusBlockCost < 0.0) {
+            this.plugin.messageManager.sendMessage(sender, "town.buy-disabled")
+            return
+        }
+        val town = this.townManager.getTown(res.townUuid).orElse(null) ?: return
+        val max = this.plugin.towniaConfig.maxBonusClaims
+        // As a Long: a huge amount must not wrap around and slip under the limit.
+        if (town.bonusClaims.toLong() + amount > max) {
+            this.plugin.messageManager.sendMessage(sender, "town.buy-limit", "max", max.toString(), "current", town.bonusClaims.toString())
+            return
+        }
+        val price = rules.bonusBlockPrice(town.bonusClaims, amount)
+        if (town.balance < price) {
+            this.plugin.messageManager.sendMessage(
+                sender, "town.claim-insufficient-funds",
+                "cost", (this.formatMoney(price) ?: "0"), "balance", (this.formatMoney(town.balance) ?: "0")
+            )
+            return
+        }
+        try {
+            if (price > 0.0) this.townManager.subtractBalance(town.id, price)
+            town.bonusClaims += amount
+            this.townManager.saveTown(town)
+            if (price > 0.0) {
+                this.plugin.databaseManager.recordBankTransaction("TOWN", town.id!!, player.uniqueId, -price, "buy_bonus", town.balance)
+            }
+        } catch (e: TowniaException) {
+            this.plugin.messageManager.sendMessage(sender, e.messageKey ?: "error.database", *e.replacements.filterNotNull().toTypedArray())
+            return
+        } catch (e: SQLException) {
+            this.plugin.logger.log(Level.SEVERE, "Failed to record the purchase of bonus claims", e)
+        }
+        this.plugin.messageManager.sendMessage(
+            sender, "town.buy-done",
+            "amount", amount.toString(), "cost", (this.formatMoney(price) ?: "0"), "total", town.bonusClaims.toString()
+        )
+    }
+
+    /** `/town invite sent`: invitations the town has sent that are still open. */
+    private fun handleInvitesSent(sender: CommandSender, res: TowniaPlayer) {
+        if (!Perm.has(sender, "towny.command.town.invite.sent")) {
+            this.plugin.messageManager.sendMessage(sender, "error.no-permission")
+            return
+        }
+        val timeout = this.plugin.towniaConfig.inviteTimeout
+        val names = try {
+            this.plugin.databaseManager.getInvitesByTown(res.townUuid!!)
+                .filter { !it.isExpired(timeout) }
+                .mapNotNull { invite -> this.residentManager.getResident(invite.targetUuid).map { it.name }.orElse(null) }
+        } catch (e: SQLException) {
+            this.plugin.logger.log(Level.SEVERE, "Failed to read sent invites", e)
+            emptyList()
+        }
+        this.plugin.messageManager.sendMessage(sender, "town.invites-sent", "players", if (names.isEmpty()) "-" else names.joinToString(", "))
+    }
+
     private fun handleToggle(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isMayorOrHigher) {
+        if (args.size >= 2 && !Perm.has(sender, "towny.command.town.toggle." + toggleNode(args[1]))) {
             this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return
         }
@@ -1381,6 +1632,12 @@ class TownCommand
         this.townManager.getTown(res.townUuid).ifPresent({ t ->
             when (args[1].lowercase(Locale.getDefault())) {
                 "pvp" -> {
+                    val wait = net.azisaba.townia.manager.Cooldowns.remaining("pvp:" + t.id, this.plugin.towniaConfig.rules.pvpToggleCooldownSeconds)
+                    if (wait > 0 && !Perm.isAdmin(sender)) {
+                        this.plugin.messageManager.sendMessage(sender, "error.cooldown", "seconds", wait.toString())
+                        return@ifPresent
+                    }
+                    net.azisaba.townia.manager.Cooldowns.start("pvp:" + t.id)
                     t.setPvp(explicitState ?: !t.hasPvp())
                     this.townManager.saveTown(t)
                     this.plugin.messageManager
@@ -1548,7 +1805,7 @@ class TownCommand
             return
         }
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isMayorOrHigher) {
+        if (!Perm.has(sender, "towny.command.town.withdraw")) {
             this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return
         }
@@ -1637,6 +1894,10 @@ class TownCommand
         }
     }
 
+    /**
+     * `/town rank add|remove <player> <rank>`. Ranks come from townyperms.yml; granting one
+     * needs `towny.command.town.rank.<rank>`, exactly as in Towny.
+     */
     private fun handleRank(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
         if (args.size < 3) {
@@ -1644,13 +1905,12 @@ class TownCommand
             return
         }
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isMayorOrHigher) {
-            this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
+        val subAction = args[1].lowercase(Locale.getDefault())
+        if (subAction != "add" && subAction != "remove") {
+            this.handleHelp(sender)
             return
         }
-        val subAction = args[1].lowercase(Locale.getDefault())
-        val targetName = args[2]
-        val targetOpt: Optional<TowniaPlayer> = this.residentManager.getResidentByName(targetName)
+        val targetOpt: Optional<TowniaPlayer> = this.residentManager.getResidentByName(args[2])
         if (targetOpt.isEmpty) {
             this.plugin.messageManager.sendMessage(sender, "error.player-not-found", "player", args[2])
             return
@@ -1660,44 +1920,61 @@ class TownCommand
             this.plugin.messageManager.sendMessage(sender, "error.player-not-same-town", "player", (target.name ?: "Unknown"))
             return
         }
-        when (subAction) {
-            "add" -> {
-                if (args.size < 4) {
-                    this.handleHelp(sender)
-                    return
-                }
-                val rankOpt: Optional<TownRank> =
-                    Arrays.stream(TownRank.entries.toTypedArray()).filter { r ->
-                        r.name.equals(
-                            args[3],
-                            ignoreCase = true
-                        )
-                    }.findFirst()
-                if (rankOpt.isEmpty) {
-                    this.plugin.messageManager.sendMessage(sender, "error.rank-not-found", "{rank}", args[3])
-                    return
-                }
-                val rank: TownRank = rankOpt.get()
-                if (rank === TownRank.MAYOR) {
-                    this.plugin.messageManager
-                        .sendMessage(sender, "error.no-permission")
-                    return
-                }
-                this.residentManager.setRank(target.uuid, rank)
-                this.plugin.messageManager
-                    .sendMessage(sender, "town.rank-set", "player", (target.name ?: "Unknown"), "rank", rank.name)
-            }
 
-            "remove" -> {
-                this.residentManager.setRank(target.uuid, TownRank.RESIDENT)
-                this.plugin.messageManager
-                    .sendMessage(sender, "town.rank-set", "player", (target.name ?: "Unknown"), "rank", TownRank.RESIDENT.name)
+        // "/town rank remove <player>" without a rank takes every rank away (the old Townia form).
+        val ranks: List<String> = if (args.size >= 4) {
+            listOf(normalizeRank(args[3]))
+        } else if (subAction == "remove") {
+            target.effectiveTownRanks().toList()
+        } else {
+            this.handleHelp(sender)
+            return
+        }
+        val known = this.plugin.townyPerms.townRankNames() + BUILT_IN_RANKS
+        for (rank in ranks) {
+            if (rank !in known) {
+                this.plugin.messageManager.sendMessage(sender, "error.rank-not-found", "{rank}", rank)
+                return
             }
-
-            else -> {
-                this.handleHelp(sender)
+            if (!Perm.has(sender, "towny.command.town.rank.$rank")) {
+                this.plugin.messageManager.sendMessage(sender, "error.no-permission")
+                return
             }
         }
+        if (ranks.isEmpty()) {
+            this.plugin.messageManager.sendMessage(sender, "town.rank-none", "player", (target.name ?: "Unknown"))
+            return
+        }
+
+        for (rank in ranks) {
+            val builtIn = when (rank) {
+                "assistant" -> TownRank.ASSISTANT
+                "sub_mayor" -> TownRank.SUB_MAYOR
+                else -> null
+            }
+            if (builtIn != null) {
+                // The mayor is whoever the town names as mayor; a rank must never demote them.
+                if (target.isMayor) {
+                    this.plugin.messageManager.sendMessage(sender, "error.no-permission")
+                    return
+                }
+                if (subAction == "add") this.residentManager.setRank(target.uuid, builtIn)
+                else if (target.rank == builtIn) this.residentManager.setRank(target.uuid, TownRank.RESIDENT)
+            } else {
+                if (subAction == "add") target.townRanks.add(rank) else target.townRanks.remove(rank)
+                this.residentManager.saveResident(target)
+            }
+            this.plugin.messageManager.sendMessage(
+                sender, if (subAction == "add") "town.rank-set" else "town.rank-removed",
+                "player", (target.name ?: "Unknown"), "rank", rank
+            )
+        }
+        target.uuid?.let { Bukkit.getPlayer(it) }?.let { this.plugin.townyPerms.refresh(it) }
+    }
+
+    private fun normalizeRank(raw: String): String {
+        val name = raw.trim().lowercase(Locale.ROOT).replace('-', '_')
+        return if (name == "co_mayor" || name == "comayor" || name == "submayor") "sub_mayor" else name
     }
 
     private fun handleHere(sender: CommandSender) {
@@ -1938,7 +2215,7 @@ class TownCommand
     private fun handleDelete(sender: CommandSender, args: Array<out String>) {
         val player: Player = this.requirePlayer(sender) ?: return
         val res: TowniaPlayer = this.requireInTown(sender, player) ?: return
-        if (!res.isMayor) {
+        if (!res.isMayor || !Perm.has(sender, "towny.command.town.delete")) {
             this.plugin.messageManager.sendMessage(sender, "town.not-mayor")
             return
         }
@@ -2016,7 +2293,7 @@ class TownCommand
     private fun handleOutlaw(sender: CommandSender, args: Array<out String>) {
         val player = requirePlayer(sender) ?: return
         val res = requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
+        if (!Perm.has(sender, "towny.command.town.outlaw")) {
             plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
@@ -2079,7 +2356,7 @@ class TownCommand
     private fun handleJail(sender: CommandSender, args: Array<out String>) {
         val player = requirePlayer(sender) ?: return
         val res = requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
+        if (!Perm.has(sender, "towny.command.town.toggle.jail")) {
             plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
@@ -2127,7 +2404,7 @@ class TownCommand
     private fun handleUnjail(sender: CommandSender, args: Array<out String>) {
         val player = requirePlayer(sender) ?: return
         val res = requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher || args.size < 2) {
+        if (!Perm.has(sender, "towny.command.town.toggle.jail") || args.size < 2) {
             plugin.messageManager.sendMessage(sender, if (args.size < 2) "error.invalid-args" else "town.not-assistant")
             return
         }
@@ -2144,7 +2421,7 @@ class TownCommand
     private fun handleJailCell(sender: CommandSender, args: Array<out String>) {
         val player = requirePlayer(sender) ?: return
         val res = requireInTown(sender, player) ?: return
-        if (!res.isAssistantOrHigher) {
+        if (!Perm.has(sender, "towny.command.town.set.jail")) {
             plugin.messageManager.sendMessage(sender, "town.not-assistant")
             return
         }
@@ -2247,7 +2524,7 @@ class TownCommand
     private fun parseRadius(value: String?): Int? {
         if (value == null) return null
         val radius = value.toIntOrNull() ?: return null
-        return radius.coerceIn(0, MAX_RANGE_RADIUS)
+        return radius.coerceIn(0, minOf(MAX_RANGE_RADIUS, this.plugin.towniaConfig.rules.maxClaimRadius))
     }
 
     private fun collectSquareChunks(center: Chunk, radius: Int): List<Chunk> {
@@ -2302,7 +2579,9 @@ class TownCommand
                     "outlowlist",
                     "jail",
                     "unjail",
-                    "jailcell"
+                    "jailcell",
+                    "say",
+                    "buy"
                 ),
                 completions
             )
@@ -2472,12 +2751,12 @@ class TownCommand
                 )
             }
         } else if (args.size == 4) {
-            if (args[0].toString().equals("rank", ignoreCase = true) && args[1].toString().equals("add", ignoreCase = true)) {
-                val ranks = ArrayList<String>()
-                for (rank in TownRank.entries) {
-                    if (rank === TownRank.MAYOR) continue
-                    ranks.add(rank.name.lowercase(Locale.getDefault()))
-                }
+            if (args[0].toString().equals("rank", ignoreCase = true) &&
+                (args[1].toString().equals("add", ignoreCase = true) || args[1].toString().equals("remove", ignoreCase = true))
+            ) {
+                // Only the ranks this player is allowed to hand out.
+                val ranks = (this.plugin.townyPerms.townRankNames() + BUILT_IN_RANKS)
+                    .filter { Perm.has(sender, "towny.command.town.rank.$it") }
                 StringUtil.copyPartialMatches(args[3], ranks, completions)
             } else if (args[0].toString().equals("set", ignoreCase = true) && args[1].toString().equals(
                     "perm",
@@ -2505,7 +2784,35 @@ class TownCommand
     }
 
     companion object {
+        /** Ranks that are part of Townia itself and need no entry in townyperms.yml. */
+        private val BUILT_IN_RANKS = setOf("assistant", "sub_mayor")
+
+        /** Subcommands guarded by one node. Those with finer nodes (claim, set, toggle, rank, ...) check inside. */
+        private val TOP_NODES: Map<String, String> = mapOf(
+            "new" to "towny.command.town.new",
+            "outlaw" to "towny.command.town.outlaw",
+            "outlow" to "towny.command.town.outlaw",
+            "kick" to "towny.command.town.kick",
+            "leave" to "towny.command.town.leave",
+            "join" to "towny.command.town.join",
+            "reslist" to "towny.command.town.reslist",
+            "online" to "towny.command.town.online",
+            "ranklist" to "towny.command.town.ranklist",
+            "deposit" to "towny.command.town.deposit",
+            "withdraw" to "towny.command.town.withdraw",
+            "bankhistory" to "towny.command.town.bankhistory",
+            "here" to "towny.command.town.here",
+            "list" to "towny.command.town.list",
+            "delete" to "towny.command.town.delete",
+            "map" to "towny.command.towny.map",
+            "say" to "towny.command.town.say",
+            "buy" to "towny.command.town.buy"
+        )
+
         private const val MAX_RANGE_RADIUS = 10
+        /** Towny's max_tag_length. */
+        private const val MAX_TAG_LENGTH = 4
+        private val TAG_REGEX = Regex("^[\\p{L}\\p{N}_-]+$")
         private val DATE_FMT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
     }

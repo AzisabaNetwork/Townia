@@ -254,6 +254,16 @@ object TownyMigrator {
                         ?.takeIf { it.isNotBlank() && !it.equals("/res set about", ignoreCase = true) }
                         ?.let { player.about = it.take(255) }
                     applyTownyResidentPermissions(tRes.permissions, player)
+                    // Every other rank (helper, sheriff, a server's own ones) only carries permission nodes.
+                    if (townUuid != null) {
+                        runCatching {
+                            tRes.townRanks.map { it.trim().lowercase(Locale.ROOT).replace('-', '_') }
+                                .filter { it.isNotEmpty() && it != "assistant" && it != "mayor" && it !in setOf("co_mayor", "comayor", "submayor", "sub_mayor") }
+                                .forEach(player.townRanks::add)
+                            tRes.nationRanks.map { it.trim().lowercase(Locale.ROOT) }.filter { it.isNotEmpty() }
+                                .forEach(player.nationRanks::add)
+                        }
+                    }
                     if (tRes.isJailed) {
                         runCatching {
                             player.jailedTownUuid = tRes.jailTown.uuid

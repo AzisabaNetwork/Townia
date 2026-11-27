@@ -75,6 +75,7 @@ internal object MigrationSupport {
         val names = HashMap<UUID, String>()
         for (file in files) {
             val uuid = runCatching { UUID.fromString(file.name.removeSuffix(".yml")) }.getOrNull() ?: continue
+            BulkRead.fileRead()
             val name = runCatching {
                 file.useLines { lines ->
                     lines.firstOrNull { it.startsWith("last-account-name:") }

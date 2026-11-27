@@ -43,7 +43,9 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
         val fromPlotOpt: Optional<Plot> = plotManager.getPlot(event.from.world.name, fromX, fromZ)
 
         if (resident != null && resident.jailedTownUuid != null) {
-            if (resident.jailReleaseAt > 0L && resident.jailReleaseAt <= System.currentTimeMillis()) {
+            val jailTown = townManager.getTown(resident.jailedTownUuid).orElse(null)
+            // Served the sentence, or the town that held them is gone.
+            if (jailTown == null || (resident.jailReleaseAt > 0L && resident.jailReleaseAt <= System.currentTimeMillis())) {
                 resident.jailedTownUuid = null
                 resident.jailReleaseAt = 0L
                 resident.jailBail = 0.0
@@ -53,9 +55,8 @@ class PlayerMoveListener(private val plugin: Townia) : Listener {
                 val toTownIdForJail = if (toPlotOpt.isPresent) toPlotOpt.get().townUuid else null
                 if (toTownIdForJail != resident.jailedTownUuid) {
                     event.isCancelled = true
-                    val jailTown = townManager.getTown(resident.jailedTownUuid).orElse(null)
-                    val world = if (jailTown?.jailWorld != null) plugin.server.getWorld(jailTown.jailWorld!!) else null
-                    if (jailTown != null && world != null) {
+                    val world = if (jailTown.jailWorld != null) plugin.server.getWorld(jailTown.jailWorld!!) else null
+                    if (world != null) {
                         player.teleport(Location(world, jailTown.jailX, jailTown.jailY, jailTown.jailZ, jailTown.jailYaw, jailTown.jailPitch))
                     }
                     plugin.messageManager.sendMessage(player, "jail.cannot-leave")

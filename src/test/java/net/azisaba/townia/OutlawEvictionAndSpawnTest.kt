@@ -170,6 +170,13 @@ class OutlawEvictionAndSpawnTest {
                 townCmd.onCommand(target, env.dummyCommand("town"), "town", arrayOf("spawn", "berry_town"))
                 assertTrue(env.sentMessages.any { it.recipient === target && it.key == "town.teleporting" }, "Expected town.teleporting, got: ${env.sentMessages}")
 
+                // As in Towny, an outsider needs towny.nation.spawn.public to travel to a nation's spawn.
+                env.sentMessages.clear()
+                nationCmd.onCommand(target, env.dummyCommand("nation"), "nation", arrayOf("spawn", "Azisaba"))
+                assertTrue(env.sentMessages.any { it.recipient === target && it.key == "error.no-permission" })
+
+                whenever(target.isPermissionSet("towny.nation.spawn.public")).thenReturn(true)
+                whenever(target.hasPermission("towny.nation.spawn.public")).thenReturn(true)
                 env.sentMessages.clear()
                 nationCmd.onCommand(target, env.dummyCommand("nation"), "nation", arrayOf("spawn", "Azisaba"))
                 assertTrue(env.sentMessages.any { it.recipient === target && it.key == "nation.teleporting" })
